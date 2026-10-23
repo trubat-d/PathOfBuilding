@@ -128,13 +128,23 @@ function ItemsTabClass:ItemsTab(build)
 	end)
 
 	-- Price Items
-	self.controls.priceDisplayItem = new("ButtonControl"):ButtonControl({"TOPLEFT",self,"TOPLEFT"}, {96, 32, 310, 20}, "Trade for these items", function()
+	self.controls.priceDisplayItem = new("ButtonControl"):ButtonControl({"TOPLEFT",self,"TOPLEFT"}, {96, 32, 151, 20}, "Trade for these items", function()
 		self.tradeQuery:PriceItem()
 	end)
 	self.controls.priceDisplayItem.tooltipFunc = function(tooltip)
 		tooltip:Clear()
 		tooltip:AddLine(16, "^7Contains searches from the official trading site to help find")
 		tooltip:AddLine(16, "^7similar or better items for this build")
+	end
+
+	-- Find best items
+	self.controls.findBestItems = new("ButtonControl"):ButtonControl({"LEFT",self.controls.priceDisplayItem,"RIGHT"}, {8, 0, 151, 20}, "Find best items...", function()
+		self:OpenBestItemsPopup()
+	end)
+	self.controls.findBestItems.tooltipFunc = function(tooltip)
+		tooltip:Clear()
+		tooltip:AddLine(16, "^7Tries every unique in each gear slot and ranks them by how much")
+		tooltip:AddLine(16, "^7they improve the stat you choose. Runs locally on your PC.")
 	end
 
 	-- Item slots
@@ -2616,6 +2626,133 @@ function ItemsTabClass:OpenItemSetManagePopup()
 		main:ClosePopup()
 	end)
 	main:OpenPopup(630, 290, "Manage Item Sets", controls)
+end
+
+-- Opens the best item finder popup
+function ItemsTabClass:OpenBestItemsPopup()
+	local finder = new("BestItemFinder"):BestItemFinder(self)
+	local controls = { }
+	local popup
+	local state = { running = false, status = "", report = nil }
+
+	-- Stat to rank by
+	local statList = { }
+	local defaultIndex = 1
+	for _, stat in ipairs(data.powerStatList) do
+		if stat.stat and not stat.ignoreForItems then
+			t_insert(statList, { label = stat.label, stat = stat })
+			if stat.stat == (self.bestItemsStat or "FullDPS") then
+				defaultIndex = #statList
+			end
+		end
+	end
+	controls.statLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 22, 0, 16}, "^7Rank items by:")
+	controls.stat = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {118, 20, 220, 20}, statList, function(index, value)
+		self.bestItemsStat = value.stat.stat
+	end)
+	controls.stat.selIndex = defaultIndex
+	controls.stat.enabled = function() return not state.running end
+
+	-- Filters
+	controls.obtainable = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {122, 50, 18}, "Obtainable only:", nil, "Skip uniques that can no longer be obtained.", true)
+	controls.level = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {292, 50, 18}, "My level or lower:", nil, "Skip uniques that need a higher character level than this build.", true)
+	controls.resists = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {482, 50, 18}, "Keep resists capped:", nil, "Skip uniques that would lower a fire, cold or lightning resistance below its cap.", true)
+	controls.attributes = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {664, 50, 18}, "Keep attributes met:", nil, "Skip uniques that would leave a gem or item attribute requirement unmet.", true)
+
+	-- Results
+	local function equipResult(result)
+		if state.running or not result then
+			return
+		end
+		finder:Equip(result.item, result.slotName)
+		-- Drop that slot's rows; gains in other slots may have shifted
+		if state.report then
+			state.report.slots[result.slotName].results = { }
+			controls.results:SetReport(state.report)
+		end
+		state.status = "^7Equipped " .. result.item.name .. ". Search again to refresh the other gains."
+	end
+	controls.results = new("BestItemListControl"):BestItemListControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 112, 728, 300}, self, finder, equipResult)
+
+	-- Search / stop
+	local function stopSearch()
+		main.onFrameFuncs["BestItemSearch"] = nil
+		state.running = false
+	end
+	controls.search = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 78, 100, 20}, function()
+		return state.running and "Stop" or "Search"
+	end, function()
+		if state.running then
+			stopSearch()
+			state.status = "^7Search stopped."
+			return
+		end
+		if main.uniqueDB.loading then
+			state.status = "^7The unique database is still loading, try again in a moment."
+			return
+		end
+		local options = {
+			stat = controls.stat.list[controls.stat.selIndex].stat,
+			obtainableOnly = controls.obtainable.state,
+			levelOnly = controls.level.state,
+			keepResists = controls.resists.state,
+			keepAttributes = controls.attributes.state,
+			yieldEvery = 30,
+			onProgress = function(done, total)
+				state.status = string.format("^7Testing items... %d / %d (%d%%)", done, total, total > 0 and math.floor(done / total * 100) or 100)
+			end,
+		}
+		local co = coroutine.create(function() return finder:Run(options) end)
+		state.running = true
+		state.status = "^7Testing items..."
+		controls.results:SetReport(nil)
+		main.onFrameFuncs["BestItemSearch"] = function()
+			-- Stop if the popup was closed
+			local open = false
+			for _, p in ipairs(main.popups) do
+				if p == popup then open = true break end
+			end
+			if not open then
+				stopSearch()
+				return
+			end
+			local ok, res = coroutine.resume(co)
+			if not ok then
+				stopSearch()
+				state.status = "^1Search failed: " .. tostring(res)
+				ConPrintf("Best item search failed: %s", tostring(res))
+			elseif coroutine.status(co) == "dead" then
+				stopSearch()
+				state.report = res
+				controls.results:SetReport(res)
+				local slots = 0
+				for _, slotReport in pairs(res.slots) do
+					if #slotReport.results > 0 then slots = slots + 1 end
+				end
+				state.status = string.format("^7Found upgrades for %d of %d slots. Double-click a row or use the buttons below to equip.", slots, #res.order)
+			end
+		end
+	end)
+	controls.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {128, 80, 0, 16}, function() return state.status end)
+
+	-- Equip buttons
+	controls.equip = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 424, 130, 20}, "Equip selected", function()
+		equipResult(controls.results.selValue)
+	end)
+	controls.equip.enabled = function() return not state.running and controls.results.selValue ~= nil end
+	controls.equipAll = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {154, 424, 190, 20}, "Equip best in every slot", function()
+		local count = finder:EquipAll(state.report)
+		controls.results:SetReport(nil)
+		controls.results.defaultText = string.format("^7Equipped %d items. Press \"Search\" again to look for further upgrades.", count)
+		state.report = nil
+		state.status = ""
+	end)
+	controls.equipAll.enabled = function() return not state.running and state.report ~= nil and #controls.results.list > 0 end
+	controls.close = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {664, 424, 80, 20}, "Close", function()
+		stopSearch()
+		main:ClosePopup()
+	end)
+	popup = main:OpenPopup(760, 456, "Find Best Items", controls, nil, nil, "close")
 end
 
 -- Opens the item crafting popup
