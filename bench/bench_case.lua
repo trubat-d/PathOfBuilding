@@ -58,6 +58,8 @@ for _, sc in ipairs(new("AutoConfig"):AutoConfig(build).scenarioList) do
 end
 local gen = new("BuildGenerator"):BuildGenerator(build, {
 	meta = meta, configScenario = configScenario,
+	-- (LEARN=1: the player data steers the build; otherwise it's only shown)
+	learnFromPlayers = os.getenv("LEARN") == "1",
 	gemId = gemId, classId = asc.classId, ascendClassId = asc.ascendClassId, level = 92,
 	investment = investment, focus = focus,
 	quick = mode == "quick", synergies = os.getenv("SYNERGIES") == "1", archetype = archetype, yieldEvery = 1e9,

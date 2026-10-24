@@ -120,7 +120,7 @@ function ParallelGeneratorClass.JobFromOptions(options, extra)
 		configScenarioId = options.configScenario and options.configScenario.id,
 		archetypeId = options.archetype and options.archetype.id,
 		allowAnoints = options.allowAnoints, allowTattoos = options.allowTattoos, timeless = options.timeless,
-		synergies = options.synergies, quick = options.quick, meta = options.meta, variant = options.variant,
+		synergies = options.synergies, quick = options.quick, meta = options.meta, learnFromPlayers = options.learnFromPlayers, variant = options.variant,
 	}
 	for k, v in pairs(extra or { }) do job[k] = v end
 	return job

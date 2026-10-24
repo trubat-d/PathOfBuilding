@@ -115,6 +115,13 @@ function BuildGeneratorClass:BuildGenerator(build, options)
 	self.build = build
 	self.itemsTab = build.itemsTab
 	self.options = options or { }
+	-- Builds are made from their own value only: what players use (poe.ninja)
+	-- is kept for showing and comparing (options.metaShown), and steers the
+	-- build only when options.learnFromPlayers is set
+	if self.options.meta and not self.options.learnFromPlayers then
+		self.options.metaShown = self.options.meta
+		self.options.meta = nil
+	end
 	self.log = { }
 	return self
 end
