@@ -246,6 +246,7 @@ end
 function RadiusJewelFinderClass:Apply(p, keep)
 	local gen, spec, itemsTab = self.gen, self.spec, self.itemsTab
 	local undo = spec:CreateUndoState()
+	local savedLog = #gen.log
 	local slotName = "Jewel " .. p.socket.node.id
 	local slot = itemsTab.slots[slotName]
 	local previous = slot.selItemId
@@ -294,6 +295,8 @@ function RadiusJewelFinderClass:Apply(p, keep)
 		spec:AddUndoState()
 		return score, kept
 	end
+	-- (notes of what was tried and put back, e.g. points trimmed, dropped)
+	for i = #gen.log, savedLog + 1, -1 do table.remove(gen.log, i) end
 	slot:SetSelItemId(previous)
 	itemsTab:DeleteItem(equipped, true)
 	spec:RestoreUndoState(undo)
