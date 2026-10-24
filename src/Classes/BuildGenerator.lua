@@ -3190,6 +3190,73 @@ function BuildGeneratorClass:Explain(final)
 	if #parts > 0 then self:Note("What carries it: " .. table.concat(parts, "; ")) end
 end
 
+-- Utility gems that add nothing measurable to the finished build (a herald
+-- whose buff doesn't reach the main skill's damage, a golem, a filler...)
+-- are taken out one at a time: each costs mana or life reserved and sockets,
+-- and a build full of skills that don't touch its damage isn't smooth to play.
+-- Kept: setups PoB can't count but a player uses (movement, guard skills,
+-- Animate Guardian, trigger setups, Vaal skills switched off for hand use).
+function BuildGeneratorClass:PruneUselessGems()
+	-- (auras: each aura or herald alone; other setups as a whole: a curse
+	-- without its Arcanist Brand would just be cast by hand)
+	local prunable = { "^Auras", "^Golem", "^Filler", "^Blessing", "^Curse" }
+	local function isPrunable(label)
+		for _, p in ipairs(prunable) do if (label or ""):match(p) then return true end end
+		return false
+	end
+	local removed = { }
+	local current = self:FullScore()
+	local list = self.build.skillsTab.socketGroupList
+	local function names(group)
+		local out = { }
+		for _, gem in ipairs(group.gemList) do
+			if gem.gemData and not gem.gemData.grantedEffect.support then t_insert(out, gem.gemData.name) end
+		end
+		return out
+	end
+	for gi = #list, 1, -1 do
+		local group = list[gi]
+		if group ~= self.mainGroup and group.enabled ~= false and isPrunable(group.label) then
+			if (group.label or ""):match("^Auras") then
+				for i = #group.gemList, 1, -1 do
+					local gem = group.gemList[i]
+					local gd = gem.gemData
+					if gem.enabled ~= false and gd and not gd.grantedEffect.support then
+						gem.enabled = false
+						self.build.skillsTab:ProcessSocketGroup(group)
+						local score = self:FullScore()
+						if score >= current - 0.002 then
+							t_remove(group.gemList, i)
+							t_insert(removed, gd.name)
+							current = math.max(current, score)
+						else
+							gem.enabled = true
+						end
+						self.build.skillsTab:ProcessSocketGroup(group)
+					end
+				end
+				if #names(group) == 0 then t_remove(list, gi) end
+			else
+				group.enabled = false
+				local score = self:FullScore()
+				if score >= current - 0.002 then
+					t_remove(list, gi)
+					t_insert(removed, table.concat(names(group), " + "))
+					current = math.max(current, score)
+				else
+					group.enabled = true
+				end
+			end
+		end
+	end
+	self:Recalculate()
+	if #removed > 0 then
+		table.sort(removed)
+		self:Note("Taken out (added nothing measurable to damage or defence): " .. table.concat(removed, ", "))
+	end
+	return #removed
+end
+
 -- Clearing + bossing: the score is the boss's, and Eldritch implicits are
 -- also measured while mapping (killed recently, normal enemies), that score
 -- counting at this weight. Returns { weight, toggle(on) } or nil.
@@ -4187,6 +4254,11 @@ function BuildGeneratorClass:Run()
 		self:Move(6, 6, "Rebuilding parts of the build to improve it")
 		self:RepairSearch(opts.repairRounds or 8)
 	end
+	-- utility gems that add nothing taken out
+	if opts.pruneGems ~= false then
+		local ok, err = pcall(function() self:PruneUselessGems() end)
+		if not ok then ConPrintf("Pruning gems failed: %s", tostring(err)) end
+	end
 	-- hard requirements (resistances, attributes) fixed with bench crafts
 	if opts.requirements ~= false then self:RequirementsMove() end
 	self:RemoveUnusedItems()
@@ -4219,7 +4291,9 @@ function BuildGeneratorClass:Run()
 			if summary[key] then self:Note(summary[key]) end
 		end
 	end
-	local details = self.options.meta and self.options.meta.details
+	-- (top players: only shown, for comparison)
+	local shown = self.options.meta or self.options.metaShown
+	local details = shown and shown.details
 	if details and details.count > 0 and details.maxHit then
 		local mh = details.maxHit
 		self:Note(string.format("Top %d players of this skill (poe.ninja, median): max hit physical %s, fire %s, cold %s, lightning %s, chaos %s, EHP %s",

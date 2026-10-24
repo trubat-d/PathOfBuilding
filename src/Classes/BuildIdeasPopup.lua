@@ -55,16 +55,6 @@ local function isPopupOpen(popup)
 	return false
 end
 
--- Which tab of the build shows what a generation step is working on
-local function viewForStage(stage)
-	local s = (stage or ""):lower()
-	if s:find("support") or s:find("gem setup") or s:find("aura") or s:find("main link") or s:find("curse") then return "SKILLS" end
-	if s:find("flask") or s:find("rare") or s:find("unique") or s:find("item") or s:find("mageblood") or s:find("top players' gear") then return "ITEMS" end
-	if s:find("tree") or s:find("passive") or s:find("ascendancy") or s:find("jewel") or s:find("timeless") or s:find("forbidden")
-		or s:find("cluster") or s:find("anoint") or s:find("tattoo") or s:find("bloodline") or s:find("ailment") then return "TREE" end
-	if s:find("config") then return "CONFIG" end
-end
-
 -- Runs fn in a coroutine, one slice per frame, until it finishes or the popup closes
 local function runInBackground(key, popup, fn, onDone, onError)
 	local co = coroutine.create(fn)
@@ -1133,11 +1123,11 @@ function BuildIdeasPopupClass:OpenGenerator()
 	popup = main:OpenPopup(920, 496, "Generate Build", controls, nil, nil, "close")
 
 	-- While a generation or scan runs, the window folds into a panel on the
-	-- right of the screen: the build stays visible and follows what is being
-	-- tried (tree, items, skills), and the panel shows the progress and the
-	-- notes as they come. Back to the full window when it ends.
+	-- right of the screen: the build stays visible on its passive tree (no
+	-- switching between tabs: less to draw while it works), and the panel shows
+	-- the progress and the notes as they come. Back to the full window when it ends.
 	local panel
-	local panelState = { follow = true, lastView = nil, idleSince = nil, notes = { } }
+	local panelState = { lastView = nil, idleSince = nil, notes = { } }
 	local unfoldWindow
 	local function foldWindow()
 		if panel or popup.folded or main.popups[1] ~= popup then return end
@@ -1156,9 +1146,6 @@ function BuildIdeasPopupClass:OpenGenerator()
 		pc.progress = new("ProgressBarControl"):ProgressBarControl({"TOPLEFT",nil,"TOPLEFT"}, {12, 34, width - 24, 10}, function()
 			return state.progress or 0
 		end)
-		pc.follow = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {150, 52, 18}, "Show each step:", function(on)
-			panelState.follow = on
-		end, "Switch the build to the tab that shows what is being tried (passive tree, items, skills).", panelState.follow)
 		pc.notesLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {12, 76, 0, 14}, "^7What the generator decided so far:")
 		pc.notes = new("TextListControl"):TextListControl({"TOPLEFT",nil,"TOPLEFT"}, {12, 94, width - 24, height - 134}, nil, { })
 		pc.stop = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {12, height - 32, 100, 20}, "Stop", function()
@@ -1216,14 +1203,11 @@ function BuildIdeasPopupClass:OpenGenerator()
 			for _, l in ipairs(log) do addLines(list, "^7- " .. l, 14, 58) end
 			panel.notesControl.list = list
 		end
-		-- the build follows the step
+		-- the build is shown on its passive tree while it is made
 		local build = main.modes["BUILD"]
-		if panelState.follow and gen and build and main.mode == "BUILD" then
-			local view = viewForStage(gen.stage)
-			if view and view ~= panelState.lastView then
-				panelState.lastView = view
-				build.viewMode = view
-			end
+		if gen and build and main.mode == "BUILD" and panelState.lastView ~= gen then
+			panelState.lastView = gen
+			build.viewMode = "TREE"
 		end
 	end
 end

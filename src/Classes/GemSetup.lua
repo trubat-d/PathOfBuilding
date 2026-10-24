@@ -400,7 +400,10 @@ function GemSetupClass:ChooseAuras(maxBuffs)
 	for id, gem in pairs(data.gems) do
 		-- (attacks with an aura, like Smite, only give it while you use them)
 		-- (as are mines / traps with an aura: only while they are placed)
-		if gem.tags and (gem.tags.aura or gem.tags.herald or gem.tags.golem or gem.tags.banner) and not gem.tags.attack and not gem.tags.mine and not gem.tags.trap and not gem.tags.totem
+		-- (and buffs that reserve, like Arctic Armour or Tempest Shield: always on once cast)
+		local reservedBuff = gem.grantedEffect and gem.grantedEffect.skillTypes and gem.grantedEffect.skillTypes[SkillType.HasReservation]
+			and gem.grantedEffect.skillTypes[SkillType.Buff] and not (gem.tags and (gem.tags.minion or gem.tags.guard))
+		if gem.tags and (gem.tags.aura or gem.tags.herald or gem.tags.golem or gem.tags.banner or reservedBuff) and not gem.tags.attack and not gem.tags.mine and not gem.tags.trap and not gem.tags.totem
 			and gem.grantedEffect and not gem.grantedEffect.support and not gem.vaalGem and not gem.grantedEffect.unsupported then
 			t_insert(candidates, id)
 		end
@@ -678,10 +681,13 @@ function GemSetupClass:ChooseFillers()
 			end
 		end
 	end
-	-- spells cast automatically on cooldown
+	-- spells cast automatically on cooldown (not buffs that reserve, like
+	-- Arctic Armour or Tempest Shield: they stay on once cast, nothing to repeat)
 	if free("Automation") then
-		for _, spell in ipairs({ "Wave of Conviction", "Frost Bomb", "Arctic Armour", "Tempest Shield" }) do
-			if free(spell) then add("Automation + " .. spell, { "Automation", spell }, true) end
+		for _, spell in ipairs({ "Wave of Conviction", "Frost Bomb" }) do
+			local id = gemId(spell)
+			local types = id and data.gems[id].grantedEffect.skillTypes or { }
+			if free(spell) and not types[SkillType.HasReservation] then add("Automation + " .. spell, { "Automation", spell }, true) end
 		end
 	end
 	local kept = { }

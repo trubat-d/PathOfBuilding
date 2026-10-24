@@ -131,6 +131,9 @@ elseif step == "cross" then
 elseif step == "explain" then
 	gen:FullScore()
 	gen:Explain()
+elseif step == "prune" then
+	print("REMOVED", gen:PruneUselessGems())
+	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
 elseif step == "requirements" then
 	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
 	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]

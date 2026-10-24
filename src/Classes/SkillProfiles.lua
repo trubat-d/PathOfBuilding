@@ -50,7 +50,6 @@ SkillProfilesClass.list = {
 	{ pattern = "^Barrage", part = "All Projectiles", note = "all projectiles of a volley hit one target" },
 	{ pattern = "^Forbidden Rite", part = "All Primary Projectiles", note = "the primary projectiles converging on a boss" },
 	{ pattern = "^Ice Spear", part = "Second Form, 1 Projectile", note = "second form (a boss isn't point blank), one projectile" },
-	{ pattern = "^Molten Strike", part = "Average Balls Hitting", note = "the melee hit's magma balls that land on a boss (PoB's average)" },
 	{ pattern = "^Lacerate", part = "Both slashes", note = "both slashes hit a boss's large hitbox" },
 	-- the part that deals the damage
 	{ pattern = "^Explosive Arrow", part = "Explosion (Maximum Sustainable Fuses)", note = "explosions with the fuses the attack rate sustains" },
@@ -64,6 +63,11 @@ SkillProfilesClass.list = {
 	-- elements to choose from: the best one
 	{ pattern = "^Elemental Hit", bestOf = { "Fire Attack", "Cold Attack", "Lightning Attack" }, note = "the element that deals the most damage" },
 	-- parts that all hit the same boss
+	-- (Zenith: every 5th attack throws many more, stronger balls; PoB's weighted
+	-- average mixes the 4 normal attacks and the 5th - showing one normal attack's
+	-- balls undervalued it about 6 times)
+	{ pattern = "^Molten Strike of the Zenith", combine = { { part = "Melee Hit", weight = 1 }, { part = "Total Weighted Ball Average", weight = 1 } }, note = "the melee hit and the magma balls landing on a boss, every 5th attack's bigger volley included (PoB's weighted average)" },
+	{ pattern = "^Molten Strike", combine = { { part = "Melee Hit", weight = 1 }, { part = "Average Balls Hitting", weight = 1 } }, note = "the melee hit and its magma balls that land on a boss (PoB's average)" },
 	{ pattern = "^Kinetic Blast", combine = { { part = "Projectile", weight = 1 }, { part = "Explosions", weight = 2 } }, note = "the projectile and 2 of its 3 explosions hitting a boss" },
 	{ pattern = "^Earthquake", combine = { { part = "Initial impact", weight = 1 }, { part = "Aftershock", weight = 1 } }, note = "each impact and its aftershock" },
 	{ pattern = "^Earthshatter", combine = { { part = "Initial impact", weight = 1 }, { part = "Spike", weight = 1 } }, note = "each impact and its spikes shattering on a boss" },
@@ -80,6 +84,40 @@ SkillProfilesClass.list = {
 		local maxHits = 1 + m_floor((ctx.output.Duration or 0) / 0.66)
 		return m_max(1, maxHits / 3)
 	end } }, note = "about a third of the hits each projectile could deal on a boss" },
+	-- (skills whose first part, used when none is chosen, is only a piece of
+	-- their damage on a boss: found by listing every skill with several parts)
+	{ pattern = "^Blast Rain", part = "All Projectiles", note = "all the arrows of a volley landing on a boss" },
+	{ pattern = "^Blazing Salvo", part = "All Projectiles", note = "all the projectiles of a volley landing on a boss" },
+	{ pattern = "^Blight", part = "Maximum Sustainable Stacks", note = "the stacks the cast rate keeps up while channelling" },
+	{ pattern = "^Scorching Ray", part = "Maximum Stages", note = "channelled at full stages" },
+	{ pattern = "^Explosive Trap", part = "Average explosions hitting", note = "the explosions that land on a boss (PoB's average)" },
+	{ pattern = "^Lightning Spire Trap", part = "Average active traps, average waves", note = "the traps a throw rate keeps active, average waves hitting" },
+	{ pattern = "^Seismic Trap of Swells", part = "Average waves hitting configured size enemy", note = "the waves that hit a boss" },
+	{ pattern = "^Seismic Trap", part = "Average active traps, average waves", note = "the traps a throw rate keeps active, average waves hitting" },
+	{ pattern = "^Flamethrower Trap", part = "Average # traps (good placement)", note = "the traps a throw rate keeps active, well placed" },
+	{ pattern = "^Lancing Steel", part = "All Projectiles Hit", note = "the projectiles converging on a boss" },
+	{ pattern = "^Eviscerate", part = "Both Waves", note = "both waves hitting a boss" },
+	{ pattern = "^Shield Crush", part = "2 Overlapping Waves", note = "the two waves overlapping on a boss" },
+	{ pattern = "^Storm Burst of Repulsion", part = "Max Duration Explode", note = "orbs exploding at full duration" },
+	{ pattern = "^Storm Burst", part = "Max Channelled Orbs", note = "the orbs a full channel keeps up" },
+	{ pattern = "^Storm Rain of", part = "Beam", note = "the beams between arrows" },
+	{ pattern = "^Boneshatter", combine = { { part = "Attack", weight = 1 }, { part = "Pulse", weight = 1 } }, note = "the hit and its pulse on a boss" },
+	{ pattern = "^Fireball", combine = { { part = "Projectile", weight = 1 }, { part = "Explosion", weight = 1 } }, note = "the projectile and its explosion on a boss" },
+	{ pattern = "^Conflagration", combine = { { part = "Projectile", weight = 1 }, { part = "Explosion", weight = 1 } }, note = "the projectile and its explosion on a boss" },
+	{ pattern = "^Somatic Shell", combine = { { part = "Projectile", weight = 1 }, { part = "Explosion", weight = 1 } }, note = "the projectile and its explosion on a boss" },
+	{ pattern = "^Divine Blast", combine = { { part = "Beam Implosion", weight = 1 }, { part = "Explosion", weight = 1 } }, note = "the beams and the explosion on a boss" },
+	{ pattern = "^Holy Sweep", combine = { { part = "Melee Hit", weight = 1 }, { part = "Holy Hammer", weight = 1 } }, note = "the sweep and its hammer on a boss" },
+	{ pattern = "^Holy Hammers", combine = { { part = "Slam", weight = 1 }, { part = "First Hammer", weight = 1 } }, note = "the slam and the first hammer on a boss" },
+	{ pattern = "^Infernal Blow", combine = { { part = "Melee Hit", weight = 1 }, { part = "Debuff Explosion - 6 Stacks", weight = 1 / 6 } }, note = "the hits and one full explosion every 6 hits" },
+	{ pattern = "^Purifying Flame", combine = { { part = "Initial hit", weight = 1 }, { part = "Shockwave", weight = 1 } }, note = "the hit and its shockwave on a boss" },
+	{ pattern = "^Rage Vortex", combine = { { part = "Melee", weight = 1 }, { part = "Rage Storm", weight = 1 } }, note = "the attack and its storm on a boss" },
+	{ pattern = "^Scourge Arrow", combine = { { part = "Release", weight = 1 }, { part = "Thorn Arrows", weight = 1 } }, note = "the released arrow and the thorn arrows on a boss" },
+	{ pattern = "^Shattering Steel", combine = { { part = "Projectile", weight = 1 }, { part = "Cone AoE", weight = 1 } }, note = "the projectiles and the cone at close range" },
+	{ pattern = "^Smite", combine = { { part = "Melee Hit", weight = 1 }, { part = "Area Hit", weight = 1 } }, note = "the strike and its lightning on a boss" },
+	{ pattern = "^Volcanic Fissure", combine = { { part = "Ground Fissure", weight = 1 }, { part = "Magma Balls", weight = 1 } }, note = "the fissure and its magma balls on a boss" },
+	{ pattern = "^Wild Strike", combine = { { part = "Fire hit", weight = 1 / 3 }, { part = "Fire explosion", weight = 1 / 3 }, { part = "Lightning hit", weight = 1 / 3 },
+		{ part = "Lightning bolt", weight = 1 / 3 }, { part = "Cold hit", weight = 1 / 3 }, { part = "Icy wave", weight = 1 / 3 } }, note = "each element in turn, with its secondary hit" },
+	{ pattern = "^Tornado of Elemental Turbulence", combine = { { part = "Fire", weight = 1 / 3 }, { part = "Lightning", weight = 1 / 3 }, { part = "Cold", weight = 1 / 3 } }, note = "the three elements in turn" },
 	-- conditions the skill is used under
 	{ pattern = "^Cyclone", config = { channellingCycloneCheck = true }, note = "channelled" },
 }

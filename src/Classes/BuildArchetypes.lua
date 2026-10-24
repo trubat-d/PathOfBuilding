@@ -210,6 +210,17 @@ BuildArchetypesClass.list = {
 		applies = function(info) return not info.minion end,
 	},
 	{
+		-- (heralds whose buffs add the skill's own damage type, kept up all the
+		-- time; damage per herald and reservation from the tree and uniques)
+		id = "HERALDS", label = "Herald stacking (The Coming Calamity, Alpha's Howl, damage per herald)",
+		summary = "Several heralds up at once: their buffs add damage to the skill, and the tree and gear pay for them and scale with each herald.",
+		auras = { },
+		maxAuras = 6,
+		uniques = { "The Coming Calamity", "Replica Alpha's Howl" },
+		uniqueLines = { "for each Herald affecting you", "Herald Skills" },
+		applies = function(info) return not info.minion and info.hits end,
+	},
+	{
 		id = "FIRE_CONV", label = "Conversion to fire (Avatar of Fire)",
 		summary = "Avatar of Fire converts physical, lightning and cold damage to fire: scale fire only.",
 		keystones = { "Avatar of Fire" },
