@@ -1,0 +1,8 @@
+# A/B set: one full endgame build per top-player skill, with the archetype that suits it
+Boneshatter | Juggernaut | ENDGAME | full | IMPALE
+Tornado Shot | Deadeye | ENDGAME | full | CRIT
+Cyclone | Slayer | ENDGAME | full | IMPALE
+Lightning Arrow | Deadeye | ENDGAME | full | CRIT
+Righteous Fire | Chieftain | ENDGAME | full | STANDARD
+Toxic Rain | Pathfinder | ENDGAME | full | STANDARD
+Ball Lightning | Hierophant | ENDGAME | full | STANDARD

@@ -17,6 +17,16 @@ local t_sort = table.sort
 local m_max = math.max
 
 ---@class ClusterJewelGenerator
+
+-- Nodes of a node table in id order (pairs() order changes from run to run:
+-- LuaJIT seeds its hashing per process, and greedy choices follow the order)
+local function nodesById(tbl)
+	local list = { }
+	for _, node in pairs(tbl) do list[#list + 1] = node end
+	table.sort(list, function(a, b) return a.id < b.id end)
+	return list
+end
+
 local ClusterJewelGeneratorClass = newClass("ClusterJewelGenerator")
 
 -- ctx: { build, score = function(override) -> number, fullScore = function() -> number,
@@ -52,7 +62,7 @@ end
 function ClusterJewelGeneratorClass:Sockets(maxPath)
 	local list = { }
 	local itemsTab = self.build.itemsTab
-	for id, node in pairs(self.spec.nodes) do
+	for _, node in ipairs(nodesById(self.spec.nodes)) do local id = node.id
 		if node.type == "Socket" and node.expansionJewel and node.expansionJewel.size == 2 and not node.expansionJewel.parent
 			and itemsTab.slots["Jewel " .. id] and (self.spec.jewels[id] or 0) == 0 then
 			local cost = node.alloc and 0 or (node.path and #node.path or 99)

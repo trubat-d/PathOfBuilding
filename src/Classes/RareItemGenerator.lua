@@ -296,7 +296,12 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			t_insert(scores, candidate)
 		end
 	end
-	t_sort(scores, function(a, b) return a.gain > b.gain end)
+	-- (gains to 1e-9, then the mod id: the same order every run)
+	t_sort(scores, function(a, b)
+		local qa, qb = m_floor(a.gain * 1e9 + 0.5), m_floor(b.gain * 1e9 + 0.5)
+		if qa ~= qb then return qa > qb end
+		return a.modId < b.modId
+	end)
 
 	-- 2. Shortlist: the strongest mods, plus the ones that fix resistances / attributes
 	local shortlist, inList = { }, { }
@@ -402,7 +407,7 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 					elseif currentDeficit > 0 and d ~= bestDeficit then
 						better = d < bestDeficit
 					else
-						better = power > bestPower
+						better = power > bestPower + 1e-9
 					end
 					if better then
 						best, bestPower, bestDeficit = candidate, power, d

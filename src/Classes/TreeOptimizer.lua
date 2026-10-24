@@ -20,6 +20,16 @@ local m_min = math.min
 local m_max = math.max
 
 ---@class TreeOptimizer
+
+-- Nodes of a node table in id order (pairs() order changes from run to run:
+-- LuaJIT seeds its hashing per process, and greedy choices follow the order)
+local function nodesById(tbl)
+	local list = { }
+	for _, node in pairs(tbl) do list[#list + 1] = node end
+	table.sort(list, function(a, b) return a.id < b.id end)
+	return list
+end
+
 local TreeOptimizerClass = newClass("TreeOptimizer")
 
 function TreeOptimizerClass:TreeOptimizer(gen)
@@ -120,7 +130,7 @@ end
 -- Masteries are kept while a notable of their group stays allocated
 function TreeOptimizerClass:KeptMasteries(nodeSet)
 	local kept, dropped = { }, { }
-	for _, node in pairs(self.spec.allocNodes) do
+	for _, node in ipairs(nodesById(self.spec.allocNodes)) do
 		if node.type == "Mastery" and not node.ascendancyName then
 			local ok = false
 			for other in pairs(nodeSet) do
@@ -150,7 +160,7 @@ function TreeOptimizerClass:Override(nodeSet)
 		if not node.alloc then add[node] = true end
 	end
 	local _, dropped = self:KeptMasteries(nodeSet)
-	for _, node in pairs(self.spec.allocNodes) do
+	for _, node in ipairs(nodesById(self.spec.allocNodes)) do
 		if not node.ascendancyName and node.type ~= "ClassStart" and not self.fixed[node] then
 			if node.type == "Mastery" then
 				if dropped[node] then remove[node] = true end
@@ -178,7 +188,7 @@ function TreeOptimizerClass:Apply(nodeSet)
 	local spec = self.spec
 	local _, dropped = self:KeptMasteries(nodeSet)
 	for node in pairs(dropped) do spec:DeallocNode(node) end
-	for _, node in pairs(spec.nodes) do
+	for _, node in ipairs(nodesById(spec.nodes)) do
 		if not node.ascendancyName and node.type ~= "ClassStart" and node.type ~= "Mastery" and not self.fixed[node] then
 			local want = nodeSet[node] and true or false
 			if node.alloc ~= want then
@@ -196,7 +206,7 @@ function TreeOptimizerClass:CurrentTargets()
 	local spec = self.spec
 	local protected = self.gen.protectedNodes or { }
 	local targets = { }
-	for _, node in pairs(spec.allocNodes) do
+	for _, node in ipairs(nodesById(spec.allocNodes)) do
 		if not node.ascendancyName and node.type ~= "ClassStart" and node.type ~= "Mastery" and not isSubgraph(node) then
 			local holdsJewel = node.type == "Socket" and (spec.jewels[node.id] or 0) ~= 0
 			-- (depends: the nodes that would be lost without this one, itself included)
@@ -215,7 +225,7 @@ function TreeOptimizerClass:Candidates(limit)
 	local spec = self.spec
 	local current = gen:Score()
 	local list = { }
-	for _, node in pairs(spec.nodes) do
+	for _, node in ipairs(nodesById(spec.nodes)) do
 		if not node.alloc and node.path and #node.path <= 10 and not node.ascendancyName and not isSubgraph(node)
 			and (node.type == "Notable" or node.type == "Keystone") and not (gen.forbiddenNodes and gen.forbiddenNodes[node.id]) then
 			local pathSet = { }
@@ -251,7 +261,7 @@ function TreeOptimizerClass:Run(opts)
 		end
 	end
 	self.fixedCost = 0
-	for _, node in pairs(spec.allocNodes) do
+	for _, node in ipairs(nodesById(spec.allocNodes)) do
 		if not node.ascendancyName and node.type ~= "ClassStart" and node.type ~= "Mastery" and (isSubgraph(node) or not reach[node]) then
 			self.fixed[node] = true
 			self.fixedCost = self.fixedCost + 1
@@ -265,7 +275,7 @@ function TreeOptimizerClass:Run(opts)
 	-- value of a free point: the average loss of the weakest end-of-path passives
 	local current = gen:Score()
 	local losses = { }
-	for _, node in pairs(spec.allocNodes) do
+	for _, node in ipairs(nodesById(spec.allocNodes)) do
 		if not node.ascendancyName and node.type ~= "ClassStart" and node.type ~= "Mastery" and not isSubgraph(node) and node.depends and #node.depends <= 1 then
 			t_insert(losses, m_max(0, current - gen:Score({ removeNodes = { [node] = true } })))
 		end
@@ -278,7 +288,7 @@ function TreeOptimizerClass:Run(opts)
 	local targets = self:CurrentTargets()
 	-- the current tree (main part) as the starting solution
 	local bestSet = { [self.startNode] = true }
-	for _, node in pairs(spec.allocNodes) do
+	for _, node in ipairs(nodesById(spec.allocNodes)) do
 		if not node.ascendancyName and node.type ~= "ClassStart" and node.type ~= "Mastery" and not self.fixed[node] then
 			bestSet[node] = true
 		end

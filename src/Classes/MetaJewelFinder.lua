@@ -14,6 +14,16 @@ local t_insert = table.insert
 local t_sort = table.sort
 
 ---@class MetaJewelFinder
+
+-- Nodes of a node table in id order (pairs() order changes from run to run:
+-- LuaJIT seeds its hashing per process, and greedy choices follow the order)
+local function nodesById(tbl)
+	local list = { }
+	for _, node in pairs(tbl) do list[#list + 1] = node end
+	table.sort(list, function(a, b) return a.id < b.id end)
+	return list
+end
+
 local MetaJewelFinderClass = newClass("MetaJewelFinder")
 
 -- ctx: { build, fullScore = function() -> number, equip = function(item, slotName) -> item, tick = function() }
@@ -42,7 +52,7 @@ end
 function MetaJewelFinderClass:Sockets(maxPath, anywhere)
 	local itemsTab = self.build.itemsTab
 	local list = { }
-	for id, node in pairs(self.spec.nodes) do
+	for _, node in ipairs(nodesById(self.spec.nodes)) do local id = node.id
 		local slot = itemsTab.slots["Jewel " .. id]
 		local holder = itemsTab.items[self.spec.jewels[id] or 0]
 		local clusterOk = anywhere and not (holder and holder.clusterJewel)
@@ -143,7 +153,7 @@ function MetaJewelFinderClass:ForbiddenPair(baseScore)
 	local className = self.spec.curClassName
 	-- ascendancy notables already allocated can't be taken again
 	local allocatedNames = { }
-	for _, node in pairs(self.spec.allocNodes) do
+	for _, node in ipairs(nodesById(self.spec.allocNodes)) do
 		if node.ascendancyName then allocatedNames[node.dn] = true end
 	end
 	local best
@@ -160,7 +170,7 @@ function MetaJewelFinderClass:ForbiddenPair(baseScore)
 					{ node = sockets[2].node, item = variantItem(flesh, fleshIndex) },
 				}
 				local score = self:TryJewels(placements)
-				if not best or score > best.score then
+				if not best or score > best.score + 1e-9 then
 					best = { score = score, notable = notable, placements = placements }
 				end
 			end
@@ -256,7 +266,7 @@ function MetaJewelFinderClass:UniqueJewel(baseScore, title, preferredStat, limit
 		t_insert(options, { db.defaultVariant or (#list > 0 and #list or nil) })
 	end
 	-- variants screened quickly, the best three scored in full
-	local quick = self.ctx.quickScore ~= nil
+	local quick = self.ctx.quickScore ~= nil and not self.ctx.noQuick
 	local tried = { }
 	for _, opt in ipairs(options) do
 		local item = variantItem(db, opt[1], opt[2])
@@ -269,7 +279,7 @@ function MetaJewelFinderClass:UniqueJewel(baseScore, title, preferredStat, limit
 	for i = 1, quick and math.min(3, #tried) or #tried do
 		local entry = tried[i]
 		if quick then entry.score = self:TryJewels(entry.placements) end
-		if not best or entry.score > best.score then best = entry end
+		if not best or entry.score > best.score + 1e-9 then best = entry end
 	end
 	if not best then return nil end
 	-- jewels that grow with the passives between their socket and the class
@@ -279,7 +289,7 @@ function MetaJewelFinderClass:UniqueJewel(baseScore, title, preferredStat, limit
 	if title == "Split Personality" then
 		local item = best.placements[1].item
 		local candidates = self:Sockets(8, true)
-		local quick = self.ctx.quickScore ~= nil
+		local quick = self.ctx.quickScore ~= nil and not self.ctx.noQuick
 		local base = quick and self:TryJewels(best.placements, false, true) or best.score
 		local found = { }
 		for i = 1, math.min(#candidates, 16) do
@@ -293,7 +303,7 @@ function MetaJewelFinderClass:UniqueJewel(baseScore, title, preferredStat, limit
 		table.sort(found, function(a, b) return a.score > b.score end)
 		for i = 1, quick and math.min(3, #found) or #found do
 			local score = quick and self:TryJewels({ found[i].placement }) or found[i].score
-			if score > best.score then
+			if score > best.score + 1e-9 then
 				best.score, best.placements = score, { found[i].placement }
 			end
 		end
@@ -369,7 +379,7 @@ function MetaJewelFinderClass:BestUniqueJewel(baseScore, allowed, quickScore)
 		local entry = ranked[i]
 		local placement = { node = entry.node, item = entry.item }
 		local score = self:TryJewels({ placement })
-		if not best or score > best.score then
+		if not best or score > best.score + 1e-9 then
 			best = { score = score, placements = { placement }, label = entry.title .. (entry.variant and (" (" .. entry.variant .. ")") or ""), title = entry.title }
 		end
 	end

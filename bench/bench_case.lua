@@ -58,6 +58,14 @@ local gen = new("BuildGenerator"):BuildGenerator(build, {
 	quick = mode == "quick", synergies = os.getenv("SYNERGIES") == "1", archetype = archetype, yieldEvery = 1e9,
 	debugTiming = os.getenv("DEBUG_TIMING") == "1",
 })
+-- GEN_OPTS="name=value,...": generator options (true / false / numbers), for A/B runs
+for pair in (os.getenv("GEN_OPTS") or ""):gmatch("[^,]+") do
+	local k, v = pair:match("^%s*([%w_]+)%s*=%s*(.-)%s*$")
+	if k then
+		if v == "true" then v = true elseif v == "false" then v = false else v = tonumber(v) or v end
+		gen.options[k] = v
+	end
+end
 local t0 = os.clock()
 local co = coroutine.create(function() return gen:Run() end)
 local ok, res = coroutine.resume(co)

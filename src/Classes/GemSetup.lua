@@ -296,14 +296,14 @@ function GemSetupClass:ChooseCurses()
 						local gems = { }
 						for _, gid in ipairs(option.gems) do t_insert(gems, gemEntry(gid)) end
 						local score = self:TryGroup(gems)
-						if not bestScore or score > bestScore then
+						if not bestScore or score > bestScore + 1e-9 then
 							best, bestScore = { id = id, option = option, gems = gems }, score
 						end
 					end
 				end
 				if brandGroup and not data.gems[id].tags.mark then
 					local score = self:TryInGroup(brandGroup, gemEntry(id))
-					if not bestScore or score > bestScore then
+					if not bestScore or score > bestScore + 1e-9 then
 						best, bestScore = { id = id, option = { label = data.gems[id].name .. " on the same Arcanist Brand" }, into = brandGroup }, score
 					end
 				end
@@ -412,7 +412,7 @@ function GemSetupClass:ChooseAuras(maxBuffs)
 				elseif #auraGroup.gemList < auraGroup.capacity then
 					score = self:TryInGroup(auraGroup, gemEntry(id))
 				end
-				if score and (not bestScore or score > bestScore) then
+				if score and (not bestScore or score > bestScore + 1e-9) then
 					best, bestScore = id, score
 				end
 			end
@@ -497,7 +497,7 @@ function GemSetupClass:ChooseBest(kind, options, allowNeutral)
 			local gems = { }
 			for _, gid in ipairs(option.gems) do t_insert(gems, gemEntry(gid)) end
 			local score = self:TryGroup(gems)
-			if not bestScore or score > bestScore then
+			if not bestScore or score > bestScore + 1e-9 then
 				best, bestScore = { option = option, gems = gems }, score
 			end
 		end
@@ -646,7 +646,7 @@ function GemSetupClass:ChooseFillers()
 				local score = self:TryGroup(gems)
 				-- (automatic setups are worth a slot even when PoB can't count them)
 				local value = score + (option.auto and 0.001 or 0)
-				if not bestScore or value > bestScore then best, bestScore = option, value end
+				if not bestScore or value > bestScore + 1e-9 then best, bestScore = option, value end
 			end
 		end
 		if not best or bestScore - current < (best.auto and -0.0005 or 0.002) then break end
@@ -688,7 +688,7 @@ function GemSetupClass:ChooseFillers()
 					local group = self:AddGroup("try", { gemEntry(id) }, slotName)
 					local score = self:Score()
 					self:RemoveGroup(group)
-					if not bestScore or score > bestScore then best, bestScore = id, score end
+					if not bestScore or score > bestScore + 1e-9 then best, bestScore = id, score end
 				end
 			end
 			if best and bestScore > current + 0.002 then
@@ -710,7 +710,7 @@ function GemSetupClass:ChooseLifetap()
 	for _, group in ipairs(self.groups) do
 		if not group.label:match("^Auras") and not group.label:match("^Golem") and group.slot and (free[group.slot] or 0) > 0 then
 			local score = self:TryInGroup(group, gemEntry(id))
-			if not bestScore or score > bestScore then best, bestScore = group, score end
+			if not bestScore or score > bestScore + 1e-9 then best, bestScore = group, score end
 		end
 	end
 	if best and bestScore > current + 0.002 then

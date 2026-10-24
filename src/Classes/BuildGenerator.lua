@@ -19,6 +19,16 @@ local m_max = math.max
 local m_floor = math.floor
 
 ---@class BuildGenerator
+
+-- Nodes of a node table in id order (pairs() order changes from run to run:
+-- LuaJIT seeds its hashing per process, and greedy choices follow the order)
+local function nodesById(tbl)
+	local list = { }
+	for _, node in pairs(tbl) do list[#list + 1] = node end
+	table.sort(list, function(a, b) return a.id < b.id end)
+	return list
+end
+
 local BuildGeneratorClass = newClass("BuildGenerator")
 
 -- Armour base tag for each class's attributes
@@ -506,7 +516,7 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 				self.build.skillsTab:ProcessSocketGroup(group)
 				local score = self:Score()
 				t_remove(group.gemList)
-				if not bestScore or score > bestScore then best, bestScore = gemId, score end
+				if not bestScore or score > bestScore + 1e-9 then best, bestScore = gemId, score end
 			end
 		end
 		if best then t_insert(forced, 1, best) end
@@ -526,7 +536,7 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 				self.build.skillsTab:ProcessSocketGroup(group)
 				local score = self:WithChargesOf(gem, function() return self:Score() end)
 				t_remove(group.gemList)
-				if not bestScore or score > bestScore then
+				if not bestScore or score > bestScore + 1e-9 then
 					best, bestScore = gemId, score
 				end
 			end
@@ -626,7 +636,7 @@ function BuildGeneratorClass:TryTopPlayerSupports(supports, forced, maxSupports)
 			end
 			self.build.skillsTab:ProcessSocketGroup(group)
 			local score = self:Score()
-			if not bestScore or score > bestScore then best, bestScore, bestCount = ids, score, set.count end
+			if not bestScore or score > bestScore + 1e-9 then best, bestScore, bestCount = ids, score, set.count end
 		end
 	end
 	for j = #group.gemList, 2, -1 do t_remove(group.gemList, j) end
@@ -701,7 +711,7 @@ function BuildGeneratorClass:AuraStackMove()
 							local score = self:Score()
 							t_insert(group.gemList, i, g)
 							skillsTab:ProcessSocketGroup(group)
-							if not bestScore or score > bestScore then bestGroup, bestIndex, bestScore = group, i, score end
+							if not bestScore or score > bestScore + 1e-9 then bestGroup, bestIndex, bestScore = group, i, score end
 						end
 					end
 				end
@@ -857,7 +867,7 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly, warm)
 	end
 	local function candidates(ascendancy)
 		local list = { }
-		for _, node in pairs(spec.nodes) do
+		for _, node in ipairs(nodesById(spec.nodes)) do
 			if not node.alloc and node.path and node.type ~= "ClassStart" and node.type ~= "AscendClassStart"
 				and node.type ~= "Socket" and not node.isProxy and not node.expansionJewel
 				and not (self.forbiddenNodes and self.forbiddenNodes[node.id]) then
@@ -1084,7 +1094,7 @@ function BuildGeneratorClass:SearchAscendancy()
 	local current = self:Score()
 	-- 1. notables (and multiple choice options) reachable with the points left
 	local targets = { }
-	for _, node in pairs(spec.nodes) do
+	for _, node in ipairs(nodesById(spec.nodes)) do
 		if own(node) and not node.alloc and node.path and not node.isMultipleChoice
 			and (node.type == "Notable" or node.isMultipleChoiceOption) then
 			local pathSet, cost = { }, 0
@@ -1125,7 +1135,7 @@ function BuildGeneratorClass:SearchAscendancy()
 				if cost(union) <= left then
 					t_insert(chosen, t)
 					local score = self:Score({ addNodes = union })
-					if score > bestScore then
+					if score > bestScore + 1e-9 then
 						best, bestScore = { }, score
 						for _, c in ipairs(chosen) do t_insert(best, c) end
 					end
@@ -1155,7 +1165,7 @@ function BuildGeneratorClass:TrimTree()
 			if over <= 0 then break end
 			local current = self:Score()
 			local best, bestLoss
-			for _, node in pairs(spec.allocNodes) do
+			for _, node in ipairs(nodesById(spec.allocNodes)) do
 				local isAsc = node.ascendancyName ~= nil
 				local holdsJewel = node.type == "Socket" and (spec.jewels[node.id] or 0) ~= 0
 				local protected = self.protectedNodes and self.protectedNodes[node.id]
@@ -1194,7 +1204,7 @@ function BuildGeneratorClass:AscendancyRecheck()
 	local undo = spec:CreateUndoState()
 	local function notables()
 		local list = { }
-		for _, node in pairs(spec.allocNodes) do
+		for _, node in ipairs(nodesById(spec.allocNodes)) do
 			if node.ascendancyName and (node.type == "Notable" or node.isMultipleChoiceOption) then t_insert(list, node.dn) end
 		end
 		t_sort(list)
@@ -1252,7 +1262,7 @@ end
 function BuildGeneratorClass:ClearAscendancy()
 	local spec = self.build.spec
 	local list = { }
-	for _, node in pairs(spec.allocNodes) do
+	for _, node in ipairs(nodesById(spec.allocNodes)) do
 		if node.ascendancyName and node.type ~= "AscendClassStart" and not (spec.curSecondaryAscendClass and node.id == spec.curSecondaryAscendClass.startNodeId) then
 			t_insert(list, node)
 		end
@@ -1287,7 +1297,7 @@ function BuildGeneratorClass:ChooseBloodline()
 		self:Recalculate()
 		local current = self:Score()
 		local values = { }
-		for _, node in pairs(spec.nodes) do
+		for _, node in ipairs(nodesById(spec.nodes)) do
 			if node.ascendancyName == ascend.id and not node.alloc and node.path and (node.type == "Notable" or node.isMultipleChoiceOption) then
 				local pathSet = { }
 				for _, n in ipairs(node.path) do pathSet[n] = true end
@@ -1309,7 +1319,7 @@ function BuildGeneratorClass:ChooseBloodline()
 		self:AllocateTree(true, true)
 		local notables = 0
 		local ascend = tree.alternate_ascendancies[id]
-		for _, node in pairs(spec.allocNodes) do
+		for _, node in ipairs(nodesById(spec.allocNodes)) do
 			if ascend and node.ascendancyName == ascend.id and (node.type == "Notable" or node.isMultipleChoiceOption) then notables = notables + 1 end
 		end
 		return self:FullScore(), notables
@@ -1331,7 +1341,7 @@ function BuildGeneratorClass:ChooseBloodline()
 	self:Recalculate()
 	if bestId ~= 0 and tree.alternate_ascendancies[bestId] then
 		local names = { }
-		for _, node in pairs(spec.allocNodes) do
+		for _, node in ipairs(nodesById(spec.allocNodes)) do
 			if node.ascendancyName == tree.alternate_ascendancies[bestId].id and (node.type == "Notable" or node.isMultipleChoiceOption) then
 				t_insert(names, node.dn)
 			end
@@ -1348,7 +1358,7 @@ function BuildGeneratorClass:ChooseBases()
 	for _, tag in ipairs(armourTags) do
 		self:EquipArmourType(tag)
 		local score = self:FullScore()
-		if not bestScore or score > bestScore then bestTag, bestScore = tag, score end
+		if not bestScore or score > bestScore + 1e-9 then bestTag, bestScore = tag, score end
 	end
 	self:EquipArmourType(bestTag)
 	self:Note("Armour type: " .. bestTag:gsub("_armour", ""):gsub("_", "/"))
@@ -1360,7 +1370,7 @@ function BuildGeneratorClass:ChooseBases()
 		for _, baseName in ipairs(self:BasesOfType(function(base) return base.type == baseType end)) do
 			local item = makeBase(baseName)
 			local score = self:Score({ repSlotName = slotName, repItem = item })
-			if not bestS or score > bestS then best, bestS = baseName, score end
+			if not bestS or score > bestS + 1e-9 then best, bestS = baseName, score end
 		end
 		if best then self:Equip(makeBase(best), slotName) end
 	end
@@ -1469,7 +1479,7 @@ function BuildGeneratorClass:MakeRares(withInfluences)
 		influences = withInfluences and investment and investment.influences or 0,
 		elevated = withInfluences and investment and investment.elevated or false,
 		eldritchTier = withInfluences and investment and investment.eldritchTier or 0,
-		weaponSeeds = self.options.weaponSeeds, crafts = self.options.crafts,
+		weaponSeeds = self.options.weaponSeeds, crafts = self.options.crafts, lazyFill = self.options.lazyFill,
 		yieldEvery = nil,
 	}
 	local function withSlots(slots)
@@ -1496,7 +1506,7 @@ function BuildGeneratorClass:MakeRares(withInfluences)
 			local report = finder:RunRares(withSlots({ "Weapon 1", "Weapon 2" }))
 			finder:EquipAll(report)
 			local score = self:FullScore()
-			if not bestScore or score > bestScore then best, bestScore = option, score end
+			if not bestScore or score > bestScore + 1e-9 then best, bestScore = option, score end
 		end
 		self:EquipWeapons(best)
 		self:Recalculate()
@@ -1640,7 +1650,7 @@ function BuildGeneratorClass:AddJewels(maxJewels)
 	local generator = finder.rareGenerator
 	self:Recalculate()
 	local sockets = { }
-	for _, node in pairs(spec.nodes) do
+	for _, node in ipairs(nodesById(spec.nodes)) do
 		if node.type == "Socket" and not node.alloc and node.path and #node.path <= 5 and not node.expansionJewel and self.itemsTab.slots["Jewel " .. node.id] then
 			t_insert(sockets, node)
 		end
@@ -1729,7 +1739,7 @@ function BuildGeneratorClass:RefineTree(count)
 	while left > 0 do
 		local current = self:Score()
 		local list = { }
-		for _, node in pairs(spec.allocNodes) do
+		for _, node in ipairs(nodesById(spec.allocNodes)) do
 			if removable(node) then
 				t_insert(list, { node = node, loss = current - self:Score({ removeNodes = { [node] = true } }) })
 			end
@@ -1813,7 +1823,7 @@ function BuildGeneratorClass:PairAilments()
 			self:Recalculate()
 			local current = self:Score()
 			local bestRatio = 0
-			for _, node in pairs(spec.nodes) do
+			for _, node in ipairs(nodesById(spec.nodes)) do
 				if not node.alloc and node.path and #node.path <= 8 and not node.ascendancyName and text(node):find(pair.target, 1, true) then
 					local pathSet = { }
 					for _, n in ipairs(node.path) do pathSet[n] = true end
@@ -1823,7 +1833,7 @@ function BuildGeneratorClass:PairAilments()
 			-- 2. the cheapest passive that adds a chance to inflict it
 			local source
 			if bestRatio > 0.002 then
-				for _, node in pairs(spec.nodes) do
+				for _, node in ipairs(nodesById(spec.nodes)) do
 					if not node.alloc and node.path and #node.path <= 5 and not node.ascendancyName and node.type ~= "Mastery" then
 						local t = text(node)
 						for _, pattern in ipairs(pair.source) do
@@ -1879,7 +1889,7 @@ function BuildGeneratorClass:ChooseTimelessJewel()
 		build = self.build,
 		score = function(override) return (self:Score(override)) end,
 		fullScore = function() return (self:FullScore()) end,
-		quickScore = function() self:Recalculate() return (self:Score()) end,
+		quickScore = function() self:Recalculate() return (self:Score()) end, noQuick = self.options.jewelQuick == false,
 		equip = function(item, slotName) return self:Equip(item, slotName) end,
 		tick = function() self:Tick() end,
 	})
@@ -1923,7 +1933,7 @@ function BuildGeneratorClass:ChooseMetaJewels(onlyKinds)
 	local finder = new("MetaJewelFinder"):MetaJewelFinder({
 		build = self.build,
 		fullScore = function() return (self:FullScore()) end,
-		quickScore = function() self:Recalculate() return (self:Score()) end,
+		quickScore = function() self:Recalculate() return (self:Score()) end, noQuick = self.options.jewelQuick == false,
 		equip = function(item, slotName) return self:Equip(item, slotName) end,
 		tick = function() self:Tick() end,
 	})
@@ -1998,7 +2008,7 @@ function BuildGeneratorClass:ChooseClusterJewels(maxJewels)
 		build = self.build,
 		score = function(override) return (self:Score(override)) end,
 		fullScore = function() return (self:FullScore()) end,
-		quickScore = function() self:Recalculate() return (self:Score()) end,
+		quickScore = function() self:Recalculate() return (self:Score()) end, noQuick = self.options.jewelQuick == false,
 		equip = function(item, slotName) return self:Equip(item, slotName) end,
 		tick = function() self:Tick() end,
 	})
@@ -2056,7 +2066,7 @@ function BuildGeneratorClass:ApplyArchetypeUniques()
 				for _, slotName in ipairs(slots) do
 					if not self.lockedSlots[slotName] and self.itemsTab:IsItemValidForSlot(item, slotName) then
 						local score = self:Score({ repSlotName = slotName, repItem = item })
-						if not best or score > best.score then best = { item = item, slot = slotName, score = score } end
+						if not best or score > best.score + 1e-9 then best = { item = item, slot = slotName, score = score } end
 					end
 				end
 			end
@@ -2086,7 +2096,7 @@ function BuildGeneratorClass:ChooseArchetypeJewels()
 	local finder = new("MetaJewelFinder"):MetaJewelFinder({
 		build = self.build,
 		fullScore = function() return (self:FullScore()) end,
-		quickScore = function() self:Recalculate() return (self:Score()) end,
+		quickScore = function() self:Recalculate() return (self:Score()) end, noQuick = self.options.jewelQuick == false,
 		equip = function(item, slotName) return self:Equip(item, slotName) end,
 		tick = function() self:Tick() end,
 	})
@@ -2171,7 +2181,7 @@ function BuildGeneratorClass:JointMoves(rounds)
 						override.repItems[slotName] = item
 						local score = self:Score(override)
 						override.repItems[slotName] = nil
-						if not bestScore or score > bestScore then bestSlot, bestScore = slotName, score end
+						if not bestScore or score > bestScore + 1e-9 then bestSlot, bestScore = slotName, score end
 					end
 				end
 				if bestSlot then
@@ -2232,7 +2242,7 @@ function BuildGeneratorClass:JointMoves(rounds)
 				local score = self:FullScore()
 				revert(state)
 				for j = #self.log, savedLog + 1, -1 do t_remove(self.log, j) end
-				if score > base + 0.01 and (not bestScore or score > bestScore) then best, bestScore = move, score end
+				if score > base + 0.01 and (not bestScore or score > bestScore + 1e-9) then best, bestScore = move, score end
 			end
 			self:Tick()
 		end
@@ -2353,7 +2363,7 @@ function BuildGeneratorClass:ChooseMetaUniques()
 				local equipped = slot and self.itemsTab.items[slot.selItemId]
 				if self.itemsTab:IsItemValidForSlot(item, slotName) and not (equipped and equipped.title == item.title) and not (self.lockedSlots and self.lockedSlots[slotName]) then
 					local score = self:Score({ repSlotName = slotName, repItem = item })
-					if not bestScore or score > bestScore then bestSlot, bestScore = slotName, score end
+					if not bestScore or score > bestScore + 1e-9 then bestSlot, bestScore = slotName, score end
 				end
 			end
 			if bestSlot and bestScore > current + 0.003 then
@@ -2504,7 +2514,12 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 			end
 		end
 	end
-	t_sort(gains, function(a, b) return a.gain > b.gain end)
+	t_sort(gains, function(a, b)
+		local qa, qb = m_floor(a.gain * 1e9 + 0.5), m_floor(b.gain * 1e9 + 0.5)
+		if qa ~= qb then return qa > qb end
+		if a.slot ~= b.slot then return a.slot < b.slot end
+		return (a.item.title or a.item.name) < (b.item.title or b.item.name)
+	end)
 	if self.options.debugTiming then
 		ConPrintf("[uniques] %d candidates, %d gains", #candidates, #gains)
 		for i = 1, m_min(10, #gains) do ConPrintf("  %.3f %s in %s", gains[i].gain, gains[i].item.title or gains[i].item.name, gains[i].slot) end
@@ -2583,7 +2598,12 @@ function BuildGeneratorClass:UniqueFlaskSweep(maxTries)
 			end
 		end
 	end
-	t_sort(gains, function(a, b) return a.gain > b.gain end)
+	t_sort(gains, function(a, b)
+		local qa, qb = m_floor(a.gain * 1e9 + 0.5), m_floor(b.gain * 1e9 + 0.5)
+		if qa ~= qb then return qa > qb end
+		if a.slot ~= b.slot then return a.slot < b.slot end
+		return (a.item.title or a.item.name) < (b.item.title or b.item.name)
+	end)
 	local kept, usedSlots, usedItems = { }, { }, { }
 	local tries = 0
 	for _, entry in ipairs(gains) do
@@ -2636,7 +2656,7 @@ function BuildGeneratorClass:ChooseAnoint()
 	for _, entry in ipairs(extras:AnointCandidates(self.options.investment)) do
 		local copy = extras:AnointedCopy(amulet, entry.node)
 		local score = self:Score({ repSlotName = "Amulet", repItem = copy })
-		if not bestScore or score > bestScore then best, bestScore, bestEntry = copy, score, entry end
+		if not bestScore or score > bestScore + 1e-9 then best, bestScore, bestEntry = copy, score, entry end
 	end
 	if best and bestScore > current + 0.002 then
 		self:Equip(best, "Amulet")
@@ -2732,7 +2752,7 @@ function BuildGeneratorClass:ApplySynergies(rounds)
 		local result = finder:Run()
 		local best
 		for _, idea in ipairs(result.ideas) do
-			if not best or idea.score > best.score then best = idea end
+			if not best or idea.score > best.score + 1e-9 then best = idea end
 		end
 		if not best or best.gain <= 0.01 then break end
 		finder:Apply(best)
@@ -2916,6 +2936,17 @@ function BuildGeneratorClass:Run()
 	end
 	self:PairAilments()
 	self:OptimizeTree()
+	-- a second, cheap round: the rebuilt tree can want other supports or
+	-- ascendancy notables (and those other passives)
+	if opts.polishRound ~= false then
+		local gain = 0
+		if opts.finalSupports ~= false then gain = gain + self:FinalSupports() end
+		if opts.ascendancyRecheck ~= false then gain = gain + self:AscendancyRecheck() end
+		if gain > 0 then
+			local tree = self:RefineTree(10)
+			if tree > 0.001 then self:Note(string.format("Passive tree adjusted for them: score %+.3f", tree)) end
+		end
+	end
 
 	self:RemoveUnusedItems()
 	self:AutoConfigure()

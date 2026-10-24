@@ -217,7 +217,7 @@ function FlaskGeneratorClass:Generate(ctx)
 					end
 				end
 			end
-			if not best or pickScore > best.score then
+			if not best or pickScore > best.score + 1e-9 then
 				best = { baseName = baseName, prefix = pick.Prefix, suffix = pick.Suffix, score = pickScore }
 			end
 		end
@@ -225,7 +225,7 @@ function FlaskGeneratorClass:Generate(ctx)
 		for _, item in ipairs(existing) do
 			if not usedBases[item.baseName] and not chosenItems[item] and not (item.type == "Tincture" and usedTincture) then
 				local score = quickScore(slotName, item)
-				if not best or score > best.score then
+				if not best or score > best.score + 1e-9 then
 					best = { existing = item, baseName = item.baseName, score = score }
 				end
 			end
