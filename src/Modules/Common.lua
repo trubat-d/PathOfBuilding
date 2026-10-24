@@ -1144,3 +1144,19 @@ function HashStats(stats, extraStat)
 	end
 	return murmurHash2(statHashes, GGG_TRADE_SEED)
 end
+
+-- Shared price source for the build ideas tools (prices load once per session)
+function GetPriceSource()
+	if not main.priceSource then
+		main.priceSource = new("PriceSource"):PriceSource()
+	end
+	return main.priceSource
+end
+
+-- Shared poe.ninja build statistics source for the build ideas tools
+function GetBuildMetaSource()
+	if not main.buildMetaSource then
+		main.buildMetaSource = new("BuildMetaSource"):BuildMetaSource()
+	end
+	return main.buildMetaSource
+end

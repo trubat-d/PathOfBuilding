@@ -812,7 +812,15 @@ function calcs.initEnv(build, mode, override, specEnv)
 				goto continue
 			end
 			local item
-			if slotName == override.repSlotName then
+			if override.repItems and override.repItems[slotName] ~= nil then
+				-- Several items swapped at once (false = slot emptied)
+				item = override.repItems[slotName] or nil
+			elseif override.repItems and slotName:match("^Weapon 2") and override.repItems[slotName:gsub("Weapon 2", "Weapon 1")]
+			and override.repItems[slotName:gsub("Weapon 2", "Weapon 1")].base and override.repItems[slotName:gsub("Weapon 2", "Weapon 1")].base.type
+			and not (env.data.weaponTypeInfo[override.repItems[slotName:gsub("Weapon 2", "Weapon 1")].base.type] or { oneHand = true }).oneHand then
+				-- A two handed weapon was swapped into Weapon 1
+				goto continue
+			elseif slotName == override.repSlotName then
 				item = override.repItem
 			elseif override.repItem and override.repSlotName:match("^Weapon 1") and slotName:match("^Weapon 2") and
 			(override.repItem.base.type == "Staff" or override.repItem.base.type == "Two Handed Sword" or override.repItem.base.type == "Two Handed Axe" or override.repItem.base.type == "Two Handed Mace"
@@ -1022,12 +1030,14 @@ function calcs.initEnv(build, mode, override, specEnv)
 		-- Track which flask slot (1-5) each flask is in, for adjacency checks
 		env.flaskSlotMap = { }
 		env.flaskSlotOccupied = { }
+		env.flaskSlotItems = { }
 		for _, slot in ipairs(build.itemsTab.orderedSlots) do
 			local slotName = slot.slotName
 			local item = items[slotName]
 			if item and item.type == "Flask" then
+				env.flaskSlotItems[slotName] = item
 				env.itemModDB.conditions["Have"..item.baseName:gsub("%s+", "")] = true
-				if slot.active then
+				if slot.active or (override.activeFlaskSlots and override.activeFlaskSlots[slotName]) then
 					env.flasks[item] = true
 				end
 				local flaskNum = tonumber(slotName:match("Flask (%d+)"))

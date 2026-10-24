@@ -2634,8 +2634,29 @@ function ItemsTabClass:OpenBestItemsPopup()
 	local controls = { }
 	local popup
 	local state = { running = false, status = "", report = nil }
+	local function rareMode()
+		return controls.mode.selIndex == 2
+	end
+	local function idle()
+		return not state.running
+	end
 
-	-- Stat to rank by
+	-- Row 1: what to search and which stat to rank by
+	controls.modeLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 22, 0, 16}, "^7Search:")
+	controls.mode = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {118, 20, 220, 20}, { "Uniques", "Generated rares" }, function(index, value)
+		self.bestItemsMode = index
+		state.report = nil
+		controls.results:SetReport(nil)
+		state.status = ""
+	end)
+	controls.mode.selIndex = self.bestItemsMode or 1
+	controls.mode.enabled = idle
+	controls.mode.tooltipFunc = function(tooltip, mode, index, value)
+		tooltip:Clear()
+		tooltip:AddLine(16, "^7Uniques: tries every unique from the item database in each slot.")
+		tooltip:AddLine(16, "^7Generated rares: builds the best rare for each slot from the mods that can")
+		tooltip:AddLine(16, "^7roll on the base of the item you have there now (3 prefixes, 3 suffixes).")
+	end
 	local statList = { }
 	local defaultIndex = 1
 	for _, stat in ipairs(data.powerStatList) do
@@ -2646,18 +2667,59 @@ function ItemsTabClass:OpenBestItemsPopup()
 			end
 		end
 	end
-	controls.statLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 22, 0, 16}, "^7Rank items by:")
-	controls.stat = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {118, 20, 220, 20}, statList, function(index, value)
+	controls.statLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {360, 22, 0, 16}, "^7Rank by:")
+	controls.stat = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {422, 20, 220, 20}, statList, function(index, value)
 		self.bestItemsStat = value.stat.stat
 	end)
 	controls.stat.selIndex = defaultIndex
-	controls.stat.enabled = function() return not state.running end
+	controls.stat.enabled = idle
 
-	-- Filters
-	controls.obtainable = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {122, 50, 18}, "Obtainable only:", nil, "Skip uniques that can no longer be obtained.", true)
-	controls.level = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {292, 50, 18}, "My level or lower:", nil, "Skip uniques that need a higher character level than this build.", true)
-	controls.resists = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {482, 50, 18}, "Keep resists capped:", nil, "Skip uniques that would lower a fire, cold or lightning resistance below its cap.", true)
-	controls.attributes = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {664, 50, 18}, "Keep attributes met:", nil, "Skip uniques that would leave a gem or item attribute requirement unmet.", true)
+	-- Row 2: mod quality (rares) or obtainable filter (uniques)
+	local qualityList = { }
+	for _, quality in ipairs(finder.rareQualityList) do
+		t_insert(qualityList, { label = quality.label, quality = quality })
+	end
+	controls.qualityLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 50, 0, 16}, "^7Mod quality:")
+	controls.qualityLabel.shown = rareMode
+	controls.quality = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {118, 48, 290, 20}, qualityList, function(index, value)
+		self.bestItemsQuality = index
+	end)
+	controls.quality.selIndex = self.bestItemsQuality or finder.rareGenerator.defaultQuality
+	controls.quality.shown = rareMode
+	controls.quality.enabled = idle
+	controls.quality.tooltipFunc = function(tooltip, mode, index, value)
+		tooltip:Clear()
+		tooltip:AddLine(16, "^7Which mod tiers the generated rares use.")
+		tooltip:AddLine(16, "^7Tier 1 with perfect rolls is a theoretical maximum that is almost never found.")
+		tooltip:AddLine(16, "^7Tier 2-3 with average rolls is close to what you can actually buy or craft.")
+	end
+	local investmentList = { }
+	for _, level in ipairs(GetPriceSource().levels) do t_insert(investmentList, { label = level.label, level = level }) end
+	controls.investmentLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {430, 50, 0, 16}, "^7Investment:")
+	controls.investment = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {510, 48, 300, 20}, investmentList, function(index)
+		self.bestItemsInvestment = index
+	end)
+	controls.investment.selIndex = self.bestItemsInvestment or GetPriceSource().defaultLevel
+	controls.investment.enabled = idle
+	controls.investment.tooltipFunc = function(tooltip)
+		tooltip:Clear()
+		tooltip:AddLine(16, "^7Uniques: skip items above this price (poe.ninja, see the Build Ideas window to update prices).")
+		tooltip:AddLine(16, "^7Generated rares: keep the slot's base, implicits and enchants; influenced mods from")
+		tooltip:AddLine(16, "^7Mid (one influence) and High (two), elevated mods only with No limit.")
+		tooltip:AddLine(16, "^7Armour pieces also get Exarch / Eater implicits: tier 1 at League start up to Perfect at No limit.")
+		tooltip:AddLine(16, "^7" .. StripEscapes(GetPriceSource():Status()))
+	end
+	controls.obtainable = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {140, 49, 18}, "Obtainable only:", nil, "Skip uniques that can no longer be obtained.", true)
+	controls.obtainable.shown = function() return not rareMode() end
+
+	-- Row 3: filters shared by both modes
+	controls.level = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {140, 77, 18}, "My level or lower:", nil, "Skip uniques, or mod tiers, that need a higher character level than this build.", true)
+	controls.resists = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {345, 77, 18}, "Keep resists capped:", nil, "Don't let a fire, cold or lightning resistance drop below its cap.\nGenerated rares add resistance mods when needed.", true)
+	controls.attributes = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {525, 77, 18}, "Keep attributes met:", nil, "Don't leave a gem or item attribute requirement unmet.\nGenerated rares add attribute mods when needed.", true)
+	controls.life = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {690, 77, 18}, "Keep life & ES:", nil, "Don't lower maximum life or energy shield.\nGenerated rares add life or energy shield mods when needed.", true)
+	for _, name in ipairs({ "obtainable", "level", "resists", "attributes", "life" }) do
+		controls[name].enabled = idle
+	end
 
 	-- Results
 	local function equipResult(result)
@@ -2672,14 +2734,14 @@ function ItemsTabClass:OpenBestItemsPopup()
 		end
 		state.status = "^7Equipped " .. result.item.name .. ". Search again to refresh the other gains."
 	end
-	controls.results = new("BestItemListControl"):BestItemListControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 112, 728, 300}, self, finder, equipResult)
+	controls.results = new("BestItemListControl"):BestItemListControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 136, 828, 290}, self, finder, equipResult)
 
 	-- Search / stop
 	local function stopSearch()
 		main.onFrameFuncs["BestItemSearch"] = nil
 		state.running = false
 	end
-	controls.search = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 78, 100, 20}, function()
+	controls.search = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 104, 100, 20}, function()
 		return state.running and "Stop" or "Search"
 	end, function()
 		if state.running then
@@ -2691,20 +2753,36 @@ function ItemsTabClass:OpenBestItemsPopup()
 			state.status = "^7The unique database is still loading, try again in a moment."
 			return
 		end
+		local rares = rareMode()
 		local options = {
 			stat = controls.stat.list[controls.stat.selIndex].stat,
+			quality = controls.quality.list[controls.quality.selIndex].quality,
 			obtainableOnly = controls.obtainable.state,
 			levelOnly = controls.level.state,
 			keepResists = controls.resists.state,
 			keepAttributes = controls.attributes.state,
+			keepLife = controls.life.state,
+			investment = controls.investment.list[controls.investment.selIndex].level,
+			influences = controls.investment.list[controls.investment.selIndex].level.influences,
+			elevated = controls.investment.list[controls.investment.selIndex].level.elevated,
+			eldritchTier = controls.investment.list[controls.investment.selIndex].level.eldritchTier,
 			yieldEvery = 30,
 			onProgress = function(done, total)
-				state.status = string.format("^7Testing items... %d / %d (%d%%)", done, total, total > 0 and math.floor(done / total * 100) or 100)
+				if rares then
+					state.status = string.format("^7Generating rares... slot %d / %d", m_min(done + 1, total), total)
+				else
+					state.status = string.format("^7Testing items... %d / %d (%d%%)", done, total, total > 0 and math.floor(done / total * 100) or 100)
+				end
 			end,
 		}
-		local co = coroutine.create(function() return finder:Run(options) end)
+		local co = coroutine.create(function()
+			if rares then
+				return finder:RunRares(options)
+			end
+			return finder:Run(options)
+		end)
 		state.running = true
-		state.status = "^7Testing items..."
+		state.status = rares and "^7Generating rares..." or "^7Testing items..."
 		controls.results:SetReport(nil)
 		main.onFrameFuncs["BestItemSearch"] = function()
 			-- Stop if the popup was closed
@@ -2729,18 +2807,18 @@ function ItemsTabClass:OpenBestItemsPopup()
 				for _, slotReport in pairs(res.slots) do
 					if #slotReport.results > 0 then slots = slots + 1 end
 				end
-				state.status = string.format("^7Found upgrades for %d of %d slots. Double-click a row or use the buttons below to equip.", slots, #res.order)
+				state.status = string.format("^7Found upgrades for %d of %d slots. Double-click a row to equip; hover it to see the item%s.", slots, #res.order, res.rares and " and the best mods" or "")
 			end
 		end
 	end)
-	controls.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {128, 80, 0, 16}, function() return state.status end)
+	controls.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {128, 106, 0, 16}, function() return state.status end)
 
 	-- Equip buttons
-	controls.equip = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 424, 130, 20}, "Equip selected", function()
+	controls.equip = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 438, 130, 20}, "Equip selected", function()
 		equipResult(controls.results.selValue)
 	end)
 	controls.equip.enabled = function() return not state.running and controls.results.selValue ~= nil end
-	controls.equipAll = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {154, 424, 190, 20}, "Equip best in every slot", function()
+	controls.equipAll = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {154, 438, 190, 20}, "Equip best in every slot", function()
 		local count = finder:EquipAll(state.report)
 		controls.results:SetReport(nil)
 		controls.results.defaultText = string.format("^7Equipped %d items. Press \"Search\" again to look for further upgrades.", count)
@@ -2748,11 +2826,11 @@ function ItemsTabClass:OpenBestItemsPopup()
 		state.status = ""
 	end)
 	controls.equipAll.enabled = function() return not state.running and state.report ~= nil and #controls.results.list > 0 end
-	controls.close = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {664, 424, 80, 20}, "Close", function()
+	controls.close = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {764, 438, 80, 20}, "Close", function()
 		stopSearch()
 		main:ClosePopup()
 	end)
-	popup = main:OpenPopup(760, 456, "Find Best Items", controls, nil, nil, "close")
+	popup = main:OpenPopup(860, 470, "Find Best Items", controls, nil, nil, "close")
 end
 
 -- Opens the item crafting popup

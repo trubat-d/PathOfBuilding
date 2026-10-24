@@ -51,6 +51,10 @@ function BestItemListClass:GetRowValue(column, index, result)
 	if column == 1 then
 		return result.rank == 1 and ("^7" .. result.slotName) or "^8" .. result.slotName
 	elseif column == 2 then
+		if result.generated then
+			local influence = result.influences and #result.influences > 0 and (" ^xA0A0FF" .. self.finder.rareGenerator.InfluenceLabel(result.influences)) or ""
+			return colorCodes.RARE .. "Rare " .. result.item.baseName .. influence .. " ^8(" .. #result.chosen .. " mods)"
+		end
 		return colorCodes.UNIQUE .. result.item.name
 	elseif column == 3 then
 		return colorCodes.POSITIVE .. self.finder.FormatGain(result)
@@ -61,6 +65,16 @@ end
 function BestItemListClass:AddValueTooltip(tooltip, index, result)
 	if tooltip:CheckForUpdate(result, self.itemsTab.build.outputRevision) then
 		self.itemsTab:AddItemTooltip(tooltip, result.item, nil, true)
+		if result.modScores and #result.modScores > 0 then
+			-- Mod priority list: what to look for when crafting or trading
+			tooltip:AddSeparator(10)
+			tooltip:AddLine(16, "^7Best mods for this slot on their own (" .. self.report.stat.label .. "):")
+			for i = 1, math.min(10, #result.modScores) do
+				local score = result.modScores[i]
+				tooltip:AddLine(14, string.format("^8%d. %s%s ^8%s  %s+%s", i, score.type == "Prefix" and "^x8888FF" or "^xFFCC77", score.label, score.type, colorCodes.POSITIVE, formatNumSep(string.format("%.1f", score.gain))))
+			end
+			tooltip:AddLine(14, "^8Blue = prefix, yellow = suffix. An item can have at most 3 of each.")
+		end
 	end
 end
 

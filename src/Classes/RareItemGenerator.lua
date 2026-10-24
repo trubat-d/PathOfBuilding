@@ -1,0 +1,492 @@
+-- Path of Building
+--
+-- Class: Rare Item Generator
+-- Builds the best rare item for a gear slot out of the mods that can roll on
+-- the slot's current item base:
+--   1. every mod is scored on its own (how much it improves the chosen stat)
+--   2. the item is filled one mod at a time, recalculating after each pick, so
+--      mods that stop mattering (e.g. resistance once capped) are skipped
+-- Rules followed: at most 3 prefixes and 3 suffixes, one mod per mod group,
+-- no influenced, eldritch, crafted, fractured or delve mods.
+-- Runs entirely locally using the build's own calculator.
+--
+local pairs = pairs
+local ipairs = ipairs
+local t_insert = table.insert
+local t_remove = table.remove
+local t_sort = table.sort
+local m_floor = math.floor
+local m_max = math.max
+local m_min = math.min
+
+---@class RareItemGenerator
+local RareItemGeneratorClass = newClass("RareItemGenerator")
+
+-- Mod quality presets: which tier to use (1 = best) and how high it rolls (0 to 1)
+RareItemGeneratorClass.qualityList = {
+	{ label = "Tier 1, perfect rolls (theoretical max)", tier = 1, range = 1 },
+	{ label = "Tier 2-3, average rolls (realistic)", tier = 2, range = 0.25 },
+	{ label = "Tier 4 and below (cheap / league start)", tier = 4, range = 0.5 },
+}
+RareItemGeneratorClass.defaultQuality = 2
+
+local elements = { "Fire", "Cold", "Lightning" }
+local attributes = { "Str", "Dex", "Int" }
+
+-- Slot types the generator supports
+local supportedTypes = {
+	["Helmet"] = true, ["Body Armour"] = true, ["Gloves"] = true, ["Boots"] = true,
+	["Amulet"] = true, ["Ring"] = true, ["Belt"] = true, ["Shield"] = true, ["Quiver"] = true,
+}
+
+---@param finder BestItemFinder
+function RareItemGeneratorClass:RareItemGenerator(finder)
+	self.finder = finder
+	self.itemsTab = finder.itemsTab
+	self.build = finder.build
+	return self
+end
+
+function RareItemGeneratorClass:IsSupported(item)
+	if not item or not item.base then
+		return false
+	end
+	if item.base.flask or item.type == "Jewel" or item.type == "Tincture" or item.type == "Graft" then
+		return false
+	end
+	return supportedTypes[item.type] or item.base.weapon ~= nil
+end
+
+-- Creates an empty rare on the same base as the current item. Enchants and
+-- anoints are kept; implicits are kept unless the current item is a unique
+-- (unique implicits are not part of the base).
+function RareItemGeneratorClass:MakeBlankRare(current, influences)
+	local item = new("Item"):Item()
+	for _, key in ipairs(influences or { }) do
+		item[key] = true
+	end
+	item.name = "Best Rare, " .. current.baseName
+	item.title = "Best Rare"
+	item.base = current.base
+	item.baseName = current.baseName
+	item.rarity = "RARE"
+	item.crafted = true
+	item.buffModLines = { }
+	item.classRequirementModLines = { }
+	item.scourgeModLines = { }
+	item.crucibleModLines = { }
+	item.explicitModLines = { }
+	item.enchantModLines = copyTable(current.enchantModLines or { })
+	item.implicitModLines = { }
+	if current.rarity ~= "UNIQUE" and current.rarity ~= "RELIC" then
+		item.implicitModLines = copyTable(current.implicitModLines or { })
+	elseif current.base.implicit then
+		local index = 1
+		for line in current.base.implicit:gmatch("[^\n]+") do
+			local modList, extra = modLib.parseMod(line)
+			t_insert(item.implicitModLines, { line = line, extra = extra, modList = modList or { }, modTags = current.base.implicitModTypes and current.base.implicitModTypes[index] or { } })
+			index = index + 1
+		end
+	end
+	if current.sockets and #current.sockets > 0 then
+		item.sockets = copyTable(current.sockets)
+	end
+	item.quality = current.quality
+	item:NormaliseQuality()
+	item:BuildAndParseRaw()
+	return item
+end
+
+-- Groups the mods that can roll on this item into series (all tiers of one mod)
+-- and picks the tier to use for each series. Returns a list of candidates:
+-- { modId, mod, label, group, type }
+function RareItemGeneratorClass:GetCandidates(item, quality, levelOnly, modTable)
+	local charLevel = self.build.characterLevel
+	local series = { }
+	modTable = modTable or data.itemMods.Explicit
+	for modId, mod in pairs(modTable) do
+		local elevated = mod.affix and mod.affix:match("Elevated")
+		if (mod.type == "Prefix" or mod.type == "Suffix") and item.affixes[modId] and not item:CheckIfModIsDelve(mod) and item:CanHaveMod(mod)
+			and (self.allowElevated or not elevated) then
+			local key = (mod.group or modId) .. "|" .. table.concat(mod.statOrder or { }, ",")
+			series[key] = series[key] or { }
+			t_insert(series[key], modId)
+		end
+	end
+	local candidates = { }
+	for _, list in pairs(series) do
+		-- best tier first
+		t_sort(list, function(a, b)
+			local la, lb = modTable[a].level, modTable[b].level
+			if la ~= lb then
+				return la > lb
+			end
+			return a < b
+		end)
+		local index = m_min(quality.tier, #list)
+		if levelOnly then
+			-- skip tiers whose level requirement is above the character
+			while index <= #list and m_floor(modTable[list[index]].level * 0.8) > charLevel do
+				index = index + 1
+			end
+		end
+		local modId = list[index]
+		if modId then
+			local mod = modTable[modId]
+			local lines = { }
+			for _, line in ipairs(mod) do
+				t_insert(lines, (itemLib.applyRange(line, quality.range, 1, 1)))
+			end
+			t_insert(candidates, {
+				modId = modId,
+				mod = mod,
+				group = mod.group or modId,
+				type = mod.type,
+				tier = index,
+				lines = lines,
+				label = table.concat(lines, ", "),
+			})
+		end
+	end
+	t_sort(candidates, function(a, b) return a.modId < b.modId end)
+	return candidates
+end
+
+-- Total amount by which the build's resistances / attributes are worse than the baseline
+local function deficit(output, baseOutput, opts)
+	local total = 0
+	if opts.keepResists then
+		for _, elem in ipairs(elements) do
+			local key = "Missing" .. elem .. "Resist"
+			total = total + m_max(0, (output[key] or 0) - (baseOutput[key] or 0))
+		end
+	end
+	if opts.keepAttributes then
+		for _, attr in ipairs(attributes) do
+			local newMissing = m_max(0, (output["Req" .. attr] or 0) - (output[attr] or 0))
+			local oldMissing = m_max(0, (baseOutput["Req" .. attr] or 0) - (baseOutput[attr] or 0))
+			total = total + m_max(0, newMissing - oldMissing)
+		end
+	end
+	if opts.keepLife then
+		-- 20 life or energy shield counts as much as 1% resistance
+		for _, key in ipairs({ "Life", "EnergyShield" }) do
+			total = total + m_max(0, (baseOutput[key] or 0) - (output[key] or 0)) / 20
+		end
+	end
+	return total
+end
+
+-- Generates the best rare for a slot.
+-- ctx: { calcFunc, useFullDPS, stat, baseOutput, basePower, opts, tick = function() }
+-- Returns result (or nil) and the per-mod score list
+function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, influences)
+	local opts = ctx.opts
+	local quality = opts.quality or self.qualityList[self.defaultQuality]
+	local calcFunc, useFullDPS, stat = ctx.calcFunc, ctx.useFullDPS, ctx.stat
+
+	local subject = self:MakeBlankRare(current, influences)
+	local half = subject.affixLimit and subject.affixLimit > 0 and subject.affixLimit / 2 or 3
+	local prefixLimit = subject.prefixes.limit or half
+	local suffixLimit = subject.suffixes.limit or half
+	-- jewels roll from their own mod pool (2 prefixes + 2 suffixes on rares)
+	local modTable = current.type == "Jewel" and data.itemMods.Jewel or nil
+	local candidates = self:GetCandidates(subject, quality, opts.levelOnly, modTable)
+
+	-- Adds the parsed lines of a candidate to the test subject
+	local function push(candidate)
+		for _, line in ipairs(candidate.lines) do
+			local modList, extra = modLib.parseMod(line)
+			local modLine = { line = line, modList = modList or { }, extra = extra, modTags = candidate.mod.modTags or { } }
+			modLine[candidate.type == "Prefix" and "prefix" or "suffix"] = true
+			t_insert(subject.explicitModLines, modLine)
+		end
+	end
+	local function pop(candidate)
+		for _ = 1, #candidate.lines do
+			t_remove(subject.explicitModLines)
+		end
+	end
+	local function evaluate()
+		subject:BuildModList()
+		local output = calcFunc({ repSlotName = slotName, repItem = subject }, useFullDPS)
+		ctx.tick()
+		return output, ctx.measure(output)
+	end
+
+	-- 1. Score every mod on its own
+	local blankOutput, blankPower = evaluate()
+	local blankDeficit = deficit(blankOutput, ctx.baseOutput, opts)
+	for _, candidate in ipairs(candidates) do
+		push(candidate)
+		local output, power = evaluate()
+		pop(candidate)
+		candidate.gain = power - blankPower
+		candidate.fix = blankDeficit - deficit(output, ctx.baseOutput, opts)
+	end
+	local scores = { }
+	for _, candidate in ipairs(candidates) do
+		if candidate.gain > 0 then
+			t_insert(scores, candidate)
+		end
+	end
+	t_sort(scores, function(a, b) return a.gain > b.gain end)
+
+	-- 2. Shortlist: the strongest mods, plus the ones that fix resistances / attributes
+	local shortlist, inList = { }, { }
+	local function addToShortlist(candidate)
+		if not inList[candidate] then
+			inList[candidate] = true
+			t_insert(shortlist, candidate)
+		end
+	end
+	for i = 1, m_min(opts.shortlistSize or 20, #scores) do
+		addToShortlist(scores[i])
+	end
+	if blankDeficit > 0 then
+		local fixers = { }
+		for _, candidate in ipairs(candidates) do
+			if candidate.fix > 0 then
+				t_insert(fixers, candidate)
+			end
+		end
+		t_sort(fixers, function(a, b)
+			if a.fix ~= b.fix then
+				return a.fix > b.fix
+			end
+			return a.gain > b.gain
+		end)
+		for i = 1, m_min(12, #fixers) do
+			addToShortlist(fixers[i])
+		end
+	end
+
+	-- 3. Fill the item one mod at a time. While resistances or attributes are
+	-- below where they were, the pick that fixes the most wins; otherwise the
+	-- pick that improves the stat the most.
+	local chosen = { }
+	local usedGroups = { }
+	local counts = { Prefix = 0, Suffix = 0 }
+	local limits = { Prefix = prefixLimit, Suffix = suffixLimit }
+	local currentPower = blankPower
+	local currentDeficit = blankDeficit
+	while counts.Prefix + counts.Suffix < prefixLimit + suffixLimit do
+		local best, bestPower, bestDeficit
+		for _, candidate in ipairs(shortlist) do
+			if not usedGroups[candidate.group] and counts[candidate.type] < limits[candidate.type] then
+				push(candidate)
+				local output, power = evaluate()
+				pop(candidate)
+				local d = deficit(output, ctx.baseOutput, opts)
+				local better
+				if not best then
+					better = true
+				elseif currentDeficit > 0 and d ~= bestDeficit then
+					better = d < bestDeficit
+				else
+					better = power > bestPower
+				end
+				if better then
+					best, bestPower, bestDeficit = candidate, power, d
+				end
+			end
+		end
+		-- Stop when nothing helps any more
+		if not best or (bestPower <= currentPower and bestDeficit >= currentDeficit) then
+			break
+		end
+		push(best)
+		t_insert(chosen, best)
+		usedGroups[best.group] = true
+		counts[best.type] = counts[best.type] + 1
+		currentPower, currentDeficit = bestPower, bestDeficit
+	end
+	if #chosen == 0 then
+		return nil, scores
+	end
+
+	-- 4. Build the real item from the chosen affixes and measure it
+	local item = self:MakeBlankRare(current, influences)
+	local p, s = 1, 1
+	for _, candidate in ipairs(chosen) do
+		local entry = { modId = candidate.modId, range = quality.range }
+		if candidate.type == "Prefix" then
+			item.prefixes[p] = entry
+			p = p + 1
+		else
+			item.suffixes[s] = entry
+			s = s + 1
+		end
+	end
+	item.title = "Best Rare (" .. slotName .. ")"
+	item:Craft()
+	-- an item can't be both influenced and have eldritch implicits
+	local eldritch = not (influences and influences[1]) and self:AddEldritch(item, slotName, ctx, opts.eldritchTier, quality.range) or nil
+	item.name = item.title .. ", " .. item.baseName
+	local output = calcFunc({ repSlotName = slotName, repItem = item }, useFullDPS)
+	ctx.tick()
+	local power = ctx.measure(output)
+	local delta = power - ctx.basePower
+	if delta <= 0 or not self.finder.PassesConstraints(output, ctx.baseOutput, opts) then
+		return nil, scores
+	end
+	return {
+		slotName = slotName,
+		item = item,
+		power = power,
+		delta = delta,
+		deltaPct = ctx.basePower ~= 0 and delta / math.abs(ctx.basePower) * 100 or nil,
+		chosen = chosen,
+		modScores = scores,
+		generated = true,
+		influences = influences,
+		eldritch = eldritch,
+	}, scores
+end
+
+-- Eldritch implicits (Searing Exarch and Eater of Worlds) for armour pieces.
+-- An item has at most one Exarch and one Eater implicit. Each comes as a base
+-- line or as a stronger "while a Unique / Pinnacle enemy is in your presence"
+-- variant (separate mods; PoB applies the presence ones against bosses).
+-- They replace the base's implicits and can't be on influenced items.
+local eldritchSlots = { ["Helmet"] = true, ["Body Armour"] = true, ["Gloves"] = true, ["Boots"] = true }
+local eldritchMods
+local function getEldritchMods()
+	if eldritchMods then return eldritchMods end
+	eldritchMods = { }
+	for modId, mod in pairs(data.itemMods.Eldritch or { }) do
+		local name, presence, tier = modId:match("^(.-)EldritchImplicit(%a*)(%d+)$")
+		tier = tonumber(tier)
+		if name and tier and (mod.type == "Exarch" or mod.type == "Eater") then
+			t_insert(eldritchMods, { modId = modId, mod = mod, name = name, presence = presence, tier = tier, type = mod.type })
+		end
+	end
+	table.sort(eldritchMods, function(a, b) return a.modId < b.modId end)
+	return eldritchMods
+end
+
+-- Adds the best Exarch and the best Eater implicit (tier up to maxTier) to a generated rare
+function RareItemGeneratorClass:AddEldritch(item, slotName, ctx, maxTier, range)
+	if not maxTier or maxTier <= 0 or not (item.base and eldritchSlots[item.base.type]) then
+		return nil
+	end
+	local calcFunc, useFullDPS = ctx.calcFunc, ctx.useFullDPS
+	local subject = new("Item"):Item(item:BuildRaw())
+	wipeTable(subject.implicitModLines)
+	subject:BuildModList()
+	local chosen = { }
+	local function linesFor(entry, kind)
+		local lines = { }
+		for _, line in ipairs(entry.mod) do
+			local text = itemLib.applyRange(line, range or 0.5, 1, 1)
+			local modList, extra = modLib.parseMod(text)
+			t_insert(lines, { line = text, modList = modList or { }, extra = extra, modTags = entry.mod.modTags or { }, [kind] = true })
+		end
+		return lines
+	end
+	local function measure(lines)
+		local saved = subject.implicitModLines
+		subject.implicitModLines = { }
+		for _, l in ipairs(chosen) do t_insert(subject.implicitModLines, l) end
+		for _, l in ipairs(lines or { }) do t_insert(subject.implicitModLines, l) end
+		subject:BuildModList()
+		local output = calcFunc({ repSlotName = slotName, repItem = subject }, useFullDPS)
+		ctx.tick()
+		subject.implicitModLines = saved
+		return ctx.measure(output)
+	end
+	-- Highest available tier of each mod (base and each presence variant separately)
+	local function candidates(kind)
+		local best = { }
+		for _, entry in ipairs(getEldritchMods()) do
+			if entry.type == kind and entry.tier <= maxTier and subject:GetModSpawnWeight(entry.mod) > 0 then
+				local key = entry.name .. entry.presence
+				if not best[key] or entry.tier > best[key].tier then
+					best[key] = entry
+				end
+			end
+		end
+		local list = { }
+		for _, entry in pairs(best) do t_insert(list, entry) end
+		table.sort(list, function(a, b) return a.modId < b.modId end)
+		return list
+	end
+	local labels = { }
+	for _, kind in ipairs({ "Exarch", "Eater" }) do
+		local flag = kind == "Exarch" and "exarch" or "eater"
+		local best, bestPower, bestLabel = nil, measure(nil), nil
+		for _, entry in ipairs(candidates(kind)) do
+			local lines = linesFor(entry, flag)
+			local power = measure(lines)
+			if power > bestPower + math.abs(bestPower) * 0.002 then
+				best, bestPower, bestLabel = lines, power, lines[1] and lines[1].line
+			end
+		end
+		if best then
+			for _, l in ipairs(best) do t_insert(chosen, l) end
+			t_insert(labels, kind .. ": " .. bestLabel)
+		end
+	end
+	if #chosen == 0 then
+		return nil
+	end
+	item.implicitModLines = { }
+	for _, l in ipairs(chosen) do
+		t_insert(item.implicitModLines, { line = l.line, modTags = l.modTags, exarch = l.exarch, eater = l.eater })
+	end
+	item:BuildAndParseRaw()
+	return labels
+end
+
+-- Influences a rare can have (Shaper, Elder and the four Conquerors)
+RareItemGeneratorClass.influenceList = {
+	{ key = "shaper", label = "Shaper" }, { key = "elder", label = "Elder" },
+	{ key = "crusader", label = "Crusader" }, { key = "eyrie", label = "Redeemer" },
+	{ key = "basilisk", label = "Hunter" }, { key = "adjudicator", label = "Warlord" },
+}
+
+function RareItemGeneratorClass.InfluenceLabel(influences)
+	local names = { }
+	for _, key in ipairs(influences or { }) do
+		for _, info in ipairs(RareItemGeneratorClass.influenceList) do
+			if info.key == key then t_insert(names, info.label) end
+		end
+	end
+	return table.concat(names, "/")
+end
+
+-- Best rare for a slot. With ctx.opts.influences = 1 each influence is tried,
+-- with 2 the best two are also tried together (Awakener's Orb).
+function RareItemGeneratorClass:GenerateForSlot(slotName, current, ctx)
+	local opts = ctx.opts
+	self.allowElevated = opts.elevated and true or false
+	local best, bestScores = self:GenerateForSlotWith(slotName, current, ctx, nil)
+	local maxInfluences = opts.influences or 0
+	if maxInfluences <= 0 or not (current.base and current.base.influenceTags) then
+		return best, bestScores
+	end
+	local singles = { }
+	for _, info in ipairs(self.influenceList) do
+		if current.base.influenceTags[info.key] then
+			local result = self:GenerateForSlotWith(slotName, current, ctx, { info.key })
+			if result then
+				t_insert(singles, { key = info.key, result = result })
+				if not best or result.power > best.power then
+					best, bestScores = result, result.modScores
+				end
+			end
+		end
+	end
+	if maxInfluences >= 2 and #singles >= 2 then
+		t_sort(singles, function(a, b) return a.result.power > b.result.power end)
+		local pairsToTry = { { singles[1].key, singles[2].key } }
+		if singles[3] then t_insert(pairsToTry, { singles[1].key, singles[3].key }) end
+		for _, pair in ipairs(pairsToTry) do
+			local result = self:GenerateForSlotWith(slotName, current, ctx, pair)
+			if result and (not best or result.power > best.power) then
+				best, bestScores = result, result.modScores
+			end
+		end
+	end
+	return best, bestScores
+end

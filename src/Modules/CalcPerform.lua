@@ -1581,7 +1581,13 @@ function calcs.perform(env, skipEHP)
 	if maxLeftActiveMagicUtilityCount > 0 or maxRightActiveMagicUtilityCount > 0 then
 		local magicUtilityFlasks = {}
 		for _, slot in ipairs(env.build.itemsTab.orderedSlots) do
-			local item = env.build.itemsTab.items[slot.selItemId]
+			-- Use the flasks this calculation sees (they can differ from the build's when comparing items)
+			local item
+			if env.flaskSlotItems then
+				item = env.flaskSlotItems[slot.slotName]
+			else
+				item = env.build.itemsTab.items[slot.selItemId]
+			end
 			if item and item.type == "Flask" and item.rarity == "MAGIC"
 				and not (item.baseName:match("Life Flask") or item.baseName:match("Mana Flask") or item.baseName:match("Hybrid Flask")) then
 				t_insert(magicUtilityFlasks, item)
@@ -3985,6 +3991,14 @@ function calcs.perform(env, skipEHP)
 			end
 		end
 	end
+
+	-- Explosions on kill, for clear speed estimates: sum of chance x share of
+	-- the enemy's maximum life dealt as damage (e.g. 10% chance x 250% = 0.25)
+	local explodeValue = 0
+	for _, value in ipairs(env.player.modDB:List(nil, "ExplodeMod")) do
+		explodeValue = explodeValue + (value.chance or 0) * (value.amount or 0) / 100
+	end
+	output.ClearExplodeValue = explodeValue
 
 	cacheData(cacheSkillUUID(env.player.mainSkill, env), env)
 end

@@ -24,6 +24,8 @@ local attributes = { "Str", "Dex", "Int" }
 function BestItemFinderClass:BestItemFinder(itemsTab)
 	self.itemsTab = itemsTab
 	self.build = itemsTab.build
+	self.rareGenerator = new("RareItemGenerator"):RareItemGenerator(self)
+	self.rareQualityList = self.rareGenerator.qualityList
 	return self
 end
 
@@ -36,6 +38,7 @@ function BestItemFinderClass:DefaultOptions()
 		levelOnly = true,       -- skip items above the character's level
 		keepResists = true,     -- reject items that lower an elemental resistance below its cap
 		keepAttributes = true,  -- reject items that leave attribute requirements unmet
+		keepLife = true,        -- reject items that lower maximum life or energy shield
 		keepSkillUsable = true, -- reject items that stop the main skill from dealing damage (e.g. wrong weapon type)
 		slots = nil,            -- list of slot names; defaults to every active gear slot
 		yieldEvery = nil,       -- ms between coroutine yields (nil = never yield)
@@ -80,6 +83,12 @@ function BestItemFinderClass:IsItemAllowed(item, opts)
 	if opts.levelOnly and item.requirements and item.requirements.level and item.requirements.level > self.build.characterLevel then
 		return false
 	end
+	if opts.investment then
+		local prices = GetPriceSource()
+		if not prices:Allows(opts.investment, "unique", prices:UniquePrice(item)) then
+			return false
+		end
+	end
 	return true
 end
 
@@ -98,6 +107,13 @@ local function passesConstraints(output, baseOutput, opts)
 			local newMissing = (output["Req" .. attr] or 0) - (output[attr] or 0)
 			local oldMissing = (baseOutput["Req" .. attr] or 0) - (baseOutput[attr] or 0)
 			if newMissing > 0 and newMissing > oldMissing then
+				return false
+			end
+		end
+	end
+	if opts.keepLife then
+		for _, key in ipairs({ "Life", "EnergyShield" }) do
+			if (output[key] or 0) < (baseOutput[key] or 0) - 0.5 then
 				return false
 			end
 		end
@@ -197,6 +213,68 @@ function BestItemFinderClass:Run(options)
 	return report
 end
 
+-- Generates the best rare for every active slot, on the base of the item
+-- currently in that slot. Same report format as Run.
+function BestItemFinderClass:RunRares(options)
+	local opts = self:DefaultOptions()
+	for k, v in pairs(options or { }) do
+		opts[k] = v
+	end
+	local stat = opts.stat or statByName("FullDPS")
+	local useFullDPS = stat.stat == "FullDPS"
+	local itemsTab = self.itemsTab
+	local calcFunc = self.build.calcsTab:GetMiscCalculator()
+	local baseOutput = calcFunc({ }, useFullDPS)
+	local measure = opts.scoreFunc or function(output) return data.powerStatList.GetFromOutput(output, stat) end
+	local basePower = measure(baseOutput)
+	local generator = self.rareGenerator
+	local slotNames = opts.slots or self:GetActiveSlots()
+
+	local report = { stat = stat, base = basePower, slots = { }, order = slotNames, options = opts, rares = true }
+	local lastYield = GetTime()
+	local slotIndex = 0
+	local ctx = {
+		calcFunc = calcFunc,
+		useFullDPS = useFullDPS,
+		stat = stat,
+		baseOutput = baseOutput,
+		basePower = basePower,
+		measure = measure,
+		opts = opts,
+		tick = function()
+			if opts.yieldEvery and GetTime() - lastYield > opts.yieldEvery then
+				if opts.onProgress then
+					opts.onProgress(slotIndex - 1, #slotNames)
+				end
+				coroutine.yield()
+				lastYield = GetTime()
+			end
+		end,
+	}
+	for _, slotName in ipairs(slotNames) do
+		slotIndex = slotIndex + 1
+		local slot = itemsTab.slots[slotName]
+		local current = slot and itemsTab.items[slot.selItemId]
+		local slotReport = { current = current and current.name or nil, results = { } }
+		if not current then
+			slotReport.note = "empty slot"
+		elseif not generator:IsSupported(current) then
+			slotReport.note = "not supported"
+		else
+			local result, scores = generator:GenerateForSlot(slotName, current, ctx)
+			slotReport.modScores = scores
+			if result then
+				t_insert(slotReport.results, result)
+			end
+		end
+		report.slots[slotName] = slotReport
+	end
+	if opts.onProgress then
+		opts.onProgress(#slotNames, #slotNames)
+	end
+	return report
+end
+
 -- Adds a copy of the database item to the build and equips it in the given slot
 function BestItemFinderClass:Equip(item, slotName, deferUpdate)
 	local itemsTab = self.itemsTab
@@ -236,7 +314,8 @@ function BestItemFinderClass:EquipAll(report)
 	local useFullDPS = stat.stat == "FullDPS"
 	local calcFunc = self.build.calcsTab:GetMiscCalculator()
 	local originalOutput = calcFunc({ }, useFullDPS)
-	local currentPower = data.powerStatList.GetFromOutput(originalOutput, stat)
+	local measure = opts.scoreFunc or function(output) return data.powerStatList.GetFromOutput(output, stat) end
+	local currentPower = measure(originalOutput)
 	local used = { }
 	local count = 0
 	for _, slotName in ipairs(report.order) do
@@ -244,13 +323,13 @@ function BestItemFinderClass:EquipAll(report)
 		local slot = itemsTab.slots[slotName]
 		if slotReport and slot then
 			for _, result in ipairs(slotReport.results) do
-				if not used[result.item.name] then
+				if result.generated or not used[result.item.name] then
 					local previousId = slot.selItemId
 					local newItem = self:Equip(result.item, slotName, true)
 					self:Recalculate()
 					calcFunc = self.build.calcsTab:GetMiscCalculator()
 					local output = calcFunc({ }, useFullDPS)
-					local power = data.powerStatList.GetFromOutput(output, stat)
+					local power = measure(output)
 					if power > currentPower and passesConstraints(output, originalOutput, opts) then
 						used[result.item.name] = true
 						currentPower = power
