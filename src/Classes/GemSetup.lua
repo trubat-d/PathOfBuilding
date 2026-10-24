@@ -308,6 +308,11 @@ function GemSetupClass:ChooseCurses()
 		end
 	end
 	t_sort(curses)
+	-- (the first curse boosts damage, as top players run it; curses that only
+	-- defend - Enfeeble, Temporal Chains, Warlord's Mark - come with more
+	-- curse slots)
+	local defensive = { ["Enfeeble"] = true, ["Temporal Chains"] = true, ["Warlord's Mark"] = true }
+	local damageCurse = false
 	local current = self:Score()
 	local used = { }
 	for _ = 1, math.max(1, math.min(3, self:CurseLimit())) do
@@ -321,7 +326,7 @@ function GemSetupClass:ChooseCurses()
 			end
 		end
 		for _, id in ipairs(curses) do
-			if not used[id] then
+			if not used[id] and (damageCurse or not defensive[data.gems[id].name]) then
 				for _, option in ipairs(self:CurseOptions(id)) do
 					local valid = true
 					for _, gid in ipairs(option.gems) do if not gid then valid = false end end
@@ -354,6 +359,7 @@ function GemSetupClass:ChooseCurses()
 			self:Keep("Curse", best.gems, self:SlotFor(#best.gems))
 		end
 		used[best.id] = true
+		if not defensive[data.gems[best.id].name] then damageCurse = true end
 		if best.option.movement then self.hasMovement = true end
 		current = bestRaw
 		self.gen:Note("Curse setup: " .. best.option.label)
@@ -575,7 +581,13 @@ function GemSetupClass:ChooseMovement()
 		end
 		t_insert(options, { label = label, gems = gems })
 	end
-	if self:HasShield() and gemId("Shield Charge") and self:CanUse(gemId("Shield Charge")) then
+	-- (channelling builds move while channelling: a blink for walls and gaps,
+	-- not a travel skill that stops the channel)
+	local mainTypes = self.gen.mainGem and self.gen.mainGem.grantedEffect.skillTypes or { }
+	if mainTypes[SkillType.Channel] then
+		add("Frostblink + Faster Casting", { "Frostblink", "Faster Casting" })
+		add("Flame Dash + Faster Casting", { "Flame Dash", "Faster Casting" })
+	elseif self:HasShield() and gemId("Shield Charge") and self:CanUse(gemId("Shield Charge")) then
 		-- any build with a shield (spells too): Shield Charge is the fastest way to
 		-- move, plus a Frostblink for walls and gaps
 		add("Shield Charge + Faster Attacks", { "Shield Charge", "Faster Attacks" })

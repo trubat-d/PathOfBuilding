@@ -474,6 +474,7 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 		if gem.grantedEffect and gem.grantedEffect.support and not gem.grantedEffect.unsupported and affordable
 			-- (supports whose drawback PoB doesn't calculate: Modules/GeneratorRules)
 			and not GetGeneratorRules().excludedSupports[gem.name]
+			and (not GetGeneratorRules().ownDamageSupports[gem.name] or GetGeneratorRules().ownDamageSupports[gem.name](self.mainGem))
 			and (self.options.allowTriggerSupports or not self.IsAssumptionTrigger(gem)) then
 			t_insert(supports, gemId)
 		end
@@ -3563,7 +3564,9 @@ function BuildGeneratorClass:LearnFromTopBuilds(maxTries)
 					local gemId
 					for id, gem in pairs(data.gems) do if gem.name == sup.name and gem.grantedEffect and gem.grantedEffect.support then gemId = id end end
 					local gem = gemId and data.gems[gemId]
-					if gem and (investment.awakenedGems ~= false or not gem.tags.awakened) and (investment.exceptionalGems ~= false or not gem.tags.exceptional) and #list - 1 < (self.mainLinkLimit or 5) then
+					local rules = GetGeneratorRules()
+					local ownOk = gem and (not rules.ownDamageSupports[gem.name] or rules.ownDamageSupports[gem.name](self.mainGem))
+					if gem and ownOk and not rules.excludedSupports[gem.name] and (investment.awakenedGems ~= false or not gem.tags.awakened) and (investment.exceptionalGems ~= false or not gem.tags.exceptional) and #list - 1 < (self.mainLinkLimit or 5) then
 						t_insert(list, { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId })
 						t_insert(names, gem.name)
 					end

@@ -63,6 +63,8 @@ The configuration choice "Clearing + bossing" configures and scores the build on
 
 Enemy debuffs the build keeps up are switched on in the configuration like ailments: intimidate, unnerve, blind, maim, hinder, ash, frost, crush, scorch, brittle, sap (a line that inflicts it on hit, with its chance, at the main skill's hit rate), and exposure from Wave of Conviction or Frost Bomb.
 
+Supports that bring a damage source of their own are kept to the main skills they fit: Decay only for chaos skills that aren't attacks, Summon Phantasm only for minion skills (with white gear at the start, Decay's fixed damage beat a weak wand attack and the whole build then scaled Decay), and Culling Strike never (top players get it from another skill that hits). Channelling skills move with Frostblink or Flame Dash, never with a travel skill that stops the channel. The first curse is one that adds damage; Enfeeble, Temporal Chains and Warlord's Mark only come with more curse slots.
+
 Curses are tried on every way to apply them, each with what it costs in play (PoB counts a curse in full however it is applied): Arcanist Brand and casting by hand take time from the main skill, Hextouch on a movement skill only curses what it hits, Blasphemy reserves mana, a mark on Mark On Hit is free for attacks.
 
 #### Several tries

@@ -447,7 +447,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 			elseif scan and scan.estimated then
 				label = string.format("%s   ^xC0C0C0(estimated) DPS %s, max hit %s", a.label, formatNumSep(string.format("%.0f", scan.dps or 0)), formatNumSep(string.format("%.0f", scan.minHit or 0)))
 			elseif scan then
-				label = string.format("%s   ^x88CC88built: DPS %s, max hit %s, score %.2f", a.label, formatNumSep(string.format("%.0f", scan.dps or 0)), formatNumSep(string.format("%.0f", scan.minHit or 0)), scan.score)
+				label = string.format("%s   ^x88CC88quick build: DPS %s, max hit %s, score %.2f", a.label, formatNumSep(string.format("%.0f", scan.dps or 0)), formatNumSep(string.format("%.0f", scan.minHit or 0)), scan.score)
 			end
 			t_insert(list, { label = label, archetype = a, scan = scan })
 		end

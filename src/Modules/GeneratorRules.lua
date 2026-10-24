@@ -70,6 +70,26 @@ rules.uniques = {
 	["Replica Midnight Bargain"] = { check = function(output) return not output.ChaosInoculation end, reason = "can't be used with Chaos Inoculation" },
 }
 
+-- Supports that add a damage source of their own: only for main skills of
+-- the same kind. Decay's fixed chaos damage over time beats the hit of an
+-- attack with white gear (Power Siphon with a white wand), and the greedy
+-- choices then scale Decay (Void Manipulation, Cruelty...) instead of the
+-- skill: a trap, not a build. { [name] = function(mainGem) -> allowed }
+rules.ownDamageSupports = {
+	["Decay"] = function(gem)
+		local tags = gem and gem.tags or { }
+		return tags.chaos and not tags.attack and true or false
+	end,
+	-- (top players get Culling Strike from another skill that hits - Manaforged
+	-- Arrows, a secondary skill - and keep the main link for damage)
+	["Culling Strike"] = function(gem) return false end,
+	-- (its phantasms' damage counts as the build's, then Minion Damage follows)
+	["Summon Phantasm"] = function(gem)
+		local tags = gem and gem.tags or { }
+		return tags.minion and true or false
+	end,
+}
+
 -- Support gems left out of generated links: { [name] = reason }
 rules.excludedSupports = {
 	["Sacrifice"] = "takes 20% of current life on every cast; PoB only adds the chaos damage",
