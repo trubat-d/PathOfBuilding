@@ -755,6 +755,67 @@ function BuildGeneratorClass:AuraStackMove()
 	return 0
 end
 
+-- A full main link as one move: when the main skill has empty sockets (each
+-- support alone costs more mana or life than the build can pay, so the greedy
+-- choice stopped), the supports are chosen for their damage with costs
+-- ignored, then the tree and the plain rares are redone so they can pay for
+-- them (regeneration, leech, cost reduction). Kept only if the build is better.
+function BuildGeneratorClass:FillMainLinkMove()
+	local group = self.mainGroup
+	if not group then return 0 end
+	local supports = 0
+	for _, g in ipairs(group.gemList) do
+		local gd = g.gemId and data.gems[g.gemId]
+		if gd and gd.grantedEffect.support then supports = supports + 1 end
+	end
+	if supports >= 5 then return 0 end
+	local spec = self.build.spec
+	self:AutoConfigure()
+	local before = self:FullScore()
+	local treeUndo = spec:CreateUndoState()
+	local savedGems = { }
+	for i, g in ipairs(group.gemList) do savedGems[i] = g end
+	local savedItems = { }
+	for _, slot in ipairs(self.itemsTab.orderedSlots) do savedItems[slot.slotName] = slot.selItemId end
+	local savedLog = { }
+	for i, l in ipairs(self.log) do savedLog[i] = l end
+	self.scorer.ignoreCosts = true
+	local ok, err = pcall(function() self:ChooseSupports(5) end)
+	self.scorer.ignoreCosts = false
+	if ok then
+		self:AutoConfigure()
+		self:RefineTree(16)
+		self:RefineTree(10)
+		self:FinalRares()
+		self:AutoConfigure()
+	end
+	local after = ok and self:FullScore() or before
+	local now = 0
+	for _, g in ipairs(group.gemList) do
+		local gd = g.gemId and data.gems[g.gemId]
+		if gd and gd.grantedEffect.support then now = now + 1 end
+	end
+	if ok and now > supports and after > before + 0.01 then
+		self:Note(string.format("Main link filled: %d supports instead of %d, tree and rares redone to pay for them, score %+.3f", now, supports, after - before))
+		return after - before
+	end
+	if not ok then ConPrintf("Main link move failed: %s", tostring(err)) end
+	for i = #group.gemList, 1, -1 do group.gemList[i] = nil end
+	for i, g in ipairs(savedGems) do group.gemList[i] = g end
+	self.build.skillsTab:ProcessSocketGroup(group)
+	for slotName, id in pairs(savedItems) do
+		if self.itemsTab.slots[slotName].selItemId ~= id then self.itemsTab.slots[slotName]:SetSelItemId(id) end
+	end
+	self.itemsTab:PopulateSlots()
+	spec:RestoreUndoState(treeUndo)
+	spec:BuildAllDependsAndPaths()
+	for i = #self.log, 1, -1 do self.log[i] = nil end
+	for i, l in ipairs(savedLog) do self.log[i] = l end
+	self:AutoConfigure()
+	self:Recalculate()
+	return 0
+end
+
 -- Curse, aura, guard and movement setups linked like real builds, packed into gear sockets
 function BuildGeneratorClass:ChooseUtilityGems(ignoreAttributes)
 	-- drop the previous gem setup notes so the log shows the final one
@@ -1102,6 +1163,36 @@ function BuildGeneratorClass:ResetTree()
 	end
 end
 
+-- The ascendancy (and bloodline) notables chosen again for the finished
+-- build: they were picked before the gear, jewels and gems were final
+function BuildGeneratorClass:AscendancyRecheck()
+	local spec = self.build.spec
+	self:Recalculate()
+	local before = self:FullScore()
+	local undo = spec:CreateUndoState()
+	local function notables()
+		local list = { }
+		for _, node in pairs(spec.allocNodes) do
+			if node.ascendancyName and (node.type == "Notable" or node.isMultipleChoiceOption) then t_insert(list, node.dn) end
+		end
+		t_sort(list)
+		return table.concat(list, ", ")
+	end
+	local old = notables()
+	self:ClearAscendancy()
+	self:Recalculate()
+	self:AllocateTree(true, true)
+	local after = self:FullScore()
+	if after > before + 0.005 and notables() ~= old then
+		self:Note(string.format("Ascendancy chosen again for the finished build: %s (was %s), score %+.3f", notables(), old, after - before))
+		return after - before
+	end
+	spec:RestoreUndoState(undo)
+	spec:BuildAllDependsAndPaths()
+	self:Recalculate()
+	return 0
+end
+
 -- Removes every allocated ascendancy / bloodline passive (start nodes stay)
 function BuildGeneratorClass:ClearAscendancy()
 	local spec = self.build.spec
@@ -1247,6 +1338,7 @@ function BuildGeneratorClass:MakeRares(withInfluences)
 		influences = withInfluences and investment and investment.influences or 0,
 		elevated = withInfluences and investment and investment.elevated or false,
 		eldritchTier = withInfluences and investment and investment.eldritchTier or 0,
+		weaponSeeds = self.options.weaponSeeds,
 		yieldEvery = nil,
 	}
 	local function withSlots(slots)
@@ -1359,6 +1451,52 @@ function BuildGeneratorClass:MakeFlasks()
 	end
 	self.itemsTab:PopulateSlots()
 	self:Note("Flasks: " .. (#names > 0 and table.concat(names, ", ") or "none helped"))
+end
+
+-- Rares made again at the end, once the tree, jewels, flasks and gems are
+-- final (they were made for the build as it was then): plain rares only
+-- (influenced ones keep their influence choice); kept if the build is better
+function BuildGeneratorClass:FinalRares()
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local scorer = self.scorer
+	local locked = self.lockedSlots or { }
+	local slots = { }
+	local saved = { }
+	for _, slot in ipairs(self.itemsTab.orderedSlots) do
+		local item = self.itemsTab.items[slot.selItemId]
+		if item and item.rarity == "RARE" and not locked[slot.slotName] and not slot.nodeId and not item.base.flask and item.type ~= "Jewel" then
+			local influenced = false
+			for _, info in ipairs(finder.rareGenerator.influenceList) do
+				if item[info.key] then influenced = true end
+			end
+			if not influenced then
+				t_insert(slots, slot.slotName)
+				saved[slot.slotName] = slot.selItemId
+			end
+		end
+	end
+	if #slots == 0 then return 0 end
+	self:Recalculate()
+	local before = self:FullScore()
+	local ratio = self.ratio
+	local options = {
+		quality = self.options.quality, levelOnly = true,
+		keepResists = false, keepAttributes = false, keepLife = false,
+		scoreFunc = function(output) return scorer:ScoreOutput(output, ratio) end,
+		influences = 0, elevated = false, eldritchTier = (self.options.investment or { }).eldritchTier or 0,
+		weaponSeeds = self.options.weaponSeeds, slots = slots,
+	}
+	local count = finder:EquipAll(finder:RunRares(options))
+	self:Recalculate()
+	local after = self:FullScore()
+	if count > 0 and after > before + 0.005 then
+		self:Note(string.format("Rares made again for the finished build: %d item%s improved, score %+.3f", count, count == 1 and "" or "s", after - before))
+		return after - before
+	end
+	for slotName, id in pairs(saved) do self.itemsTab.slots[slotName]:SetSelItemId(id) end
+	self.itemsTab:PopulateSlots()
+	self:Recalculate()
+	return 0
 end
 
 -- Rare jewels in passive tree sockets: one rare jewel is generated for the
@@ -2335,6 +2473,14 @@ function BuildGeneratorClass:Run()
 		self.stage = "Trying aura stacking"
 		self:AuraStackMove()
 	end
+	if opts.fillMainLink ~= false then
+		self.stage = "Filling the main link"
+		self:FillMainLinkMove()
+	end
+	if opts.finalRares ~= false then
+		self.stage = "Making the rares again for the finished build"
+		self:FinalRares()
+	end
 
 	if opts.synergies ~= false then
 		stage(11, "Looking for unique items and synergies")
@@ -2345,6 +2491,7 @@ function BuildGeneratorClass:Run()
 		self:JointMoves(opts.jointMoveRounds or 2)
 	end
 	self.stage = "Optimizing the passive tree"
+	if opts.ascendancyRecheck ~= false then self:AscendancyRecheck() end
 	self:PairAilments()
 	self:OptimizeTree()
 

@@ -188,7 +188,7 @@ function BuildScorerClass:GetDPS(output)
 		dps = self.overlap:AdjustDPS(output, dps)
 	end
 	-- a skill you can't pay for doesn't deal its DPS for long
-	if self.resourceSustain ~= false then
+	if self.resourceSustain ~= false and not self.ignoreCosts then
 		dps = dps * (self:SkillSustain(output))
 	end
 	return dps
@@ -234,7 +234,7 @@ function BuildScorerClass:GetPenalties(output)
 		end
 	end
 	local sustain, limiting = self:SkillSustain(output)
-	if sustain < 0.999 then
+	if sustain < 0.999 and not self.ignoreCosts then
 		-- running out of mana mid-fight is worse than lower DPS: casting stops
 		local p = 4 * (1 - sustain)
 		total = total + p
@@ -274,7 +274,7 @@ function BuildScorerClass:GetPenalties(output)
 	end
 	-- Not being able to pay for the main skill
 	local cost = output.ManaCost or 0
-	if cost > 0 and output.ManaUnreserved and cost > output.ManaUnreserved and not self.ignoreReservation then
+	if cost > 0 and output.ManaUnreserved and cost > output.ManaUnreserved and not self.ignoreReservation and not self.ignoreCosts then
 		total = total + 1
 		t_insert(penalties, { label = "Not enough unreserved mana to cast the main skill", value = 1 })
 	end

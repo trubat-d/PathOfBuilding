@@ -79,7 +79,7 @@ while os.time() - t0 < (tonumber(os.getenv("TIMEOUT") or "3600")) do
 	if type(status) == "function" then status = status() end
 	if status ~= last then print("STATUS " .. tostring(status)) last = status end
 	if status and (status:find("Finished") or status:find("failed") or status:find("Failed")) and not status:find("Scan finished") then break end
-	os.execute("sleep 0.2")
+	os.execute("sleep 0.01")
 end
 local build = main.modes["BUILD"]
 print("FINAL build " .. tostring(build and build.buildName) .. " dps " .. tostring(build and build.calcsTab.mainOutput and build.calcsTab.mainOutput.TotalDPS))

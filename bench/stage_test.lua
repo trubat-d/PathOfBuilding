@@ -42,6 +42,19 @@ elseif step == "aurastack" then
 	gen:AuraStackMove()
 elseif step == "metajewels" then
 	gen:ChooseMetaJewels()
+elseif step == "fillmain" or step == "finalrares" then
+	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
+	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
+	if step == "fillmain" then gen:FillMainLinkMove() else gen:FinalRares() end
+elseif step == "ascendancy" then
+	gen.options.classId = build.spec.curClassId
+	gen.options.ascendClassId = build.spec.curAscendClassId
+	gen:AscendancyRecheck()
+elseif step == "rares" then
+	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
+	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
+	gen.options.weaponSeeds = tonumber(os.getenv("WEAPON_SEEDS") or "")
+	gen:MakeRares(true)
 end
 local after, r1 = gen:FullScore()
 print(string.format("AFTER score %.3f dps %.0f (%.0f s)", after, r1.dps, os.clock() - t0))

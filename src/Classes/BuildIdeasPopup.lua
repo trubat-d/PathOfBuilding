@@ -262,7 +262,7 @@ function BuildIdeasPopupClass:OpenIdeas(build)
 			allowTimeless = controls.timeless.state,
 			meta = meta, metaSkill = skillName,
 			hitFloor = controls.focus.list[controls.focus.selIndex].focus.hitFloor and tonumber(controls.ehpFloor.buf) or nil,
-			yieldEvery = 30,
+			yieldEvery = 80,
 			onProgress = function(stage, done)
 				state.status = string.format("^7%s... (%d combinations tested)", stage, done)
 			end,
@@ -503,7 +503,9 @@ function BuildIdeasPopupClass:OpenGenerator()
 			allowTattoos = controls.tattoos.state,
 			timeless = controls.timeless.state,
 			synergies = controls.synergies.state,
-			yieldEvery = 30,
+			-- (the generation runs between frames: longer slices leave more of
+			-- the time to it; the window still redraws about 12 times a second)
+			yieldEvery = 80,
 		}
 		options.archetype = archetypeEntry and archetypeEntry.archetype
 		return options

@@ -262,50 +262,108 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 		end
 	end
 
-	-- 3. Fill the item one mod at a time. While resistances or attributes are
-	-- below where they were, the pick that fixes the most wins; otherwise the
-	-- pick that improves the stat the most.
-	local chosen = { }
-	local usedGroups = { }
-	local counts = { Prefix = 0, Suffix = 0 }
-	local limits = { Prefix = prefixLimit, Suffix = suffixLimit }
-	local currentPower = blankPower
-	local currentDeficit = blankDeficit
-	while counts.Prefix + counts.Suffix < prefixLimit + suffixLimit do
-		local best, bestPower, bestDeficit
-		for _, candidate in ipairs(shortlist) do
-			if not usedGroups[candidate.group] and counts[candidate.type] < limits[candidate.type] then
-				push(candidate)
-				local output, power = evaluate()
-				pop(candidate)
-				local d = deficit(output, ctx.baseOutput, opts)
-				local better
-				if not best then
-					better = true
-				elseif currentDeficit > 0 and d ~= bestDeficit then
-					better = d < bestDeficit
-				else
-					better = power > bestPower
-				end
-				if better then
-					best, bestPower, bestDeficit = candidate, power, d
+	-- weapons: the best few mods of each kind of damage scaling are candidates
+	-- too, even when they're weak alone (local physical damage on a base
+	-- without flat physical damage yet)
+	if slotName:match("^Weapon") then
+		for _, tag in ipairs({ "physical", "elemental", "chaos", "speed", "critical" }) do
+			local added = 0
+			for _, candidate in ipairs(scores) do
+				if added >= 3 then break end
+				for _, t in ipairs(candidate.mod.modTags or { }) do
+					if t == tag then
+						addToShortlist(candidate)
+						added = added + 1
+						break
+					end
 				end
 			end
 		end
-		-- Stop when nothing helps any more
-		if not best or (bestPower <= currentPower and bestDeficit >= currentDeficit) then
-			break
-		end
-		push(best)
-		t_insert(chosen, best)
-		usedGroups[best.group] = true
-		counts[best.type] = counts[best.type] + 1
-		currentPower, currentDeficit = bestPower, bestDeficit
-	end
-	if #chosen == 0 then
-		return nil, scores
 	end
 
+	-- 3. Fill the item one mod at a time. While resistances or attributes are
+	-- below where they were, the pick that fixes the most wins; otherwise the
+	-- pick that improves the stat the most.
+	-- (seed: a mod forced first. Weapons try a few: mods that only pay off
+	-- together - local physical damage and flat physical damage - lose to a
+	-- flat elemental mod one at a time)
+	local function fill(seed)
+		local chosen = { }
+		local usedGroups = { }
+		local counts = { Prefix = 0, Suffix = 0 }
+		local limits = { Prefix = prefixLimit, Suffix = suffixLimit }
+		local currentPower = blankPower
+		local currentDeficit = blankDeficit
+		if seed then
+			push(seed)
+			t_insert(chosen, seed)
+			usedGroups[seed.group] = true
+			counts[seed.type] = counts[seed.type] + 1
+			local output, power = evaluate()
+			currentPower, currentDeficit = power, deficit(output, ctx.baseOutput, opts)
+		end
+		while counts.Prefix + counts.Suffix < prefixLimit + suffixLimit do
+			local best, bestPower, bestDeficit
+			for _, candidate in ipairs(shortlist) do
+				if not usedGroups[candidate.group] and counts[candidate.type] < limits[candidate.type] then
+					push(candidate)
+					local output, power = evaluate()
+					pop(candidate)
+					local d = deficit(output, ctx.baseOutput, opts)
+					local better
+					if not best then
+						better = true
+					elseif currentDeficit > 0 and d ~= bestDeficit then
+						better = d < bestDeficit
+					else
+						better = power > bestPower
+					end
+					if better then
+						best, bestPower, bestDeficit = candidate, power, d
+					end
+				end
+			end
+			-- Stop when nothing helps any more
+			if not best or (bestPower <= currentPower and bestDeficit >= currentDeficit) then
+				break
+			end
+			push(best)
+			t_insert(chosen, best)
+			usedGroups[best.group] = true
+			counts[best.type] = counts[best.type] + 1
+			currentPower, currentDeficit = bestPower, bestDeficit
+		end
+		-- take the mods off again: the caller builds the real item
+		for i = #chosen, 1, -1 do pop(chosen[i]) end
+		return chosen, currentPower, currentDeficit
+	end
+	local chosen, chosenPower, chosenDeficit = fill(nil)
+	if slotName:match("^Weapon") and (opts.weaponSeeds or 3) > 0 then
+		-- one seed per kind of damage scaling the greedy fill didn't open with
+		local inChosen = { }
+		for _, c in ipairs(chosen) do inChosen[c] = true end
+		local seeds, seen = { }, { }
+		for _, tag in ipairs({ "physical", "elemental", "chaos", "speed", "critical" }) do
+			for _, candidate in ipairs(scores) do
+				local tags = candidate.mod.modTags or { }
+				local has = false
+				for _, t in ipairs(tags) do if t == tag then has = true end end
+				if has and inList[candidate] then
+					if not inChosen[candidate] and not seen[candidate] then
+						seen[candidate] = true
+						t_insert(seeds, candidate)
+					end
+					break
+				end
+			end
+		end
+		for i = 1, m_min(#seeds, opts.weaponSeeds or 3) do
+			local list, power, d = fill(seeds[i])
+			if power > chosenPower and d <= chosenDeficit then
+				chosen, chosenPower, chosenDeficit = list, power, d
+			end
+		end
+	end
 	-- 4. Build the real item from the chosen affixes and measure it
 	local item = self:MakeBlankRare(current, influences)
 	local p, s = 1, 1
