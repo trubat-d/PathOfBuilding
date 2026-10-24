@@ -143,8 +143,42 @@ function BuildGeneratorClass:Score(override)
 	return r.score, r
 end
 
+-- Skills whose part is a number of stacks the build must keep up (Blade
+-- Vortex blades): the part follows what the build sustains, so supports and
+-- passives that keep more blades up (cast speed, duration, Unleash...) count
+local stackParts = {
+	{ pattern = "^Blade Vortex", counts = { 0, 5, 10 }, sustain = function(output)
+		-- one blade per cast, each lasting the skill duration
+		return (output.Speed or 0) * (output.Duration or 4)
+	end },
+}
+function BuildGeneratorClass:AdjustSkillPart()
+	local gem = self.mainGem
+	local first = self.mainGroup and self.mainGroup.gemList[1]
+	if not gem or not first then return false end
+	for _, rule in ipairs(stackParts) do
+		if gem.name:match(rule.pattern) then
+			local output = self.build.calcsTab.mainOutput or { }
+			local sustained = rule.sustain(output)
+			local part = 1
+			for i, count in ipairs(rule.counts) do
+				if sustained >= count then part = i end
+			end
+			if first.skillPart ~= part then
+				first.skillPart, first.skillPartCalcs = part, part
+				self.build.skillsTab:ProcessSocketGroup(self.mainGroup)
+				self.sustainedStacks = sustained
+				return true
+			end
+			return false
+		end
+	end
+	return false
+end
+
 function BuildGeneratorClass:FullScore()
 	self:Recalculate()
+	if self:AdjustSkillPart() then self:Recalculate() end
 	local r = self.scorer:Evaluate(self.calcFunc, { })
 	self.ratio = self.scorer.lastFlaskRatio
 	return r.score, r
@@ -509,7 +543,8 @@ function BuildGeneratorClass:ChooseUtilityGems(ignoreAttributes)
 	for i = #self.log, 1, -1 do
 		local l = self.log[i]
 		if l:match("^Curse setup") or l:match("^Buffs:") or l:match("^Guard setup") or l:match("^Movement setup") or l:match("^Blink setup") or l:match("^Blood Rage setup") or l:match("^Lifetap linked") or l:match("^Sockets used")
-			or l:match("^Possible addition: Animate") or l:match("^Animate Guardian setup") or l:match("^Secondary bow skill setup") then
+			or l:match("^Possible addition: Animate") or l:match("^Animate Guardian setup") or l:match("^Secondary bow skill setup")
+			or l:match("^Empty sockets filled") then
 			t_remove(self.log, i)
 		end
 	end

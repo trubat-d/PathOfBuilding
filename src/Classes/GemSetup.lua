@@ -174,11 +174,31 @@ function GemSetupClass:FreeSockets()
 	return free
 end
 
--- Smallest slot that still fits n gems (keeps big slots for auras)
-function GemSetupClass:SlotFor(n, largest)
+-- Does the item in a slot support its socketed gems with a support matching
+-- the pattern (e.g. March of the Legion's Divine Blessing)?
+function GemSetupClass:SlotGrantsSupport(slotName, pattern)
+	local itemsTab = self.build.itemsTab
+	local slot = itemsTab.slots[slotName]
+	local item = slot and itemsTab.items[slot.selItemId]
+	for _, list in ipairs({ item and item.explicitModLines or { }, item and item.implicitModLines or { } }) do
+		for _, line in ipairs(list) do
+			if line.line and line.line:match("Socketed Gems are Supported by Level %d+ " .. pattern) then return true end
+		end
+	end
+	return false
+end
+
+-- Slots whose item turns auras into blessings (one aura there, not a group)
+function GemSetupClass:BlessingSlot(slotName)
+	return self:SlotGrantsSupport(slotName, "Divine Blessing") or self:SlotGrantsSupport(slotName, "Eternal Blessing")
+end
+
+-- Smallest slot that still fits n gems (keeps big slots for auras);
+-- filter(slotName) can exclude slots
+function GemSetupClass:SlotFor(n, largest, filter)
 	local best, bestFree
 	for slotName, count in pairs(self:FreeSockets()) do
-		if count >= n then
+		if count >= n and (not filter or filter(slotName)) then
 			if not best or (largest and count > bestFree) or (not largest and count < bestFree) or (count == bestFree and slotName < best) then
 				best, bestFree = slotName, count
 			end
@@ -334,7 +354,8 @@ function GemSetupClass:ChooseAuras(maxBuffs)
 	while count < (maxBuffs or 4) do
 		-- the open aura group, linked with the first support option (Enlighten if available)
 		if not auraGroup then
-			local slot, free = self:SlotFor(2, true)
+			-- (not in an item that makes its gems blessings: only one of those can be up)
+			local slot, free = self:SlotFor(2, true, function(name) return not self:BlessingSlot(name) end)
 			if not slot then break end
 			local gems = { }
 			if supportOptions[1] then t_insert(gems, supportOptions[1].entry()) end
@@ -482,16 +503,17 @@ function GemSetupClass:ChooseMovement()
 		end
 		t_insert(options, { label = label, gems = gems })
 	end
-	if self:MainIsAttack() then
-		if self:HasShield() then
-			-- shield users: Shield Charge, plus a Frostblink for walls and gaps
-			add("Shield Charge + Faster Attacks", { "Shield Charge", "Faster Attacks" })
-		end
+	if self:HasShield() and gemId("Shield Charge") and self:CanUse(gemId("Shield Charge")) then
+		-- any build with a shield (spells too): Shield Charge is the fastest way to
+		-- move, plus a Frostblink for walls and gaps
+		add("Shield Charge + Faster Attacks", { "Shield Charge", "Faster Attacks" })
+	elseif self:MainIsAttack() then
 		add("Leap Slam + Faster Attacks", { "Leap Slam", "Faster Attacks" })
 		add("Whirling Blades + Faster Attacks", { "Whirling Blades", "Faster Attacks" })
 		add("Blink Arrow + Faster Attacks", { "Blink Arrow", "Faster Attacks" })
 		add("Dash + Second Wind", { "Dash", "Second Wind" })
-	else
+	end
+	if #options == 0 then
 		add("Flame Dash + Faster Casting", { "Flame Dash", "Faster Casting" })
 		add("Frostblink + Faster Casting", { "Frostblink", "Faster Casting" })
 	end
@@ -540,6 +562,108 @@ function GemSetupClass:ChooseAnimateGuardian()
 	end
 end
 
+-- Empty sockets: useful setups, automatic ones first (warcries on
+-- Autoexertion, spells on Automation, a blessing in a Divine Blessing item,
+-- Vaal auras), each kept if it helps or costs nothing
+function GemSetupClass:ChooseFillers()
+	local options = { }
+	local function add(label, names, auto)
+		local gems = { }
+		for _, name in ipairs(names) do
+			local id = gemId(name)
+			if not id or (not data.gems[id].grantedEffect.support and not self:CanUse(id)) then return end
+			t_insert(gems, id)
+		end
+		t_insert(options, { label = label, gems = gems, auto = auto })
+	end
+	local used = { }
+	for _, group in ipairs(self.skillsTab.socketGroupList) do
+		for _, g in ipairs(group.gemList or { }) do if g.gemId then used[g.gemId] = true end end
+	end
+	local function free(name) local id = gemId(name) return id and not used[id] end
+	-- warcries on Autoexertion (used automatically, exerting the next attacks)
+	local cries = { "Enduring Cry", "Battlemage's Cry", "Rallying Cry", "Intimidating Cry", "Ancestral Cry", "General's Cry", "Seismic Cry" }
+	if free("Autoexertion") then
+		for i, a in ipairs(cries) do
+			if free(a) then
+				add("Autoexertion + " .. a, { "Autoexertion", a }, true)
+				for j = i + 1, #cries do
+					if free(cries[j]) then add("Autoexertion + " .. a .. " + " .. cries[j], { "Autoexertion", a, cries[j] }, true) end
+				end
+			end
+		end
+	end
+	-- spells cast automatically on cooldown
+	if free("Automation") then
+		for _, spell in ipairs({ "Wave of Conviction", "Frost Bomb", "Arctic Armour", "Tempest Shield", "Sigil of Power" }) do
+			if free(spell) then add("Automation + " .. spell, { "Automation", spell }, true) end
+		end
+	end
+	local kept = { }
+	for _ = 1, 6 do
+		local current = self:Score()
+		local best, bestScore
+		for _, option in ipairs(options) do
+			if not option.taken and self:SlotFor(#option.gems) then
+				local gems = { }
+				for _, gid in ipairs(option.gems) do t_insert(gems, gemEntry(gid)) end
+				local score = self:TryGroup(gems)
+				-- (automatic setups are worth a slot even when PoB can't count them)
+				local value = score + (option.auto and 0.001 or 0)
+				if not bestScore or value > bestScore then best, bestScore = option, value end
+			end
+		end
+		if not best or bestScore - current < (best.auto and -0.0005 or 0.002) then break end
+		local gems = { }
+		for _, gid in ipairs(best.gems) do t_insert(gems, gemEntry(gid)) end
+		self:Keep("Filler", gems, self:SlotFor(#best.gems))
+		best.taken = true
+		-- a gem can only be used once
+		for _, option in ipairs(options) do
+			for _, a in ipairs(option.gems) do
+				for _, b in ipairs(best.gems) do
+					if a == b and not data.gems[a].grantedEffect.support then option.taken = true end
+				end
+			end
+		end
+		t_insert(kept, best.label)
+	end
+	-- a Vaal aura for bosses, switched off like the guard (PoB would count it as
+	-- always up): the first that fits a free socket
+	for _, vaal in ipairs({ "Vaal Haste", "Vaal Grace", "Vaal Discipline" }) do
+		local id = gemId(vaal)
+		local slot = self:SlotFor(1)
+		if id and free(vaal) and slot then
+			local group = self:Keep("Vaal aura (switched off: used by hand)", { gemEntry(id) }, slot)
+			group.enabled = false
+			self.skillsTab:ProcessSocketGroup(group)
+			t_insert(kept, vaal .. " (by hand on bosses, not counted)")
+			break
+		end
+	end
+	-- an item that makes its gems blessings: the best single aura there
+	for slotName, count in pairs(self:FreeSockets()) do
+		if count >= 1 and self:BlessingSlot(slotName) then
+			local current = self:Score()
+			local best, bestScore
+			for id, gem in pairs(data.gems) do
+				if gem.tags and gem.tags.aura and not gem.tags.vaal and not gem.tags.attack and not gem.tags.totem and not gem.tags.mine
+					and gem.grantedEffect and not gem.grantedEffect.support and not used[id] then
+					local group = self:AddGroup("try", { gemEntry(id) }, slotName)
+					local score = self:Score()
+					self:RemoveGroup(group)
+					if not bestScore or score > bestScore then best, bestScore = id, score end
+				end
+			end
+			if best and bestScore > current + 0.002 then
+				self:Keep("Blessing", { gemEntry(best) }, slotName)
+				t_insert(kept, data.gems[best].name .. " as a blessing (" .. slotName .. ")")
+			end
+		end
+	end
+	if #kept > 0 then self.gen:Note("Empty sockets filled: " .. table.concat(kept, "; ")) end
+end
+
 -- Lifetap into a utility group (its buff counts for the whole build)
 function GemSetupClass:ChooseLifetap()
 	local id = gemId("Lifetap")
@@ -576,6 +700,7 @@ function GemSetupClass:Run(maxBuffs, ignoreAttributes)
 	self:ChooseManaforged()
 	self:ChooseAnimateGuardian()
 	self:ChooseLifetap()
+	self:ChooseFillers()
 	scorer.ignoreAttributes = savedIgnore
 	self.gen:Recalculate()
 	local free = self:FreeSockets()

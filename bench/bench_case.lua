@@ -32,6 +32,11 @@ if archetypeId then
 	assert(archetype, "archetype not found: " .. archetypeId)
 end
 
+-- optional: FOCUS=<focus id> (BALANCED, DPS, TANK, DPS_FLOOR, CLEAR)
+local focus = new("BuildScorer"):BuildScorer(build).focusList[1]
+for _, f in ipairs(new("BuildScorer"):BuildScorer(build).focusList) do
+	if f.id == os.getenv("FOCUS") then focus = f end
+end
 -- optional: top player details (poe.ninja) saved as JSON, for offline tests
 local meta
 if os.getenv("META_DETAILS") then
@@ -42,7 +47,7 @@ end
 local gen = new("BuildGenerator"):BuildGenerator(build, {
 	meta = meta,
 	gemId = gemId, classId = asc.classId, ascendClassId = asc.ascendClassId, level = 92,
-	investment = investment, focus = new("BuildScorer"):BuildScorer(build).focusList[1],
+	investment = investment, focus = focus,
 	quick = mode == "quick", synergies = false, archetype = archetype, yieldEvery = 1e9,
 })
 local t0 = os.clock()
