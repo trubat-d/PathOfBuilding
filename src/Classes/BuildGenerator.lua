@@ -3435,6 +3435,11 @@ function BuildGeneratorClass:Run()
 	self.scorer = new("BuildScorer"):BuildScorer(self.build, { focus = opts.focus, chargesPerSecond = opts.chargesPerSecond, overlap = self.overlap, ehpFloor = opts.ehpFloor, hitFloor = opts.hitFloor,
 		bossTier = opts.investment and opts.investment.awakenedGems and "uber" or "pinnacle" })
 	self.scorer.useChecklist = false -- on from the flask stage
+	-- the archetype's stacked stat, valued on its own while the build is made
+	if opts.archetype and opts.archetype.lens and opts.statLens ~= false then
+		self.scorer.lens = opts.archetype.lens
+		self:Note(string.format("Commitment: %s is valued on its own while the build is made (gear, passives, jewels follow it)", opts.archetype.lens.label or opts.archetype.lens.stat))
+	end
 	-- (A/B options: weight of avoidance in tankiness, weight of tankiness)
 	self.scorer.avoidanceWeight = opts.avoidanceWeight
 	if opts.ehpWeight and self.scorer.focus then
@@ -3490,6 +3495,8 @@ function BuildGeneratorClass:Run()
 		end
 		self:AutoConfigure()
 		self:Recalculate()
+		-- (the archetype's stat lens left out: archetypes compared as they are)
+		self.scorer.lens = nil
 		local final = self.scorer:Evaluate(self.calcFunc, { })
 		self.final = final
 		self.build.buildFlag = true
@@ -3618,6 +3625,8 @@ function BuildGeneratorClass:Run()
 	if self:FitSockets() then self:Note("Gem setups packed again to fit the items' sockets") end
 	self:AutoConfigure()
 	self:Recalculate()
+	-- (the archetype's stat lens left out: archetypes compared as they are)
+	self.scorer.lens = nil
 	local final = self.scorer:Evaluate(self.calcFunc, { })
 	self.final = final
 	self.build.buildFlag = true

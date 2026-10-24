@@ -635,7 +635,8 @@ function GemSetupClass:ChooseAnimateGuardian()
 end
 
 -- Empty sockets: useful setups, automatic ones first (warcries on
--- Autoexertion, spells on Automation, a blessing in a Divine Blessing item,
+-- Autoexertion, spells on Automation (not Sigil of Power: its buff stays
+-- where it was cast), a blessing in a Divine Blessing item,
 -- Vaal auras), each kept if it helps or costs nothing
 function GemSetupClass:ChooseFillers()
 	local options = { }
@@ -667,7 +668,7 @@ function GemSetupClass:ChooseFillers()
 	end
 	-- spells cast automatically on cooldown
 	if free("Automation") then
-		for _, spell in ipairs({ "Wave of Conviction", "Frost Bomb", "Arctic Armour", "Tempest Shield", "Sigil of Power" }) do
+		for _, spell in ipairs({ "Wave of Conviction", "Frost Bomb", "Arctic Armour", "Tempest Shield" }) do
 			if free(spell) then add("Automation + " .. spell, { "Automation", spell }, true) end
 		end
 	end

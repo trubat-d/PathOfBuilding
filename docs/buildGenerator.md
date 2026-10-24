@@ -9,12 +9,15 @@ Every decision is made by [`BuildScorer`](../src/Classes/BuildScorer.lua) on PoB
 - **Focus**: the weights of damage and tankiness. "Damage, with a minimum max hit" (`DPS_FLOOR`) is damage first with a 10,000 max hit floor; below the floor every missing bit costs more than damage can pay back.
 - **Penalties**: elemental resistances below the cap, missing attributes, reservation over 100% (more the further over), self-damage over time bigger than regeneration, a defence checklist (freeze, shock, bleed, poison, stun...) and drawbacks PoB doesn't calculate ([`GeneratorRules`](../src/Modules/GeneratorRules.lua)).
 - **Passives PoB doesn't calculate**: cluster notables whose effect PoB can't read (Fan the Flames' ignite spread, Blast-Freeze, Remarkable's extra brands, Purposeful Harbinger...) get a value for the build ([`GeneratorRules`](../src/Modules/GeneratorRules.lua) `uncountedNodes`): ignite spread is worth a lot to an ignite build without Ignite Proliferation, nothing to a hit build.
+- **Smooth play**: only buffs that are always up count in full. Vaal skills and guard skills are switched off, buffs that stay where they are cast (Sigil of Power) aren't used, and a flask that comes and goes counts for less than its average uptime (none below half the time).
 - **Flasks**: their real uptime from charges gained and used (a flask that gains no charges while up, from an Enkindling enchantment, is up for its duration then refills); tinctures from their mana burn.
 
 The score is logarithmic in damage and in the max hit, so doubling the damage is worth the same at 1 million as at 100 million.
 
 #### Archetypes
 An archetype ([`BuildArchetypes`](../src/Classes/BuildArchetypes.lua)) is what the generator commits to before optimising everything else around it: keystones (crit, Elemental Overload, Resolute Technique, Chaos Inoculation, Avatar of Fire...), auras and supports (Pride + Brutality for impale, Hatred for physical weapons), uniques that scale with a stat (mana, intelligence, strength, dexterity, life) and playstyles (mines, traps, totems). The scan builds a quick version of every archetype that fits the skill; the automatic mode then builds the best three fully and keeps the best one.
+
+Stat stacking archetypes (Intelligence, Strength, Dexterity, mana, life, energy shield) commit to their stat: while the build is made, the stat counts on its own in the score (a "lens"), so rares, passives, jewels and uniques follow it before the items that pay it back are all in place. The final score leaves the lens out, so archetypes are compared as they are. On a Ball Lightning Intelligence build this doubled the damage of the finished build.
 
 A quick build ranks archetypes by how they start, so the scan also runs the cheap late steps that change the ranking the most (every affordable unique, a Watcher's Eye for the archetype's auras, the supports again). The automatic mode fully builds the best three, and up to five when more start within 0.5 of the best one; archetypes whose quick builds came out the same (one that adds nothing usable) are built once.
 

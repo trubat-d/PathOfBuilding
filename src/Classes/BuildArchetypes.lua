@@ -128,12 +128,14 @@ BuildArchetypesClass.list = {
 	},
 	{
 		id = "CI", label = "Energy shield + Chaos Inoculation",
+		lens = { stat = "EnergyShield", base = 1000, label = "Energy shield" },
 		summary = "Chaos Inoculation: immune to chaos damage, life is 1, energy shield is the hit pool.",
 		keystones = { "Chaos Inoculation" },
 		applies = function(info) return not info.minion end,
 	},
 	{
 		id = "MANA", label = "Mana stacking (Mind over Matter, Indigon, Archmage)",
+		lens = { stat = "Mana", base = 1000, label = "Maximum mana" },
 		summary = "Huge mana pool: Mind over Matter for defence; damage from mana spent / Archmage on spells.",
 		keystones = { "Mind Over Matter" },
 		supports = { "Archmage" },
@@ -146,6 +148,7 @@ BuildArchetypesClass.list = {
 	},
 	{
 		id = "INT", label = "Intelligence stacking (Shaper's Touch, Split Personality)",
+		lens = { stat = "Int", base = 100, label = "Intelligence" },
 		summary = "Stack Intelligence: uniques that scale damage, accuracy, evasion or energy shield per Intelligence.",
 		uniques = { "Shaper's Touch", "Astramentis" },
 		uniqueLines = { "per %d* ?Intelligence", "%d+%% increased Intelligence" },
@@ -154,6 +157,7 @@ BuildArchetypesClass.list = {
 	},
 	{
 		id = "STR", label = "Strength stacking",
+		lens = { stat = "Str", base = 100, label = "Strength" },
 		summary = "Stack Strength: uniques that scale with Strength (Iron Will for spells).",
 		uniqueLines = { "per %d* ?Strength", "%d+%% increased Strength" },
 		keystonesIf = function(info) return info.spell and { "Iron Will" } or nil end,
@@ -162,6 +166,7 @@ BuildArchetypesClass.list = {
 	},
 	{
 		id = "DEX", label = "Dexterity stacking",
+		lens = { stat = "Dex", base = 100, label = "Dexterity" },
 		summary = "Stack Dexterity: uniques that scale with Dexterity.",
 		uniqueLines = { "per %d* ?Dexterity", "%d+%% increased Dexterity" },
 		jewels = { "Split Personality" }, jewelStat = "Dexterity",
@@ -186,6 +191,7 @@ BuildArchetypesClass.list = {
 		-- (what top Righteous Fire players run: a huge life pool that the
 		-- skill and its uniques turn into damage)
 		id = "LIFE", label = "Life stacking (Kaom's Heart, life scaling uniques)",
+		lens = { stat = "Life", base = 1000, label = "Maximum life" },
 		summary = "A huge life pool: Kaom's Heart (the main skill moves to a 4-link) and uniques that turn life into damage.",
 		uniques = { "Kaom's Heart" },
 		uniqueLines = { "per %d+ Player Maximum Life", "per %d+ Maximum Life" },

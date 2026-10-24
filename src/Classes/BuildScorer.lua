@@ -432,6 +432,14 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 	-- avoiding, blocking and suppressing hits (see DamageTakenShare): its own
 	-- weight, as top players value it (max block or 100% suppression is worth
 	-- about as much as doubling the damage to them)
+	-- an archetype's commitment (e.g. Intelligence stacking): its stat counts
+	-- on its own while the build is made, so gear, passives and jewels follow
+	-- it before the uniques that pay it back are complete. Left out of the
+	-- final score, which compares archetypes as they are.
+	if self.lens and output then
+		local value = output[self.lens.stat] or 0
+		score = score + (self.lens.weight or 0.3) * m_log(m_max(1, value) / (self.lens.base or 100))
+	end
 	local avoidWeight = self.avoidanceWeight or self.focus.avoid or 0
 	if output and avoidWeight > 0 then
 		score = score + avoidWeight * m_log(1 / self:DamageTakenShare(output))
@@ -663,6 +671,12 @@ function BuildScorerClass:Evaluate(calcFunc, override, opts)
 		local list = self:GetFlaskUptimes(override)
 		flasks = list
 		for _, entry in ipairs(list) do
+			-- (smooth play: a buff that comes and goes counts for less than its
+			-- average, and one up less than half the time not at all)
+			if self.smoothBuffs ~= false and entry.uptime < 0.999 then
+				entry.rawUptime = entry.uptime
+				entry.uptime = entry.uptime < 0.5 and 0 or entry.uptime ^ 1.5
+			end
 			if entry.uptime < 1 then
 				local off = { }
 				for k, v in pairs(override) do off[k] = v end
