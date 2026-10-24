@@ -3169,6 +3169,99 @@ function BuildGeneratorClass:CorruptionMove()
 	return total
 end
 
+-- Supreme Ostentation (Elegant Hubris, Caspiro): attribute requirements ignored.
+-- Its value only shows once the build is rebuilt without them: the passives
+-- taken for attributes spent elsewhere and the rares made without attribute
+-- mods. So it is tried as a package (jewel, tree, rares) against the build as
+-- it is, replacing the timeless jewel already chosen if there is one.
+function BuildGeneratorClass:SupremeOstentationMove()
+	local investment = self.options.investment or { }
+	if not investment.awakenedGems or investment.timeless == false then return 0 end
+	if self.rules and self.rules.userExcluded and self.rules.userExcluded["Elegant Hubris"] then return 0 end
+	local spec = self.build.spec
+	self:Recalculate()
+	local output = self.build.calcsTab.mainOutput
+	local env = self.build.calcsTab.mainEnv
+	if env and env.player.modDB:Flag(nil, "IgnoreAttributeRequirements") then return 0 end
+	-- (only when attributes cost the build something: requirements well above the base)
+	local need = 0
+	for _, attr in ipairs({ "Str", "Dex", "Int" }) do need = need + m_max(0, (output["Req" .. attr] or 0) - 40) end
+	if need < 100 then return 0 end
+	local finder = new("TimelessJewelFinder"):TimelessJewelFinder({
+		build = self.build,
+		score = function(override) return (self:Score(override)) end,
+		fullScore = function() return (self:FullScore()) end,
+		equip = function(item, slotName) return self:Equip(item, slotName) end,
+		tick = function() self:Tick() end,
+	})
+	local jewelType
+	for _, jt in ipairs(finder.jewelTypes) do if jt.name == "Elegant Hubris" then jewelType = jt end end
+	if not jewelType then return 0 end
+	local conqueror
+	for _, c in ipairs(jewelType.conquerors) do if c[1] == "Caspiro" then conqueror = c end end
+	local before = self:FullScore()
+	-- the timeless jewel already socketed (it is replaced for the trial)
+	local historicSocket
+	for nodeId, itemId in pairs(spec.jewels) do
+		local item = self.itemsTab.items[itemId]
+		if item and item.jewelData and item.jewelData.conqueredBy and spec.allocNodes[nodeId] then historicSocket = nodeId end
+	end
+	local sockets = { }
+	for _, socket in ipairs(finder:CandidateSockets(6, 3)) do
+		if socket.keystones > 0 or socket.nearKeystone or socket.node.id == historicSocket then t_insert(sockets, socket) end
+	end
+	-- (the historic socket first: no points to spend on it)
+	t_sort(sockets, function(a, b)
+		local ah, bh = a.node.id == historicSocket, b.node.id == historicSocket
+		if ah ~= bh then return ah end
+		return a.value > b.value
+	end)
+	-- (each socket tried as a package; the first that improves the build is kept)
+	for i = 1, m_min(2, #sockets) do
+		local socket = sockets[i]
+		local snap = self:Snapshot()
+		local savedLog = #self.log
+		local seed
+		local ok, err = pcall(function()
+			if historicSocket and historicSocket ~= socket.node.id then
+				local slot = self.itemsTab.slots["Jewel " .. historicSocket]
+				if slot then slot:SetSelItemId(0) end
+			end
+			self:Recalculate()
+			finder.base, finder.addValue, finder.removeValue = self:Score(), { }, { }
+			seed = (finder:RankSeeds(jewelType, socket, 1)[1] or { }).seed or (data.timelessJewelSeedMin[jewelType.id] * jewelType.seedStep)
+			local item = finder.MakeItem(jewelType, seed, conqueror)
+			finder:Apply({ item = item, socket = socket, keystone = socket.keystones == 0 and socket.nearKeystone or nil })
+			self:Recalculate()
+			local dbg = self.options.debugTiming and function(what) ConPrintf("[ostentation]   %s: %.3f", what, (self:FullScore())) end or function() end
+			dbg("jewel")
+			self:TrimTree()
+			dbg("trim")
+			-- passives taken for attributes are the cheapest leaves now: spent again
+			self:RefineTree(16)
+			dbg("refine")
+			if self.options.finalRares ~= false then self:FinalRares() end
+			dbg("rares")
+			-- (targets re-chosen: paths no longer need to pass through attributes)
+			self:OptimizeTree()
+			dbg("optimize")
+		end)
+		if not ok then ConPrintf("Supreme Ostentation trial failed: %s", tostring(err)) end
+		for j = #self.log, savedLog + 1, -1 do t_remove(self.log, j) end
+		local after = ok and self:FullScore() or before
+		if self.options.debugTiming then ConPrintf("[ostentation] socket %d (historic %s, keystones %d, near %s): %.3f -> %.3f", socket.node.id, tostring(historicSocket), socket.keystones, socket.nearKeystone and socket.nearKeystone.dn or "-", before, after) end
+		if ok and after > before + 0.01 then
+			self:Note(string.format("Elegant Hubris (Caspiro, seed %d): Supreme Ostentation, attribute requirements ignored; the passives and rare mods that were there for attributes spent on other stats: score %+.3f", seed, after - before))
+			self.costs = self.costs or { }
+			t_insert(self.costs, GetPriceSource():UniquePrice(self.itemsTab.items[self.itemsTab.slots["Jewel " .. socket.node.id].selItemId]) or false)
+			return after - before
+		end
+		self:Restore(snap)
+		self:Tick()
+	end
+	return 0
+end
+
 -- Two-piece unique combos (Classes/UniqueComboFinder): pairs that gain more
 -- together than apart, and uniques granting a state (Elusive, Onslaught...)
 -- with the ones paying off in it; tried as packages with the build adapted
@@ -4802,6 +4895,11 @@ function BuildGeneratorClass:Run()
 	if opts.corruption ~= false then
 		local ok, err = pcall(function() self:CorruptionMove() end)
 		if not ok then ConPrintf("Corruption move failed: %s", tostring(err)) end
+	end
+	-- Supreme Ostentation: no attribute requirements, tree and rares rebuilt (High+)
+	if opts.ostentation ~= false then
+		local ok, err = pcall(function() self:SupremeOstentationMove() end)
+		if not ok then ConPrintf("Supreme Ostentation move failed: %s", tostring(err)) end
 	end
 	-- the finished build partly rebuilt, again and again (large neighbourhood search)
 	if (opts.repairRounds or 8) > 0 then

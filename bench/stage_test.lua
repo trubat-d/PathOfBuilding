@@ -167,6 +167,11 @@ elseif step == "conditions" then
 elseif step == "corrupt" then
 	print("GAIN", gen:CorruptionMove())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
+elseif step == "ostentation" then
+	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
+	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
+	print("GAIN", gen:SupremeOstentationMove())
+	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
 elseif step == "prune" then
 	print("REMOVED", gen:PruneUselessGems())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
