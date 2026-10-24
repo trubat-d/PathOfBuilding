@@ -130,8 +130,13 @@ return function(jobJson, userPath, scriptBase)
 			focus = byId(statics.focusList, sc.focusId) or statics.focusList[1], chargesPerSecond = sc.chargesPerSecond, overlap = overlap,
 			ehpFloor = sc.ehpFloor, hitFloor = sc.hitFloor, bossTier = sc.bossTier, killsPerSecond = sc.killsPerSecond, flaskRealism = sc.flaskRealism,
 		})
-		for _, key in ipairs({ "hitScale", "resourceSustain", "ignoreCosts", "ignoreAttributes", "ignoreReservation", "useChecklist" }) do
+		for _, key in ipairs({ "hitScale", "resourceSustain", "ignoreCosts", "ignoreAttributes", "ignoreReservation", "useChecklist",
+			"lens", "avoidanceWeight", "pastTarget", "fightWeight", "smoothBuffs", "reservationSlope" }) do
 			scorer[key] = sc[key]
+		end
+		if sc.focusEhp and scorer.focus and scorer.focus.ehp ~= sc.focusEhp then
+			scorer.focus = copyTable(scorer.focus, true)
+			scorer.focus.ehp = sc.focusEhp
 		end
 		local finder = new("BestItemFinder"):BestItemFinder(b.itemsTab)
 		local options = job.options or { }

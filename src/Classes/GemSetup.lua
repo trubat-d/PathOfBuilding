@@ -628,7 +628,7 @@ function GemSetupClass:ChooseAnimateGuardian()
 	local support = gemId("Meat Shield")
 	if investment.awakenedGems and self:SlotFor(2) and support then
 		self:Keep("Animate Guardian", { gemEntry(id), gemEntry(support) }, self:SlotFor(2))
-		self.gen:Note("Animate Guardian setup: Animate Guardian + Meat Shield; give it buff uniques (e.g. Kingmaker, Leer Cast, Victario's Influence) - PoB doesn't count their buffs")
+		self.gen:Note("Animate Guardian setup: Animate Guardian + Meat Shield (the uniques it wears are chosen later: their buffs to you go in the configuration's custom modifiers)")
 	else
 		self.gen:Note("Possible addition: Animate Guardian (+ Meat Shield) wearing buff uniques like Kingmaker or Victario's Influence, if sockets are free (PoB doesn't count it)")
 	end

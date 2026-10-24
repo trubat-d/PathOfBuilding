@@ -1615,6 +1615,9 @@ function BuildGeneratorClass:RunRaresParallel(finder, options)
 		scenarioId = self.options.scenario and self.options.scenario.id,
 		hitScale = sc.hitScale, resourceSustain = sc.resourceSustain, ignoreCosts = sc.ignoreCosts, ignoreAttributes = sc.ignoreAttributes,
 		ignoreReservation = sc.ignoreReservation, useChecklist = sc.useChecklist,
+		-- (the generator's own settings: the threads must score as it does)
+		lens = sc.lens, avoidanceWeight = sc.avoidanceWeight, pastTarget = sc.pastTarget, fightWeight = sc.fightWeight,
+		smoothBuffs = sc.smoothBuffs, reservationSlope = sc.reservationSlope, focusEhp = sc.focus and sc.focus.ehp,
 	}
 	local xml = self.build:SaveDB("code")
 	-- weapons first (their seeded fills take longest), then round robin
@@ -1676,6 +1679,7 @@ function BuildGeneratorClass:RareOptions(withInfluences)
 		elevated = withInfluences and investment and investment.elevated or false,
 		eldritchTier = withInfluences and investment and investment.eldritchTier or 0,
 		weaponSeeds = self.options.weaponSeeds, crafts = self.options.crafts, lazyFill = self.options.lazyFill,
+		maxAffixes = investment and investment.rareAffixes,
 	}
 end
 
@@ -1692,6 +1696,7 @@ function BuildGeneratorClass:MakeRares(withInfluences)
 		elevated = withInfluences and investment and investment.elevated or false,
 		eldritchTier = withInfluences and investment and investment.eldritchTier or 0,
 		weaponSeeds = self.options.weaponSeeds, crafts = self.options.crafts, lazyFill = self.options.lazyFill,
+		maxAffixes = investment and investment.rareAffixes,
 		yieldEvery = nil,
 	}
 	local function withSlots(slots)
@@ -3140,6 +3145,18 @@ function BuildGeneratorClass:Explain(final)
 	if #parts > 0 then self:Note("What carries it: " .. table.concat(parts, "; ")) end
 end
 
+-- Is a gem in an enabled socket group?
+function BuildGeneratorClass:HasGem(name)
+	for _, group in ipairs(self.build.skillsTab.socketGroupList) do
+		if group.enabled ~= false then
+			for _, gem in ipairs(group.gemList) do
+				if gem.gemData and gem.gemData.name == name and gem.enabled ~= false then return true end
+			end
+		end
+	end
+	return false
+end
+
 -- What buying an item costs in score: the budget is an investment, so an
 -- expensive item must gain more than a cheap one that does nearly as well
 -- (a quarter of the item limit costs 0.01, the full limit 0.04: about 1% and
@@ -4002,6 +4019,11 @@ function BuildGeneratorClass:Run()
 	if opts.flaskEnchants ~= false then self:FlaskEnchantMove() end
 	self:Move(2, 6, "Pantheon and bandit")
 	self:ChoosePantheonAndBandit()
+	-- an Animate Guardian wearing uniques that buff nearby allies (when the build has one)
+	if opts.animateGuardian ~= false and self:HasGem("Animate Guardian") then
+		local ok, err = pcall(function() new("AnimateGuardianSetup"):AnimateGuardianSetup(self):Run() end)
+		if not ok then ConPrintf("Animate Guardian setup failed: %s", tostring(err)) end
+	end
 	if opts.auraStacking ~= false then
 		self:Move(3, 6, "Trying aura stacking")
 		self:AuraStackMove()

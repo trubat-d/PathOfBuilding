@@ -113,6 +113,8 @@ elseif step == "snapdebug" then
 	local branches = gen:TreeBranches()
 	print("BRANCHES", #branches)
 	for i = 1, math.min(5, #branches) do print("BR", #branches[i].nodes, branches[i].perPoint, branches[i].nodes[1].dn) end
+elseif step == "guardian" then
+	print("GAIN", new("AnimateGuardianSetup"):AnimateGuardianSetup(gen):Run())
 elseif step == "cross" then
 	gen:CrossIdeasMove(1)
 elseif step == "explain" then
@@ -156,6 +158,7 @@ elseif step == "rares" then
 		local item = build.itemsTab.items[slot.selItemId]
 		if item and item.rarity == "RARE" then
 			for _, l in ipairs(item.explicitModLines) do if l.crafted then print("CRAFT", slot.slotName, l.line) end end
+			print("RARE", slot.slotName, #item.explicitModLines .. " explicit lines")
 		end
 	end
 end

@@ -49,6 +49,10 @@ Every late move is kept only when the full score (with flask uptimes) is better.
 
 Items and gems follow what can be found at the investment level, not only prices: below High investment there are no exceptional gems (Enlighten, Empower, Enhance) and no scarce uniques (Split Personality, Watcher's Eye, Cinderswallow Urn, Forbidden jewels... `PriceSource.scarceUniques`). Gem setups always fit the items' real sockets: uniques with a fixed count (Crest of Desire's single socket) or abyssal sockets pack the setups again, and a main link that no longer fits moves to a 4-link. Items whose granted supports change what a gem does there (traps, totems, triggers: `behaviourSupports`, from `bench/unique_audit.lua`) get no utility setup.
 
+An Animate Guardian (from High investment, when sockets are free) wears the uniques that buff nearby allies best for the build (Kingmaker, Mask of the Tribunal, Replica Leer Cast, Victario's Flight...): their ally lines become the player's own in a Custom Modifier group of the configuration ("Animate Guardian (generated)"), where PoB counts them. On the Boneshatter test build: Kingmaker and Mask of the Tribunal, +0.16.
+
+Rares follow the budget: below Endgame investment, a rare has only the good natural mods a player can realistically craft or buy for it (3 at League start, 4 at Budget and Mid, 5 at High; plus the bench craft).
+
 Enemy debuffs the build keeps up are switched on in the configuration like ailments: intimidate, unnerve, blind, maim, hinder, ash, frost, crush, scorch, brittle, sap (a line that inflicts it on hit, with its chance, at the main skill's hit rate), and exposure from Wave of Conviction or Frost Bomb.
 
 Curses are tried on every way to apply them, each with what it costs in play (PoB counts a curse in full however it is applied): Arcanist Brand and casting by hand take time from the main skill, Hextouch on a movement skill only curses what it hits, Blasphemy reserves mana, a mark on Mark On Hit is free for attacks.

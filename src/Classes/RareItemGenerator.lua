@@ -380,11 +380,17 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 		-- while resistances / attributes are still short)
 		local lastGain = { }
 		for _, candidate in ipairs(shortlist) do lastGain[candidate] = candidate.gain or 0 end
-		while counts.Prefix + counts.Suffix < prefixLimit + suffixLimit do
+		-- (opts.maxAffixes: the natural mods a rare of this budget realistically
+		-- has at the quality chosen, plus the bench craft)
+		local total = prefixLimit + suffixLimit
+		if opts.maxAffixes then total = m_min(total, opts.maxAffixes + 1) end
+		while counts.Prefix + counts.Suffix < total do
+			local natural = counts.Prefix + counts.Suffix - counts.crafted
 			local best, bestPower, bestDeficit
 			local order = { }
 			for _, candidate in ipairs(shortlist) do
-				if not usedGroups[candidate.group] and counts[candidate.type] < limits[candidate.type] and not (candidate.crafted and counts.crafted > 0) then
+				if not usedGroups[candidate.group] and counts[candidate.type] < limits[candidate.type] and not (candidate.crafted and counts.crafted > 0)
+					and not (opts.maxAffixes and not candidate.crafted and natural >= opts.maxAffixes) then
 					t_insert(order, candidate)
 				end
 			end
