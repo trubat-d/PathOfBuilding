@@ -13,7 +13,15 @@ for path in os.getenv("FILES"):gmatch("%S+") do
 	for _, entry in ipairs(new("BuildScorer"):BuildScorer(build).focusList) do if entry.id == (os.getenv("FOCUS") or "DPS_FLOOR") then focus = entry end end
 	local scorer = new("BuildScorer"):BuildScorer(build, { focus = focus, hitFloor = focus.hitFloor, chargesPerSecond = 1.5, bossTier = investment.awakenedGems and "uber" or "pinnacle" })
 	scorer.useChecklist = true
-	local r = scorer:Evaluate(build.calcsTab:GetMiscCalculator(), { })
+	-- STRIP="<unique>;...": items taken out (e.g. uniques PoB miscalculates, excluded since)
+	local override = { repItems = { } }
+	for title in (os.getenv("STRIP") or "Bound Fate"):gmatch("[^;]+") do
+		for slotName, slot in pairs(build.itemsTab.slots) do
+			local item = build.itemsTab.items[slot.selItemId]
+			if item and item.title == title then override.repItems[slotName] = false end
+		end
+	end
+	local r = scorer:Evaluate(build.calcsTab:GetMiscCalculator(), override)
 	local minHit = scorer:MinMaxHit(r.output)
 	print(string.format("RESCORE %-60s %.3f dps %.0f minHit %.0f share %.2f", path:match("[^/]+$"), r.score, r.dps, minHit or 0, scorer:DamageTakenShare(r.output)))
 end

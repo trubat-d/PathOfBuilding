@@ -239,6 +239,8 @@ BuildArchetypesClass.list = {
 	},
 	{
 		id = "COC", label = "Cast On Critical Strike (spell triggered by an attack's crits)", trigger = "COC",
+		-- (the build commits to critical strikes: the triggers come from them)
+		lens = { stat = "CritChance", base = 20, label = "Critical strike chance" },
 		summary = "An attack (Cyclone, Ice Shot, Lacerate...) linked with Cast On Critical Strike triggers the spell when it crits: crit chance and attack speed.",
 		applies = function(info) return not info.minion and triggerable(info) end,
 	},
