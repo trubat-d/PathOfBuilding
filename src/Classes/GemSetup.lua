@@ -364,6 +364,9 @@ function GemSetupClass:ChooseAuras(maxBuffs)
 	local supportOptions = self:AuraSupportOptions()
 	local current = self:Score()
 	local chosen, golems, count = { }, 0, 0
+	local archetype = self.gen.options.archetype
+	local archetypeAuras = archetype and archetype.auras or { }
+	local forcedAura = false
 	local auraGroup
 	while count < (maxBuffs or 4) do
 		-- the open aura group, linked with the first support option (Enlighten if available)
@@ -378,7 +381,17 @@ function GemSetupClass:ChooseAuras(maxBuffs)
 			auraGroup.supportIndex = supportOptions[1] and 1 or nil
 		end
 		local best, bestScore
-		for _, id in ipairs(candidates) do
+		-- auras the archetype commits to come first, whatever they score alone
+		-- (e.g. Hatred for a physical weapon build: the weapon follows later)
+		for _, name in ipairs(archetypeAuras) do
+			local id = gemId(name)
+			if id and not chosen[id] and #auraGroup.gemList < auraGroup.capacity then
+				best, bestScore = id, self:TryInGroup(auraGroup, gemEntry(id))
+				forcedAura = true
+				break
+			end
+		end
+		for _, id in ipairs(best and { } or candidates) do
 			local gem = data.gems[id]
 			-- golems die and need looking after: only builds made for them (extra golem limit) use one
 			-- (or an ascendancy built around them, e.g. Elementalist's Liege of the Primordial)
@@ -397,7 +410,8 @@ function GemSetupClass:ChooseAuras(maxBuffs)
 			end
 		end
 		self.gen:Tick()
-		if not best or bestScore <= current + 0.005 then break end
+		if not best or (bestScore <= current + 0.005 and not forcedAura) then break end
+		forcedAura = false
 		local gem = data.gems[best]
 		if gem.tags.golem then
 			self:Keep("Golem", { gemEntry(best) }, self:SlotFor(1))

@@ -1,0 +1,4 @@
+# compared with top players (bench/eval_build.lua on their PoB codes): skill | ascendancy | investment | mode | archetype
+Boneshatter | Juggernaut | ENDGAME | full
+Tornado Shot | Deadeye | ENDGAME | full
+Ball Lightning | Hierophant | ENDGAME | full

@@ -224,7 +224,7 @@ function BuildScorerClass:GetPenalties(output)
 	end
 	for _, pool in ipairs({ "Mana", "Life" }) do
 		local unreserved = output[pool .. "Unreserved"]
-		if unreserved and unreserved < 0 then
+		if unreserved and unreserved < 0 and not self.ignoreReservation then
 			total = total + 2
 			t_insert(penalties, { label = pool .. " reservation is over 100%", value = 2 })
 		end
@@ -270,7 +270,7 @@ function BuildScorerClass:GetPenalties(output)
 	end
 	-- Not being able to pay for the main skill
 	local cost = output.ManaCost or 0
-	if cost > 0 and output.ManaUnreserved and cost > output.ManaUnreserved then
+	if cost > 0 and output.ManaUnreserved and cost > output.ManaUnreserved and not self.ignoreReservation then
 		total = total + 1
 		t_insert(penalties, { label = "Not enough unreserved mana to cast the main skill", value = 1 })
 	end
@@ -436,6 +436,23 @@ function BuildScorerClass:FlaskUptime(item, modDB)
 	return m_min(1, duration * rate / chargesUsed)
 end
 
+-- Estimated share of time a tincture is up (0 to 1): mana burn stacks build up
+-- while it is active (one every manaBurn seconds, each 1% of mana lost per
+-- second), so it stays on until the mana pool runs dry, then waits its cooldown
+function BuildScorerClass:TinctureUptime(item, modDB, output)
+	local td = item.tinctureData
+	if not td or not td.manaBurn then return 1 end
+	if modDB and modDB:Sum("BASE", nil, "TincturesNotInflictManaBurn") >= 100 then return 1 end
+	local b = td.manaBurn
+	local mana = output and output.Mana or 0
+	local regen = output and (output.ManaRegenRecovery or output.ManaRegen) or 0
+	local r = mana > 0 and regen / mana * 100 or 0
+	-- seconds until the burn (t^2 / 2b % of mana) outweighs the pool and its regeneration
+	local active = b * r + math.sqrt((b * r) ^ 2 + 200 * b)
+	local cooldown = td.cooldown or 8
+	return m_min(1, active / (active + cooldown))
+end
+
 -- The item a calculation sees in a slot, taking swapped items into account
 function BuildScorerClass:ItemInSlot(slot, override)
 	override = override or { }
@@ -491,6 +508,9 @@ function BuildScorerClass:GetFlaskUptimes(override)
 			t_insert(list, { item = item, uptime = uptime, permanent = permanent[item] or false })
 		end
 	end
+	for item in pairs(env.tinctures or { }) do
+		t_insert(list, { item = item, uptime = self:TinctureUptime(item, modDB, env.player.output), permanent = false, tincture = true })
+	end
 	return list, env
 end
 
@@ -513,7 +533,7 @@ function BuildScorerClass:Evaluate(calcFunc, override, opts)
 			if entry.uptime < 1 then
 				local off = { }
 				for k, v in pairs(override) do off[k] = v end
-				off.toggleFlask = entry.item
+				if entry.tincture then off.toggleTincture = entry.item else off.toggleFlask = entry.item end
 				local offOutput = calcFunc(off, opts.useFullDPS)
 				local offDps, offEhp = self:GetDPS(offOutput), self:GetEHP(offOutput)
 				entry.dpsShare = rawDps > 0 and (rawDps - offDps) / rawDps or 0

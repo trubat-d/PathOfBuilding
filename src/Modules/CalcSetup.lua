@@ -1053,7 +1053,7 @@ function calcs.initEnv(build, mode, override, specEnv)
 				end
 				item = nil
 			elseif item and item.type == "Tincture" then
-				if slot.active then
+				if slot.active or (override.activeFlaskSlots and override.activeFlaskSlots[slotName]) then
 					env.tinctures[item] = true
 				end
 				item = nil

@@ -37,12 +37,21 @@ end
 
 -- A magic flask of the given base with the given prefix / suffix candidates
 function FlaskGeneratorClass:MakeFlask(baseName, prefix, suffix, range)
-	local lines = { "Rarity: MAGIC", baseName, "Crafted: true", "Quality: 20" }
+	local tincture = data.itemBases[baseName] and data.itemBases[baseName].type == "Tincture"
+	local lines = { "Rarity: MAGIC", baseName, "Crafted: true", tincture and "Quality: 0" or "Quality: 20" }
 	if prefix then
 		t_insert(lines, "Prefix: {range:" .. range .. "}" .. prefix.modId)
 	end
 	if suffix then
 		t_insert(lines, "Suffix: {range:" .. range .. "}" .. suffix.modId)
+	end
+	-- a tincture's effect is its implicit
+	local base = data.itemBases[baseName]
+	if base and base.implicit then
+		local implicits = { }
+		for line in base.implicit:gmatch("[^\n]+") do t_insert(implicits, "{range:" .. (range or 1) .. "}" .. line) end
+		t_insert(lines, "Implicits: " .. #implicits)
+		for _, line in ipairs(implicits) do t_insert(lines, line) end
 	end
 	local item = new("Item"):Item(table.concat(lines, "\n"))
 	item:NormaliseQuality()
@@ -71,6 +80,17 @@ function FlaskGeneratorClass:GetBases(levelOnly)
 	end
 	if bestMana and (output.ManaPerSecondCost or 0) > 0 then
 		t_insert(list, bestMana)
+	end
+	-- tinctures: only for melee weapon attacks (their mods apply to melee weapons)
+	local env = self.build.calcsTab.mainEnv
+	local skill = env and env.player and env.player.mainSkill
+	local flags = skill and skill.skillFlags or { }
+	if flags.melee and flags.attack and not flags.unarmed then
+		for name, base in pairs(data.itemBases) do
+			if base.type == "Tincture" and not base.hidden and not (levelOnly and base.req and (base.req.level or 0) > level) then
+				t_insert(list, name)
+			end
+		end
 	end
 	t_sort(list)
 	return list
@@ -143,6 +163,8 @@ function FlaskGeneratorClass:Generate(ctx)
 				if name == slotName then break end
 			end
 			uptime = index <= permanentCount and 1 or 0
+		elseif item.type == "Tincture" then
+			uptime = scorer:TinctureUptime(item, modDB, output)
 		else
 			uptime = scorer:FlaskUptime(item, modDB)
 		end
@@ -154,6 +176,7 @@ function FlaskGeneratorClass:Generate(ctx)
 
 	local bases = self:GetBases(opts.levelOnly)
 	local usedBases = { }
+	local usedTincture = false -- one tincture at a time
 	local currentScore = evaluate()
 	local chosen = { }
 	local chosenItems = { }
@@ -166,7 +189,8 @@ function FlaskGeneratorClass:Generate(ctx)
 		-- 1. Rank the flask types without mods
 		local ranked = { }
 		for _, baseName in ipairs(bases) do
-			if not usedBases[baseName] then
+			local isTincture = data.itemBases[baseName].type == "Tincture"
+			if not usedBases[baseName] and not (isTincture and usedTincture) then
 				local score = quickScore(slotName, self:MakeFlask(baseName, nil, nil, quality.range))
 				t_insert(ranked, { baseName = baseName, score = score })
 			end
@@ -177,7 +201,7 @@ function FlaskGeneratorClass:Generate(ctx)
 		for i = 1, m_min(opts.flaskBaseCount or 2, #ranked) do
 			local baseName = ranked[i].baseName
 			local blank = self:MakeFlask(baseName, nil, nil, quality.range)
-			local candidates = self.rareGenerator:GetCandidates(blank, quality, opts.levelOnly, data.itemMods.Flask)
+			local candidates = self.rareGenerator:GetCandidates(blank, quality, opts.levelOnly, blank.type == "Tincture" and data.itemMods.Tincture or data.itemMods.Flask)
 			local pick = { Prefix = nil, Suffix = nil }
 			local pickScore = ranked[i].score
 			for _, affixType in ipairs({ "Prefix", "Suffix" }) do
@@ -199,7 +223,7 @@ function FlaskGeneratorClass:Generate(ctx)
 		end
 		-- Compare with the flasks the build already had
 		for _, item in ipairs(existing) do
-			if not usedBases[item.baseName] and not chosenItems[item] then
+			if not usedBases[item.baseName] and not chosenItems[item] and not (item.type == "Tincture" and usedTincture) then
 				local score = quickScore(slotName, item)
 				if not best or score > best.score then
 					best = { existing = item, baseName = item.baseName, score = score }
@@ -216,6 +240,7 @@ function FlaskGeneratorClass:Generate(ctx)
 			-- stays even when its measured gain is small (e.g. few charges on a boss)
 			if score > currentScore - 0.002 then
 				chosenItems[item] = true
+				if item.type == "Tincture" then usedTincture = true end
 				usedBases[best.baseName] = true
 				currentScore = math.max(currentScore, score)
 				chosen[slotName] = item

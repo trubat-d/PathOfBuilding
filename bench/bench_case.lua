@@ -48,7 +48,7 @@ local gen = new("BuildGenerator"):BuildGenerator(build, {
 	meta = meta,
 	gemId = gemId, classId = asc.classId, ascendClassId = asc.ascendClassId, level = 92,
 	investment = investment, focus = focus,
-	quick = mode == "quick", synergies = false, archetype = archetype, yieldEvery = 1e9,
+	quick = mode == "quick", synergies = os.getenv("SYNERGIES") == "1", archetype = archetype, yieldEvery = 1e9,
 })
 local t0 = os.clock()
 local co = coroutine.create(function() return gen:Run() end)
@@ -85,6 +85,17 @@ else
 	for i, g in ipairs(gen.mainGroup.gemList) do if i > 1 and g.gemId then table.insert(gems, data.gems[g.gemId].name) end end
 	result.supports = gems
 	result.log = res.log
+	-- the generated build, for comparisons (bench/transplant.lua)
+	local saveDir = os.getenv("BENCH_SAVE")
+	if saveDir and saveDir ~= "" then
+		local name = (skillName .. "_" .. ascName .. "_" .. investmentId .. "_" .. mode .. (archetypeId and ("_" .. archetypeId) or "")):gsub("[^%w_]", "")
+		local f = io.open(saveDir .. "/" .. name .. ".xml", "w")
+		if f then
+			f:write(build:SaveDB("code"))
+			f:close()
+			result.xml = saveDir .. "/" .. name .. ".xml"
+		end
+	end
 end
 result.seconds = math.floor(os.clock() - t0)
 print("BENCH " .. dkjson.encode(result))

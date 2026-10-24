@@ -33,11 +33,11 @@ PriceSourceClass.levels = {
 	{ id = "MID", label = "Mid investment (items up to 30 divines)", maxUnique = 30, maxAnoint = 10, maxTattoo = 2, influences = 1, maxInfluenced = 2, eldritchTier = 4, quality = 2, unknownAllowed = false,
 		enlighten = { name = "Enlighten", level = 3 }, exceptionalGems = true, awakenedGems = false, timeless = true },
 	{ id = "HIGH", label = "High investment (items up to 150 divines)", maxUnique = 150, maxAnoint = 50, maxTattoo = 10, influences = 2, maxInfluenced = 4, eldritchTier = 5, quality = 2, unknownAllowed = true,
-		enlighten = { name = "Enlighten", level = 4 }, exceptionalGems = true, awakenedGems = true, timeless = true },
+		enlighten = { name = "Enlighten", level = 4 }, exceptionalGems = true, awakenedGems = true, timeless = true, corruptedMain = true },
 	{ id = "ENDGAME", label = "Endgame investment (items up to 500 divines, Mageblood level)", maxUnique = 500, maxAnoint = 150, maxTattoo = 30, influences = 2, maxInfluenced = 7, eldritchTier = 6, quality = 4, unknownAllowed = true,
-		enlighten = { name = "Awakened Enlighten", level = 5 }, exceptionalGems = true, awakenedGems = true, timeless = true },
+		enlighten = { name = "Awakened Enlighten", level = 5 }, exceptionalGems = true, awakenedGems = true, timeless = true, corruptedMain = true, corruptedSupports = true },
 	{ id = "MIRROR", label = "No limit (mirror tier)", influences = 2, eldritchTier = 6, elevated = true, quality = 1, unknownAllowed = true,
-		enlighten = { name = "Awakened Enlighten", level = 5 }, exceptionalGems = true, awakenedGems = true, timeless = true },
+		enlighten = { name = "Awakened Enlighten", level = 5 }, exceptionalGems = true, awakenedGems = true, timeless = true, corruptedMain = true, corruptedSupports = true },
 }
 PriceSourceClass.defaultLevel = 3
 

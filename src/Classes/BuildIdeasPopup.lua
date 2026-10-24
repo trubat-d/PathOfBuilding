@@ -515,6 +515,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 		if state.running then
 			main.onFrameFuncs["BuildGenerator"] = nil
 			main.onFrameFuncs["BuildMetaWait"] = nil
+			if state.parallel then state.parallel:Stop() state.parallel = nil end
 			state.running = false
 			state.status = "^7Stopped. The partly generated build is still open."
 			return
@@ -533,8 +534,11 @@ function BuildIdeasPopupClass:OpenGenerator()
 		local entry = controls.archetype.list[controls.archetype.selIndex]
 		if entry and entry.auto then
 			-- scan first; the scan sorts the list best first, then this runs again
+			-- (with background threads: the best few archetypes fully built at
+			-- once, the best result kept)
 			state.afterScan = function()
 				state.confirmDiscard = true
+				if state.parallelFull and state.parallelFull() then return end
 				controls.generate.onClick()
 			end
 			state.confirmDiscard = true -- (already confirmed above)
@@ -593,6 +597,55 @@ function BuildIdeasPopupClass:OpenGenerator()
 		end
 		loadMeta(skill.label, function(entry) go(entry) end, function(text) state.status = text end)
 	end)
+	-- Notes shown for a scanned archetype, from a generation log
+	local function scanNotes(log, keystones)
+		local notes = { }
+		for _, l in ipairs(log or { }) do
+			if l:match("^Archetype uniques") or l:match("^Supports") or l:match("^Armour type") or l:match("^Damage scales best") then t_insert(notes, l) end
+		end
+		if keystones and #keystones > 0 then t_insert(notes, "Keystones: " .. table.concat(keystones, ", ")) end
+		return notes
+	end
+	-- Generations in background threads, several at once (Classes/ParallelGenerator).
+	-- onResult(archetype, summary, xml) / onFailed(archetype, err), then onAll()
+	local function runParallel(archetypes, quick, meta, onResult, onFailed, onAll)
+		local pg = new("ParallelGenerator"):ParallelGenerator()
+		state.parallel = pg
+		local jobs = { }
+		for i, archetype in ipairs(archetypes) do
+			local options = makeOptions()
+			options.archetype = archetype
+			options.quick = quick
+			if quick then options.synergies = false end
+			options.meta = meta
+			jobs[i] = pg.JobFromOptions(options)
+		end
+		local doneCount, runningCount = 0, 0
+		local t0 = GetTime()
+		main.onFrameFuncs["BuildParallelStatus"] = function()
+			if not state.running then main.onFrameFuncs["BuildParallelStatus"] = nil return end
+			state.status = string.format("^7Building %d archetype%s at once (up to %d threads): %d running, %d done, %d s...",
+				#jobs, #jobs == 1 and "" or "s", pg.MaxWorkers(), runningCount, doneCount, m_floor((GetTime() - t0) / 1000))
+		end
+		pg:Run(jobs, {
+			onStart = function() runningCount = runningCount + 1 end,
+			onDone = function(index, summary, xml)
+				runningCount, doneCount = runningCount - 1, doneCount + 1
+				onResult(archetypes[index], summary, xml)
+			end,
+			onError = function(index, err)
+				runningCount, doneCount = math.max(0, runningCount - 1), doneCount + 1
+				ConPrintf("Parallel generation failed: %s", tostring(err))
+				onFailed(archetypes[index], err)
+			end,
+			onAllDone = function()
+				main.onFrameFuncs["BuildParallelStatus"] = nil
+				state.parallel = nil
+				if state.running then onAll() end
+			end,
+		})
+	end
+
 	-- Archetype scan: a quick build per archetype, each in its own new build
 	state.startScan = function()
 		if main.uniqueDB.loading then
@@ -647,6 +700,30 @@ function BuildIdeasPopupClass:OpenGenerator()
 		end
 		local function nextOne()
 			if not state.running then return end
+			-- after the first (planning) build: the promising archetypes all at once
+			if built > 0 and #queue >= 2 and new("ParallelGenerator"):ParallelGenerator().Available() then
+				local batch = queue
+				queue = { }
+				local okCount = 0
+				runParallel(batch, true, meta, function(archetype, summary)
+					local notes = scanNotes(summary.log, summary.keystones)
+					results[archetype.id] = { score = summary.score, dps = summary.dps, ehp = summary.ehp, minHit = summary.minHit, notes = notes, log = notes, built = true }
+					okCount = okCount + 1
+				end, function(archetype, err)
+					results[archetype.id] = { error = tostring(err) }
+				end, function()
+					if okCount == 0 then
+						-- background threads don't work here: one after the other instead
+						ConPrintf("Parallel generation unavailable, building one at a time")
+						new("ParallelGenerator"):ParallelGenerator().Disable()
+						for _, a in ipairs(batch) do results[a.id] = nil t_insert(queue, a) end
+						return nextOne()
+					end
+					built = built + #batch
+					finish()
+				end)
+				return
+			end
 			local archetype = t_remove(queue, 1)
 			if not archetype then return finish() end
 			built = built + 1
@@ -730,6 +807,54 @@ function BuildIdeasPopupClass:OpenGenerator()
 			if GetTime() - t0 > 60000 then go(nil) end
 		end
 		loadMeta(skill.label, function(entry) go(entry) end, function(text) state.status = text end)
+	end
+	-- Automatic mode, last step: the best built archetypes fully generated in
+	-- background threads at once; the best one is opened. false = not possible
+	state.parallelFull = function()
+		local pgStatic = new("ParallelGenerator"):ParallelGenerator()
+		if not pgStatic.Available() then return false end
+		local candidates = { }
+		for _, entry in ipairs(controls.archetype.list) do
+			if entry.archetype and entry.scan and entry.scan.built and not entry.scan.error and #candidates < pgStatic.MaxWorkers() then
+				t_insert(candidates, entry.archetype)
+			end
+		end
+		if #candidates < 2 then return false end
+		local skill = controls.skill.list[controls.skill.selIndex]
+		local asc = controls.ascend.list[controls.ascend.selIndex]
+		state.running = true
+		local best
+		local failures = { }
+		runParallel(candidates, false, state.meta, function(archetype, summary, xml)
+			if not best or (summary.score or -math.huge) > (best.summary.score or -math.huge) then
+				best = { archetype = archetype, summary = summary, xml = xml }
+			end
+		end, function(archetype, err)
+			t_insert(failures, archetype.label .. ": " .. tostring(err))
+		end, function()
+			state.running = false
+			if not best then
+				-- background threads don't work here: the usual full build instead
+				ConPrintf("Parallel generation failed (%s), building in the app instead", tostring(failures[1]))
+				pgStatic.Disable()
+				state.confirmDiscard = true
+				controls.generate.onClick()
+				return
+			end
+			main:SetMode("BUILD", false, "Generated " .. skill.label .. " " .. asc.ascendName .. " (" .. best.archetype.label .. ")", best.xml)
+			local result = best.summary
+			local lines = { string.format("^7Done: %d archetypes fully built at once, the best kept: %s. Damage %s, effective hit pool %s. The build is open and not saved yet: use Save As to keep it.",
+				#candidates, best.archetype.label, formatNumSep(string.format("%.0f", result.dps or 0)), formatNumSep(string.format("%.0f", result.ehp or 0))) }
+			for _, l in ipairs(result.log or { }) do t_insert(lines, "^7- " .. l) end
+			if result.costLine then t_insert(lines, "^xC0C0C0" .. result.costLine) end
+			for _, c in ipairs(result.configChanges or { }) do t_insert(lines, "^x66CCFFConfig: ^7" .. c) end
+			for _, pen in ipairs(result.penalties or { }) do t_insert(lines, colorCodes.NEGATIVE .. "Cost: ^7" .. pen.label) end
+			for _, a in ipairs(result.assumptions or { }) do t_insert(lines, "^x66CCFFAssumes: ^7" .. a) end
+			for _, f in ipairs(failures) do t_insert(lines, colorCodes.NEGATIVE .. "Failed: ^7" .. f) end
+			setLog(lines)
+			state.status = "^7Finished."
+		end)
+		return true
 	end
 
 	controls.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {128, 164, 0, 16}, function() return state.status end)

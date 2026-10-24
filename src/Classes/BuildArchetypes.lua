@@ -168,6 +168,18 @@ BuildArchetypesClass.list = {
 		applies = function(info) return not info.minion end,
 	},
 	{
+		id = "PHYS_ELE", label = "Physical weapon + damage as extra elemental (Hatred)",
+		summary = "A high physical damage weapon; Hatred and \"gain % of physical as extra\" add elemental damage on top of it.",
+		auras = { "Hatred" },
+		applies = function(info) return info.attack and info.weaponTypes ~= nil and not info.minion end,
+	},
+	{
+		id = "AURAS", label = "Aura stacking (reservation efficiency, many auras)",
+		summary = "As many auras as reservation efficiency allows: the tree and gear pay for them.",
+		maxAuras = 7,
+		applies = function(info) return not info.minion end,
+	},
+	{
 		id = "FIRE_CONV", label = "Conversion to fire (Avatar of Fire)",
 		summary = "Avatar of Fire converts physical, lightning and cold damage to fire: scale fire only.",
 		keystones = { "Avatar of Fire" },

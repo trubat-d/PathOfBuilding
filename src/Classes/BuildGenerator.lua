@@ -16,6 +16,7 @@ local t_remove = table.remove
 local t_sort = table.sort
 local m_min = math.min
 local m_max = math.max
+local m_floor = math.floor
 
 ---@class BuildGenerator
 local BuildGeneratorClass = newClass("BuildGenerator")
@@ -125,6 +126,17 @@ function BuildGeneratorClass:Note(text)
 	if self.options.debugTiming then
 		ConPrintf("[generator] %s", text)
 	end
+end
+
+-- Gem level: the gem's maximum, +1 (a corrupted 21/20 gem, a few divines)
+-- for the main skill from High investment and for its supports from Endgame
+function BuildGeneratorClass:GemLevel(gem, isMain)
+	local level = gem.naturalMaxLevel or 20
+	local investment = self.options.investment or { }
+	if (isMain and investment.corruptedMain) or (not isMain and investment.corruptedSupports) then
+		level = level + 1
+	end
+	return level
 end
 
 -- Recalculate the build now (normally done at the next frame)
@@ -247,7 +259,7 @@ function BuildGeneratorClass:Setup()
 	local gem = data.gems[opts.gemId]
 	self.mainGem = gem
 	local group = { label = "Main skill (generated)", enabled = true, slot = "Body Armour", gemList = {
-		{ level = gem.naturalMaxLevel or 20, quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = opts.gemId },
+		{ level = self:GemLevel(gem, true), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = opts.gemId },
 	} }
 	-- skills with several parts: the part that matches sustained use on a boss
 	-- (e.g. Ball Lightning "All Bolts in Range", Tornado Shot "Combined Average
@@ -261,6 +273,11 @@ function BuildGeneratorClass:Setup()
 	build.skillsTab:ProcessSocketGroup(group)
 	build.mainSocketGroup = #build.skillsTab.socketGroupList
 	self.mainGroup = group
+	local investment = opts.investment or { }
+	if investment.corruptedMain then
+		self:Note(string.format("Gem levels: %s level %d/20 (a corrupted gem)%s", gem.name, self:GemLevel(gem, true),
+			investment.corruptedSupports and ", supports one level above their maximum (corrupted)" or ""))
+	end
 
 	-- Placeholder bases so every slot has something to build rares on
 	local armourTag = classArmour[self.className] or "str_armour"
@@ -358,8 +375,46 @@ function BuildGeneratorClass:EquipDefaultWeapons()
 end
 
 -- Greedily fills the main skill's link with the best support gems
+-- Scores a support that generates charges (Endurance Charge on Melee Stun,
+-- Power Charge on Critical...) with those charges counted: the configuration
+-- only switches them on once the build has a source, so one-at-a-time picking
+-- would never see what the support is for
+function BuildGeneratorClass:WithChargesOf(gem, fn)
+	local input = self.build.configTab.input
+	local changed = { }
+	-- only when the build can meet the gem's condition (Endurance Charge on
+	-- Melee Stun needs a melee skill, Power Charge On Critical needs crits)
+	local mainTypes = self.mainGem and self.mainGem.grantedEffect.skillTypes or { }
+	if gem.name:find("Melee", 1, true) and not mainTypes[SkillType.Melee] then return fn() end
+	if gem.name:find("Critical", 1, true) then
+		local output = self.build.calcsTab.mainOutput or { }
+		local crit = output.CritChance or (output.MainHand and output.MainHand.CritChance) or 0
+		if crit < 20 then return fn() end
+	end
+	for _, kind in ipairs({ "Power", "Frenzy", "Endurance" }) do
+		local var = "use" .. kind .. "Charges"
+		if gem.name:find(kind .. " Charge", 1, true) and not input[var] then
+			input[var] = true
+			t_insert(changed, var)
+		end
+	end
+	if #changed == 0 then return fn() end
+	self.build.configTab:BuildModList()
+	wipeGlobalCache()
+	local a, b = fn()
+	for _, var in ipairs(changed) do input[var] = nil end
+	self.build.configTab:BuildModList()
+	wipeGlobalCache()
+	return a, b
+end
+
 function BuildGeneratorClass:ChooseSupports(maxSupports)
 	local group = self.mainGroup
+	-- charges switched on for a support chosen last time: off again until a
+	-- support (or the configuration's own check) brings them back
+	for var in pairs(self.supportChargeVars or { }) do self.build.configTab.input[var] = nil end
+	self.supportChargeVars = { }
+	self.build.configTab:BuildModList()
 	local supports = { }
 	for gemId, gem in pairs(data.gems) do
 		local investment = self.options.investment or { }
@@ -402,7 +457,7 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 	end
 	local function addGem(gemId)
 		local gem = data.gems[gemId]
-		t_insert(group.gemList, { level = gem.naturalMaxLevel or 20, quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId })
+		t_insert(group.gemList, { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId })
 	end
 	-- the playstyle's best support (one mine / trap / totem support is required)
 	if playstyle then
@@ -431,9 +486,9 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 		for _, gemId in ipairs(supports) do
 			if not inGroup(gemId) then
 				local gem = data.gems[gemId]
-				t_insert(group.gemList, { level = gem.naturalMaxLevel or 20, quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId })
+				t_insert(group.gemList, { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId })
 				self.build.skillsTab:ProcessSocketGroup(group)
-				local score = self:Score()
+				local score = self:WithChargesOf(gem, function() return self:Score() end)
 				t_remove(group.gemList)
 				if not bestScore or score > bestScore then
 					best, bestScore = gemId, score
@@ -444,8 +499,20 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 			break
 		end
 		local gem = data.gems[best]
-		t_insert(group.gemList, { level = gem.naturalMaxLevel or 20, quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = best })
+		t_insert(group.gemList, { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = best })
 		current = bestScore
+		-- a charge support: switch its charges on for the rest of the choice
+		local mainTypes = self.mainGem and self.mainGem.grantedEffect.skillTypes or { }
+		local usable = not (gem.name:find("Melee", 1, true) and not mainTypes[SkillType.Melee])
+		for _, kind in ipairs(usable and { "Power", "Frenzy", "Endurance" } or { }) do
+			local var = "use" .. kind .. "Charges"
+			if gem.name:find(kind .. " Charge", 1, true) and not self.build.configTab.input[var] then
+				self.build.configTab.input[var] = true
+				self.supportChargeVars = self.supportChargeVars or { }
+				self.supportChargeVars[var] = true
+			end
+		end
+		self.build.configTab:BuildModList()
 	end
 	self.build.skillsTab:ProcessSocketGroup(group)
 	-- The supports most players of this skill link (poe.ninja), tried as a set:
@@ -470,7 +537,7 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 			for i = #group.gemList, 2, -1 do t_remove(group.gemList, i) end
 			for _, gemId in ipairs(metaSet) do
 				local gem = data.gems[gemId]
-				t_insert(group.gemList, { level = gem.naturalMaxLevel or 20, quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId })
+				t_insert(group.gemList, { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId })
 			end
 			self.build.skillsTab:ProcessSocketGroup(group)
 			local metaScore = self:Score()
@@ -519,7 +586,7 @@ function BuildGeneratorClass:TryTopPlayerSupports(supports, forced, maxSupports)
 			for j = #group.gemList, 2, -1 do t_remove(group.gemList, j) end
 			for j = 1, math.min(maxSupports, #ids) do
 				local gem = data.gems[ids[j]]
-				t_insert(group.gemList, { level = gem.naturalMaxLevel or 20, quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = ids[j] })
+				t_insert(group.gemList, { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = ids[j] })
 			end
 			self.build.skillsTab:ProcessSocketGroup(group)
 			local score = self:Score()
@@ -530,13 +597,128 @@ function BuildGeneratorClass:TryTopPlayerSupports(supports, forced, maxSupports)
 	if best and bestScore > current + 0.002 then
 		for j = 1, math.min(maxSupports, #best) do
 			local gem = data.gems[best[j]]
-			t_insert(group.gemList, { level = gem.naturalMaxLevel or 20, quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = best[j] })
+			t_insert(group.gemList, { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = best[j] })
 		end
 		self:Note(string.format("Supports: the exact link %d of the top %d %s players use (poe.ninja) beats the others", bestCount, details.count, self.mainGem.name))
 	else
 		for _, g in ipairs(saved) do t_insert(group.gemList, g) end
 	end
 	self.build.skillsTab:ProcessSocketGroup(group)
+end
+
+-- Aura stacking as one move: more auras than the mana allows are chosen for
+-- what they give (reservation ignored), then the passive tree is re-spent so
+-- it can pick reservation efficiency (and the aura groups Arrogance), and the
+-- auras still too expensive are dropped again. One aura at a time never gets
+-- there: each one alone costs more in reservation than it gives until the
+-- tree changes. Kept only if the build ends up better.
+function BuildGeneratorClass:AuraStackMove()
+	local spec = self.build.spec
+	local skillsTab = self.build.skillsTab
+	self:AutoConfigure()
+	local before = self:FullScore()
+	local treeUndo = spec:CreateUndoState()
+	local savedGroups = { }
+	for i, group in ipairs(skillsTab.socketGroupList) do
+		local gems = { }
+		for j, g in ipairs(group.gemList) do gems[j] = g end
+		savedGroups[i] = { group = group, gems = gems }
+	end
+	local savedMain = self.build.mainSocketGroup
+	local savedLog = { }
+	for i, l in ipairs(self.log) do savedLog[i] = l end
+	local function auraCount()
+		local n = 0
+		for _, group in ipairs(skillsTab.socketGroupList) do
+			if (group.label or ""):match("^Auras") then
+				for _, g in ipairs(group.gemList) do
+					if g.gemId and not data.gems[g.gemId].grantedEffect.support then n = n + 1 end
+				end
+			end
+		end
+		return n
+	end
+	local beforeAuras = auraCount()
+	self.scorer.ignoreReservation = true
+	local ok, err = pcall(function()
+		self:ChooseUtilityGems()
+	end)
+	self.scorer.ignoreReservation = false
+	if ok and auraCount() > beforeAuras then
+		self:AutoConfigure()
+		self:RefineTree(16)
+		self:RefineTree(10)
+		-- auras the tree still can't pay for: drop the least useful one at a time
+		for _ = 1, 4 do
+			self:Recalculate()
+			local o = self.build.calcsTab.mainOutput
+			local over = (o.ManaUnreserved or 0) < 0 or (o.LifeUnreserved or 0) < 0 or ((o.ManaCost or 0) > 0 and (o.ManaUnreserved or 0) < (o.ManaCost or 0))
+			if not over then break end
+			local bestGroup, bestIndex, bestScore
+			for _, group in ipairs(skillsTab.socketGroupList) do
+				if (group.label or ""):match("^Auras") then
+					for i = #group.gemList, 1, -1 do
+						local g = group.gemList[i]
+						if g.gemId and not data.gems[g.gemId].grantedEffect.support then
+							t_remove(group.gemList, i)
+							skillsTab:ProcessSocketGroup(group)
+							local score = self:Score()
+							t_insert(group.gemList, i, g)
+							skillsTab:ProcessSocketGroup(group)
+							if not bestScore or score > bestScore then bestGroup, bestIndex, bestScore = group, i, score end
+						end
+					end
+				end
+			end
+			if not bestGroup then break end
+			t_remove(bestGroup.gemList, bestIndex)
+			skillsTab:ProcessSocketGroup(bestGroup)
+		end
+		-- the buffs note follows what is left
+		for i = #self.log, 1, -1 do
+			if self.log[i]:match("^Buffs:") then t_remove(self.log, i) end
+		end
+		local names = { }
+		for _, group in ipairs(skillsTab.socketGroupList) do
+			if (group.label or ""):match("^Auras") then
+				local gems = { }
+				for _, g in ipairs(group.gemList) do
+					if g.gemId then t_insert(gems, data.gems[g.gemId].name) end
+				end
+				local hasAura = false
+				for _, g in ipairs(group.gemList) do
+					if g.gemId and not data.gems[g.gemId].grantedEffect.support then hasAura = true end
+				end
+				if hasAura then t_insert(names, table.concat(gems, " + ") .. " (" .. tostring(group.slot) .. ")") end
+			end
+		end
+		if #names > 0 then self:Note("Buffs: " .. table.concat(names, "; ")) end
+		self:AutoConfigure()
+	end
+	local after = ok and self:FullScore() or before
+	if ok and after > before + 0.01 then
+		self:Note(string.format("Aura stacking: %d auras with the tree re-spent for reservation, score %+.3f", auraCount(), after - before))
+		return after - before
+	end
+	if not ok then ConPrintf("Aura stacking failed: %s", tostring(err)) end
+	-- revert
+	local list = skillsTab.socketGroupList
+	for i = #list, 1, -1 do list[i] = nil end
+	for i, entry in ipairs(savedGroups) do
+		local group = entry.group
+		for j = #group.gemList, 1, -1 do group.gemList[j] = nil end
+		for j, g in ipairs(entry.gems) do group.gemList[j] = g end
+		list[i] = group
+		skillsTab:ProcessSocketGroup(group)
+	end
+	self.build.mainSocketGroup = savedMain
+	spec:RestoreUndoState(treeUndo)
+	spec:BuildAllDependsAndPaths()
+	for i = #self.log, 1, -1 do self.log[i] = nil end
+	for i, l in ipairs(savedLog) do self.log[i] = l end
+	self:AutoConfigure()
+	self:Recalculate()
+	return 0
 end
 
 -- Curse, aura, guard and movement setups linked like real builds, packed into gear sockets
@@ -550,7 +732,9 @@ function BuildGeneratorClass:ChooseUtilityGems(ignoreAttributes)
 			t_remove(self.log, i)
 		end
 	end
-	new("GemSetup"):GemSetup(self):Run(self.options.maxAuras or 4, ignoreAttributes)
+	local archetype = self.options.archetype
+	local maxAuras = self.options.maxAuras or (archetype and archetype.maxAuras) or 4
+	new("GemSetup"):GemSetup(self):Run(maxAuras + (self.scorer.ignoreReservation and 2 or 0), ignoreAttributes)
 end
 
 -- Passive tree: repeatedly allocate the path with the best score per point
@@ -641,15 +825,43 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly)
 		local refreshEvery = 12
 		local sinceRefresh = refreshEvery
 		local queue = { }
+		-- values from earlier refreshes: candidates far below the best ones keep
+		-- their last value (only re-measured every third refresh, or when their
+		-- path got shorter); the best few are re-checked before each pick anyway
+		local prev = { }
+		local refreshCount = 0
 		while true do
 			local used, ascUsed = spec:CountAllocNodes()
 			local left = ascendancy and (ascBudget - ascUsed) or (budget - used)
 			if left <= 0 then break end
 			if sinceRefresh >= refreshEvery then
 				queue = { }
+				refreshCount = refreshCount + 1
+				local full = refreshCount % 3 == 1 or self.options.fullTreeRefresh
+				local threshold = -math.huge
+				if not full then
+					local values = { }
+					for _, p in pairs(prev) do t_insert(values, p.value) end
+					t_sort(values, function(a, b) return a > b end)
+					local keep = m_max(60, m_floor(#values * 0.3))
+					threshold = values[keep] or -math.huge
+				end
 				for _, entry in ipairs(candidates(ascendancy)) do
 					if pathCost(entry.node) <= left then
-						entry.value = ratio(entry)
+						local key = entry.node.id .. (entry.effect and ("_" .. entry.effect.id) or "")
+						local pathLen = pathCost(entry.node)
+						local p = prev[key]
+						-- (a shorter path: the same gain over fewer points at best)
+						local estimate = p and (p.value > 0 and p.value * p.pathLen / pathLen or p.value)
+						if full or not p or estimate >= threshold then
+							entry.value = ratio(entry)
+							self.treeStats = self.treeStats or { refresh = 0, skipped = 0, recheck = 0, picks = 0, refreshes = 0 }
+							self.treeStats.refresh = self.treeStats.refresh + 1
+						else
+							self.treeStats.skipped = self.treeStats.skipped + 1
+							entry.value = estimate
+						end
+						prev[key] = { value = entry.value, pathLen = pathLen }
 						t_insert(queue, entry)
 					end
 				end
@@ -663,6 +875,7 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly)
 					entry.value = -math.huge
 				else
 					entry.value = ratio(entry)
+					if self.treeStats then self.treeStats.recheck = self.treeStats.recheck + 1 end
 				end
 			end
 			t_sort(queue, function(a, b) return a.value > b.value end)
@@ -675,6 +888,7 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly)
 				end
 			else
 				allocate(picked)
+				if self.treeStats then self.treeStats.picks = self.treeStats.picks + 1 end
 				t_remove(queue, 1)
 				current = self:Score()
 				sinceRefresh = sinceRefresh + 1
@@ -1393,6 +1607,14 @@ function BuildGeneratorClass:ChooseMetaJewels()
 	-- is from the class start, so long paths and cluster sockets are tried
 	t_insert(kinds, "split")
 	t_insert(kinds, "split")
+	-- any other unique jewel within the budget (radius jewels, conditional ones...)
+	t_insert(kinds, "unique")
+	t_insert(kinds, "unique")
+	local function allowed(title)
+		local price = prices.uniques[title]
+		if price then return not investment.maxUnique or price <= investment.maxUnique end
+		return investment.unknownAllowed ~= false
+	end
 	for _, kind in ipairs(kinds) do
 		self:Recalculate()
 		local base = self:FullScore()
@@ -1401,6 +1623,8 @@ function BuildGeneratorClass:ChooseMetaJewels()
 			result = finder:ForbiddenPair(base)
 		elseif kind == "split" then
 			result = finder:UniqueJewel(base, "Split Personality", nil, 2)
+		elseif kind == "unique" then
+			result = finder:BestUniqueJewel(base, allowed, function(override) return (self:Score(override)) end)
 		else
 			result = finder:WatchersEye(base, investment.awakenedGems and 3 or 2)
 		end
@@ -1420,6 +1644,8 @@ function BuildGeneratorClass:ChooseMetaJewels()
 				price = a and b and (a + b) or nil
 			elseif kind == "split" then
 				price = prices.uniques["Split Personality"]
+			elseif kind == "unique" then
+				price = prices.uniques[result.title]
 			else
 				price = prices.uniques["Watcher's Eye"]
 			end
@@ -1960,8 +2186,9 @@ function BuildGeneratorClass:Run()
 	self.costs = { }
 	self.stageCount = 11
 	local function stage(index, label)
-		-- big searches leave a lot of garbage: free it between stages
-		collectgarbage("collect")
+		-- big searches leave a lot of garbage: free it between stages when it
+		-- piled up (a full collection of the game data takes a second)
+		if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
 		if opts.debugTiming and self.scorer then
 			local _, r = self:FullScore()
 			ConPrintf("[stage] before %d: score %.3f dps %.0f ehp %.0f lua %.0f MB t=%.0fs", index, r.score, r.dps, r.ehp, collectgarbage("count") / 1024, os.clock() - (self.startClock or 0))
@@ -2018,6 +2245,8 @@ function BuildGeneratorClass:Run()
 	self:AllocateTree()
 	if opts.quick then
 		-- archetype scan: a first version of the build, enough to compare archetypes
+		-- (aura stacking needs its tree move to show what it's worth)
+		if opts.archetype and opts.archetype.maxAuras then self:AuraStackMove() end
 		self:AutoConfigure()
 		self:Recalculate()
 		local final = self.scorer:Evaluate(self.calcFunc, { })
@@ -2046,16 +2275,16 @@ function BuildGeneratorClass:Run()
 	self:ChooseArchetypeJewels()
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'ChooseMetaUniques', r.score, r.dps, r.ehp) end
 	if opts.jewels ~= false then self:AddJewels(opts.maxJewels or 4) end
-	collectgarbage("collect")
+	if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'AddJewels', r.score, r.dps, r.ehp) end
 	if opts.timeless ~= false then self:ChooseTimelessJewel() end
-	collectgarbage("collect")
+	if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'ChooseTimelessJewel', r.score, r.dps, r.ehp) end
 	if opts.metaJewels ~= false then self:ChooseMetaJewels() end
-	collectgarbage("collect")
+	if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'ChooseMetaJewels', r.score, r.dps, r.ehp) end
 	if opts.clusterJewels ~= false then self:ChooseClusterJewels(opts.maxClusterJewels or 2) end
-	collectgarbage("collect")
+	if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'ChooseClusterJewels', r.score, r.dps, r.ehp) end
 	-- spend any points the jewel stages freed
 	self:Recalculate()
@@ -2068,6 +2297,10 @@ function BuildGeneratorClass:Run()
 	self:FullScore()
 	self:MakeFlasks()
 	self:ChoosePantheonAndBandit()
+	if opts.auraStacking ~= false then
+		self.stage = "Trying aura stacking"
+		self:AuraStackMove()
+	end
 
 	if opts.synergies ~= false then
 		stage(11, "Looking for unique items and synergies")

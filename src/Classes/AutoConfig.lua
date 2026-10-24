@@ -218,7 +218,7 @@ function AutoConfigClass:BuildText()
 	return lines, gems
 end
 
-function AutoConfigClass:GeneratesCharge(kind, lines, gems)
+function AutoConfigClass:GeneratesCharge(kind, lines, gems, flags)
 	local word = kind:lower()
 	for _, line in ipairs(lines) do
 		-- "gain a frenzy charge on hit", "grant an endurance, frenzy or power charge"...
@@ -228,7 +228,9 @@ function AutoConfigClass:GeneratesCharge(kind, lines, gems)
 		end
 	end
 	for _, name in ipairs(gems) do
-		if name:find(kind .. " Charge", 1, true) then return true end
+		-- (a charge support's condition must be met: "on Melee Stun" needs a melee skill)
+		local conditionMet = not (name:find("Melee", 1, true) and flags and not flags.melee)
+		if name:find(kind .. " Charge", 1, true) and conditionMet then return true end
 		for _, skill in ipairs(chargeSkills[kind]) do
 			if name == skill then return true end
 		end
@@ -258,7 +260,7 @@ function AutoConfigClass:Run()
 		-- charges
 		for _, kind in ipairs({ "Power", "Frenzy", "Endurance" }) do
 			-- only switched on: charge sources can be indirect, so never switched off
-			if self:GeneratesCharge(kind, lines, gems) then
+			if self:GeneratesCharge(kind, lines, gems, flags) then
 				self:Set("use" .. kind .. "Charges", true, "the build generates them")
 			end
 		end

@@ -100,6 +100,9 @@ function MetaJewelFinderClass:TryJewels(placements, keep)
 		restore[#restore].equipped = equipped
 	end
 	spec:BuildAllDependsAndPaths()
+	for _, p in ipairs(placements) do
+		p.distance = p.node.distanceToClassStart
+	end
 	local points = spec:CountAllocNodes() - usedBefore
 	local score = self.ctx.fullScore() - points * self.pointValue
 	if keep then
@@ -252,9 +255,10 @@ function MetaJewelFinderClass:UniqueJewel(baseScore, title, preferredStat, limit
 	local best
 	for _, opt in ipairs(options) do
 		local item = variantItem(db, opt[1], opt[2])
-		local score = self:TryJewels({ { node = sockets[1].node, item = item } })
+		local placement = { node = sockets[1].node, item = item }
+		local score = self:TryJewels({ placement })
 		if not best or score > best.score then
-			best = { score = score, placements = { { node = sockets[1].node, item = item } }, label = title .. (opt.label and (" (" .. opt.label .. ")") or "") }
+			best = { score = score, placements = { placement }, label = title .. (opt.label and (" (" .. opt.label .. ")") or "") }
 		end
 	end
 	if not best then return nil end
@@ -268,15 +272,90 @@ function MetaJewelFinderClass:UniqueJewel(baseScore, title, preferredStat, limit
 		for i = 1, math.min(#candidates, 16) do
 			local node = candidates[i].node
 			if node ~= best.placements[1].node then
-				local score = self:TryJewels({ { node = node, item = item } })
+				local placement = { node = node, item = item }
+				local score = self:TryJewels({ placement })
 				if score > best.score then
-					best.score, best.placements = score, { { node = node, item = item } }
+					best.score, best.placements = score, { placement }
 				end
 			end
 		end
-		local node = best.placements[1].node
-		best.label = best.label .. string.format(" in a socket %d passives from the class start", node.distanceToClassStart or 0)
+		local placement = best.placements[1]
+		best.label = best.label .. string.format(" in a socket %d passives from the class start", placement.distance or placement.node.distanceToClassStart or 0)
 	end
+	best.gain = best.score - baseScore
+	return best
+end
+
+-- Unique jewels handled elsewhere (their own search), or whose value PoB
+-- can't see by socketing them (they change what can be allocated)
+local skipJewels = {
+	["Forbidden Flame"] = true, ["Forbidden Flesh"] = true, ["Watcher's Eye"] = true, ["Split Personality"] = true,
+	["Thread of Hope"] = true, ["Intuitive Leap"] = true, ["Impossible Escape"] = true, ["Inspired Learning"] = true,
+	["Glorious Vanity"] = true, ["Lethal Pride"] = true, ["Brutal Restraint"] = true, ["Militant Faith"] = true,
+	["Elegant Hubris"] = true, ["Heroic Tragedy"] = true,
+}
+
+-- Every other unique jewel, priced within the budget (allowed(title) -> bool):
+-- each variant screened with one calculation in the nearest sockets (radius
+-- jewels depend on where they sit), the best few socketed for real.
+-- Returns { score, gain, label, placements } or nil
+function MetaJewelFinderClass:BestUniqueJewel(baseScore, allowed, quickScore)
+	local sockets = self:Sockets(4)
+	if not sockets[1] then return nil end
+	local spec = self.spec
+	local socketList = { }
+	for i = 1, math.min(#sockets, 4) do
+		local node = sockets[i].node
+		local pathSet
+		if not node.alloc and node.path then
+			pathSet = { }
+			for _, n in ipairs(node.path) do pathSet[n] = true end
+		end
+		t_insert(socketList, { node = node, pathSet = pathSet, points = node.alloc and 0 or #(node.path or { }) })
+	end
+	local base = quickScore({ })
+	local byTitle = { }
+	for _, unique in pairs(main.uniqueDB.list) do
+		local title = unique.title
+		if unique.type == "Jewel" and not skipJewels[title] and not (unique.base and unique.base.subType == "Abyss")
+			and not unique.clusterJewel and allowed(title) and self:CountJewel(title) == 0 then
+			local variants = { }
+			if unique.variantList and #unique.variantList > 1 then
+				for i = 1, math.min(#unique.variantList, 24) do
+					if not unique.variantList[i]:find("Pre ", 1, true) then t_insert(variants, i) end
+				end
+			else
+				variants[1] = false
+			end
+			for _, v in ipairs(variants) do
+				local ok, item = pcall(variantItem, unique, v or nil)
+				if ok and item then
+					for _, socket in ipairs(socketList) do
+						local slotName = "Jewel " .. socket.node.id
+						local override = { repItems = { [slotName] = item }, addNodes = socket.pathSet }
+						local score = quickScore(override) - socket.points * self.pointValue
+						local entry = byTitle[title]
+						if score > base + 0.005 and (not entry or score > entry.quick) then
+							byTitle[title] = { quick = score, item = item, node = socket.node, variant = v and unique.variantList[v] }
+						end
+					end
+				end
+			end
+		end
+	end
+	local ranked = { }
+	for title, entry in pairs(byTitle) do entry.title = title t_insert(ranked, entry) end
+	t_sort(ranked, function(a, b) return a.quick > b.quick end)
+	local best
+	for i = 1, math.min(#ranked, 3) do
+		local entry = ranked[i]
+		local placement = { node = entry.node, item = entry.item }
+		local score = self:TryJewels({ placement })
+		if not best or score > best.score then
+			best = { score = score, placements = { placement }, label = entry.title .. (entry.variant and (" (" .. entry.variant .. ")") or ""), title = entry.title }
+		end
+	end
+	if not best then return nil end
 	best.gain = best.score - baseScore
 	return best
 end

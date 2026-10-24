@@ -18,3 +18,29 @@ hit, EHP, sustain, penalties, keystones, supports and the generator log.
 `--src` runs another copy of the `src` folder (a snapshot), so the code can be
 edited while a long run is going. `META_DETAILS=<file.json>` gives
 `bench_case.lua` saved poe.ninja top player details for offline runs.
+
+## Comparing with top players
+
+```
+CODE=<file with a PoB code> luajit ../bench/eval_build.lua        # score a build with the generator's scorer
+CODE=<file> luajit ../bench/ablate_build.lua                      # what each part of it is worth (removed one at a time)
+OURS=<generated .xml> CODE=<file> luajit ../bench/transplant.lua  # each part of it put into a generated build
+```
+
+Run them from the `src` folder (with `LUA_PATH` as for the benchmark). Benchmark
+runs save each generated build as `results/<label>/<case>.xml` for this.
+`FOCUS=` and `TIER=uber|pinnacle` choose the scorer settings (default
+`DPS_FLOOR`, `uber`). `cases_pro.txt` / `cases_pro_arch.txt` hold endgame
+cases for skills with saved top-player builds.
+
+## Other tools
+
+* `profile_gen.lua "<Skill>" "<Ascendancy>" <investment> <quick|full>`: time per
+  generator method and calculator runs.
+* `stage_test.lua` (`OURS=`, `STEP=flasks|uniquejewels|aurastack|metajewels`):
+  one generator step on a saved build.
+* `worker_test.lua '<job json>'`: a generation the way a background thread runs
+  it (`Modules/GeneratorWorker.lua`).
+* `popup_test.lua` (`SKILL=`, `ASC=`, `INVEST=`, `WORKERS=`): the Generate
+  Build window's automatic mode headless, background threads replaced by
+  worker processes (`worker_proc.lua`).

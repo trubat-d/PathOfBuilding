@@ -226,6 +226,8 @@ function BuildMetaSourceClass:Download(url, callback)
 	launch.subScripts[id] = { type = "CUSTOM", callback = function(hex, err)
 		if not hex then return callback(nil, err or "download failed") end
 		callback(fromHex(hex))
+	end, errorCallback = function(err)
+		callback(nil, err or "download failed")
 	end }
 end
 

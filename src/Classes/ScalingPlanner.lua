@@ -96,10 +96,25 @@ function ScalingPlannerClass:ApplySupports(archetype)
 			self.build.skillsTab:ProcessSocketGroup(group)
 		end
 	end
+	-- the archetype's auras, in a group of their own
+	local auraGroup
+	if archetype.auras and #archetype.auras > 0 then
+		auraGroup = { label = "Archetype auras (planning)", enabled = true, gemList = { } }
+		for _, name in ipairs(archetype.auras) do
+			local gem = archetypes.GemByName(name)
+			if gem then t_insert(auraGroup.gemList, { level = gem.naturalMaxLevel or 20, quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = self:GemId(gem) }) end
+		end
+		t_insert(self.build.skillsTab.socketGroupList, auraGroup)
+		self.build.skillsTab:ProcessSocketGroup(auraGroup)
+	end
 	return function()
 		for i = #group.gemList, 1, -1 do group.gemList[i] = nil end
 		for i, g in ipairs(saved) do group.gemList[i] = g end
 		self.build.skillsTab:ProcessSocketGroup(group)
+		if auraGroup then
+			local list = self.build.skillsTab.socketGroupList
+			for i = #list, 1, -1 do if list[i] == auraGroup then t_remove(list, i) end end
+		end
 	end
 end
 

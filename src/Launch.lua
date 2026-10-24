@@ -216,6 +216,11 @@ function launch:OnSubError(id, errMsg)
 		if errMsg then
 			self:ShowErrMsg("In download callback: %s", errMsg)
 		end
+	elseif self.subScripts[id].type == "CUSTOM" and self.subScripts[id].errorCallback then
+		local cbErr = PCall(self.subScripts[id].errorCallback, errMsg)
+		if cbErr then
+			self:ShowErrMsg("In subscript error callback: %s", cbErr)
+		end
 	end
 	self.subScripts[id] = nil
 end
@@ -243,11 +248,12 @@ function launch:OnSubFinished(id, ...)
 	self.subScripts[id] = nil
 end
 
-function launch:RegisterSubScript(id, callback)
+function launch:RegisterSubScript(id, callback, errorCallback)
 	if id then
 		self.subScripts[id] = {
 			type = "CUSTOM",
 			callback = callback,
+			errorCallback = errorCallback,
 		}
 	end
 end

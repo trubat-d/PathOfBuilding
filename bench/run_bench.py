@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 here = os.path.dirname(os.path.abspath(__file__))
 src = os.path.join(here, "..", "src")
+save_dir = ""  # generated builds are saved here (results/<label>/)
 
 
 def read_cases(path, only):
@@ -35,7 +36,7 @@ def run_case(case):
     cmd = ["luajit", os.path.join(here, "bench_case.lua"), skill, asc, inv, mode or "quick"]
     if arch:
         cmd.append(arch)
-    env = dict(os.environ, LUA_PATH="../runtime/lua/?.lua;../runtime/lua/?/init.lua;;")
+    env = dict(os.environ, LUA_PATH="../runtime/lua/?.lua;../runtime/lua/?/init.lua;;", BENCH_SAVE=save_dir)
     proc = subprocess.run(cmd, cwd=src, env=env, capture_output=True, text=True)
     for line in proc.stdout.splitlines():
         if line.startswith("BENCH "):
@@ -60,6 +61,9 @@ def main():
     cases = read_cases(args.cases, args.only)
     os.makedirs(os.path.join(here, "results"), exist_ok=True)
     out = os.path.join(here, "results", args.label + ".jsonl")
+    global save_dir
+    save_dir = os.path.join(here, "results", args.label)
+    os.makedirs(save_dir, exist_ok=True)
     with ThreadPoolExecutor(args.jobs) as pool, open(out, "w") as f:
         for line in pool.map(run_case, cases):
             f.write(line + "\n")
