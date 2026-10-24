@@ -27,6 +27,7 @@ RareItemGeneratorClass.qualityList = {
 	{ label = "Tier 1, perfect rolls (theoretical max)", tier = 1, range = 1 },
 	{ label = "Tier 2-3, average rolls (realistic)", tier = 2, range = 0.25 },
 	{ label = "Tier 4 and below (cheap / league start)", tier = 4, range = 0.5 },
+	{ label = "Tier 1, good rolls (endgame crafts)", tier = 1, range = 0.7 },
 }
 RareItemGeneratorClass.defaultQuality = 2
 
