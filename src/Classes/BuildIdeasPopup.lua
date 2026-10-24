@@ -778,7 +778,10 @@ function BuildIdeasPopupClass:OpenGenerator()
 								if #p.commitments > 0 then t_insert(planNotes, "Commits to: " .. table.concat(p.commitments, ", ")) end
 								if p.plan ~= "" then t_insert(planNotes, "Best investment: " .. p.plan) end
 								results[id] = { score = p.score, dps = p.dps, minHit = p.minHit, notes = planNotes, log = planNotes, estimated = true }
-								if promising < (state.scanBuilds or 3) then
+								-- (with background threads, as many as they build in two rounds)
+								local pgInfo = new("ParallelGenerator"):ParallelGenerator()
+								local scanBuilds = state.scanBuilds or (pgInfo.Available() and math.max(3, 2 * pgInfo.MaxWorkers()) or 3)
+								if promising < scanBuilds then
 									promising = promising + 1
 									for _, a in ipairs(list) do if a.id == id then t_insert(queue, a) end end
 								end
