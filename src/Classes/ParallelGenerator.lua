@@ -106,7 +106,8 @@ function ParallelGeneratorClass:Fill()
 	local maxWorkers = ParallelGeneratorClass.MaxWorkers()
 	while not self.stopped and #self.queue > 0 and self:RunningCount() < maxWorkers do
 		local entry = t_remove(self.queue, 1)
-		local id = LaunchSubScript(workerScript, "", "ConPrintf", entry.json, main.userPath or "")
+		-- (Inflate / Deflate: the timeless jewel tables are compressed)
+		local id = LaunchSubScript(workerScript, "Inflate,Deflate", "ConPrintf", entry.json, main.userPath or "")
 		local callbacks = self.callbacks
 		local function finished()
 			self.running[entry.index] = nil

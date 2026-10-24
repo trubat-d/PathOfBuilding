@@ -1,6 +1,7 @@
 -- Test: runs Modules/GeneratorWorker the way a background thread does (fresh Lua state).
 -- From the src folder: luajit ../bench/worker_test.lua '<job json>'
 io.stdout:setvbuf("no")
+dofile("../bench/inflate.lua")
 local run = dofile("Modules/GeneratorWorker.lua")
 local t0 = os.clock()
 local summary, xml = run(arg[1], "")

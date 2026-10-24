@@ -312,6 +312,36 @@ function AutoConfigClass:Run()
 			end
 		end
 
+		-- buffs and stacks the build gives itself (its ascendancy, gems or items
+		-- say it can have them; they build up within seconds of fighting)
+		local modDB = env.player.modDB
+		local function anyLine(patterns)
+			for _, line in ipairs(lines) do
+				for _, pattern in ipairs(patterns) do
+					if line:find(pattern) then return true end
+				end
+			end
+			return false
+		end
+		if modDB:Flag(nil, "Condition:CanGainGaleForce") then
+			local maxGale = 10 + modDB:Sum("BASE", nil, "MaximumGaleForce")
+			self:Set("multiplierGaleForce", maxGale, "Gale Force builds up while using skills")
+		end
+		if modDB:Flag(nil, "Condition:CanGainFanaticism") and flags.spell then
+			self:Set("buffFanaticism", true, "gained by casting the main skill")
+		end
+		if anyLine({ "gain tailwind", "you have tailwind", "grants tailwind" }) then
+			self:Set("buffTailwind", true, "the build gains Tailwind")
+		end
+		local inspired = false
+		for _, name in ipairs(gems) do if name == "Inspiration" then inspired = true end end
+		if inspired or anyLine({ "gain an? inspiration charge", "gain inspiration charges" }) then
+			self:Set("useInspirationCharges", true, "the build generates Inspiration charges")
+		end
+		if modDB:Flag(nil, "Condition:CanWither") then
+			self:Set("multiplierWitheredStackCount", 15, "withering is kept up at its maximum")
+		end
+
 		-- counts estimated from the build's own numbers (Indigon's mana spent recently...)
 		for multName, option in pairs(optionForMult) do
 			if env.multipliersUsed and (env.multipliersUsed[multName] or (multName == "Rage" and env.player.modDB:Flag(nil, "Condition:CanGainRage"))) then

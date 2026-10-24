@@ -188,9 +188,43 @@ function BuildGeneratorClass:AdjustSkillPart()
 	return false
 end
 
+-- Skills whose damage on one target adds several of their parts: PoB shows
+-- one part at a time (Kinetic Blast: the projectile, or one explosion)
+local combinedParts = {
+	["Kinetic Blast"] = { { part = 1, weight = 1 }, { part = 2, weight = 2 }, note = "the projectile and 2 of its 3 explosions hitting a boss" },
+}
+
+-- Hit damage of the combined parts relative to the part shown, kept on the
+-- scorer (it adds that much more of the shown part's hit DPS)
+function BuildGeneratorClass:UpdateCombinedParts()
+	local gem = self.mainGem
+	local rule = gem and combinedParts[gem.name]
+	if not rule or not self.scorer then return end
+	local first = self.mainGroup and self.mainGroup.gemList[1]
+	if not first then return end
+	local current = first.skillPartCalcs or first.skillPart or 1
+	local total, shown = 0, nil
+	for _, entry in ipairs(rule) do
+		first.skillPart, first.skillPartCalcs = entry.part, entry.part
+		self.build.skillsTab:ProcessSocketGroup(self.mainGroup)
+		local output = self.calcFunc({ })
+		local hit = output.TotalDPS or 0
+		total = total + entry.weight * hit
+		if entry.part == current then shown = hit end
+	end
+	first.skillPart, first.skillPartCalcs = current, current
+	self.build.skillsTab:ProcessSocketGroup(self.mainGroup)
+	self.scorer.hitScale = shown and shown > 0 and total / shown or nil
+	if not self.combinedNoted then
+		self.combinedNoted = true
+		self:Note(string.format("%s damage counts %s", gem.name, rule.note))
+	end
+end
+
 function BuildGeneratorClass:FullScore()
 	self:Recalculate()
 	if self:AdjustSkillPart() then self:Recalculate() end
+	self:UpdateCombinedParts()
 	local r = self.scorer:Evaluate(self.calcFunc, { })
 	self.ratio = self.scorer.lastFlaskRatio
 	return r.score, r

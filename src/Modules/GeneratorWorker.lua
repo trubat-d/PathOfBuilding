@@ -16,8 +16,12 @@
 return function(jobJson, userPath)
 	local startClock = os.clock()
 
-	-- headless Path of Building in this Lua state
+	-- headless Path of Building in this Lua state (the host functions the
+	-- thread was given, like Inflate for the timeless jewel tables, are kept:
+	-- the definitions file would replace them with empty stand-ins)
+	local host = { Inflate = Inflate, Deflate = Deflate, GetScriptPath = GetScriptPath, GetRuntimePath = GetRuntimePath }
 	dofile("_SimpleGraphic.def.lua")
+	for name, fn in pairs(host) do _G[name] = fn end
 	function GetVirtualScreenSize() return 1920, 1080 end
 	function GetTime() return os.clock() * 1000 end
 	__callbackTable__ = { }

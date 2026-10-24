@@ -5,6 +5,8 @@ local jobFile, out = arg[1], arg[2]
 local f = assert(io.open(jobFile))
 local job = f:read("*a")
 f:close()
+-- (the app gives its background threads Inflate; here it comes from zlib)
+dofile("../bench/inflate.lua")
 local run = dofile("Modules/GeneratorWorker.lua")
 local ok, summary, xml = pcall(run, job, "")
 if ok then
