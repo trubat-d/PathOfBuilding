@@ -17,6 +17,18 @@
 --
 return function(jobJson, userPath)
 	local startClock = os.clock()
+	-- trace of the worker's start-up and steps (GeneratorWorker_<n>.log next
+	-- to the scripts), to find where a background thread fails
+	local traceName = jobJson:match('"traceName"%s*:%s*"([^"]+)"')
+	local function trace(text)
+		if not traceName then return end
+		local f = io.open(traceName, "a")
+		if f then
+			f:write(string.format("%8.2f s  %6.0f MB  %s\n", os.clock() - startClock, collectgarbage("count") / 1024, text))
+			f:close()
+		end
+	end
+	trace("thread started (Inflate " .. type(Inflate) .. ", ConPrintf " .. type(ConPrintf) .. ", jit " .. tostring(jit and jit.version) .. ")")
 
 	-- headless Path of Building in this Lua state (the host functions the
 	-- thread was given, like Inflate for the timeless jewel tables, are kept:
@@ -24,6 +36,7 @@ return function(jobJson, userPath)
 	local host = { Inflate = Inflate, Deflate = Deflate, GetScriptPath = GetScriptPath, GetRuntimePath = GetRuntimePath }
 	dofile("_SimpleGraphic.def.lua")
 	for name, fn in pairs(host) do _G[name] = fn end
+	trace("definitions loaded")
 	function GetVirtualScreenSize() return 1920, 1080 end
 	function GetTime() return os.clock() * 1000 end
 	__callbackTable__ = { }
@@ -40,8 +53,11 @@ return function(jobJson, userPath)
 		return l_require(name)
 	end
 	dofile("Launch.lua")
+	trace("Launch.lua loaded")
 	runCallback("OnInit")
+	trace("OnInit done")
 	runCallback("OnFrame")
+	trace("first frame done")
 	if __mainObject__.promptMsg then
 		error("Path of Building failed to start in the worker: " .. tostring(__mainObject__.promptMsg))
 	end
@@ -59,6 +75,7 @@ return function(jobJson, userPath)
 		while main.uniqueDB.loading or main.rareDB.loading do runCallback("OnFrame") end
 	end
 	local dbClock = os.clock() - startClock
+	trace("databases ready, job kind " .. tostring(job.kind))
 	main:SetMode("BUILD", false, "Generated build")
 	runCallback("OnFrame")
 	local build = main.modes["BUILD"]
@@ -155,7 +172,13 @@ return function(jobJson, userPath)
 	if job.archetypeId then
 		options.archetype = byId(archetypeList, job.archetypeId)
 	end
+	local lastStage
+	options.yieldEvery = 1000
+	options.onProgress = function(stage)
+		if stage ~= lastStage then lastStage = stage trace("step: " .. tostring(stage)) end
+	end
 	local generator = new("BuildGenerator"):BuildGenerator(build, options)
+	trace("generating")
 	local co = coroutine.create(function() return generator:Run() end)
 	local ok, result = coroutine.resume(co)
 	while ok and coroutine.status(co) ~= "dead" do ok, result = coroutine.resume(co) end
@@ -185,5 +208,7 @@ return function(jobJson, userPath)
 				commitments = p.commitments, plan = p.plan })
 		end
 	end
-	return dkjson.encode(summary), build:SaveDB("code")
+	local xml = build:SaveDB("code")
+	trace("done, returning " .. #xml .. " bytes")
+	return dkjson.encode(summary), xml
 end

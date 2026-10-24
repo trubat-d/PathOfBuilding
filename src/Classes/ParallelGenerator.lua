@@ -106,7 +106,13 @@ function ParallelGeneratorClass:Run(jobs, callbacks)
 	self.callbacks = callbacks
 	self.remaining = #jobs
 	self.stopped = false
+	ParallelGeneratorClass.traceCount = ParallelGeneratorClass.traceCount or 0
 	for index, job in ipairs(jobs) do
+		-- (each worker writes its trace to its own file next to the scripts)
+		ParallelGeneratorClass.traceCount = ParallelGeneratorClass.traceCount % 8 + 1
+		job.traceName = job.traceName or string.format("GeneratorWorker_%d.log", ParallelGeneratorClass.traceCount)
+		local f = io.open(job.traceName, "w")
+		if f then f:write(string.format("job %d (%s), launched at %s\n", index, tostring(job.kind or (job.quick and "quick build" or "full build")), os.date("%H:%M:%S"))) f:close() end
 		local ok, text = pcall(dkjson.encode, job)
 		if ok then
 			t_insert(self.queue, { index = index, json = text })
@@ -139,7 +145,14 @@ function ParallelGeneratorClass:Fill()
 		else
 			self.running[entry.index] = id
 			if callbacks.onStart then callbacks.onStart(entry.index) end
+			local traceName = entry.json:match('"traceName"%s*:%s*"([^"]+)"')
+			local function mainTrace(text)
+				local f = traceName and io.open(traceName, "a")
+				if f then f:write("main thread: " .. text .. "\n") f:close() end
+			end
+			mainTrace("thread launched")
 			launch:RegisterSubScript(id, function(summaryJson, xml)
+				mainTrace(string.format("result received (%d + %d bytes)", #(summaryJson or ""), #(xml or "")))
 				if not self.stopped then
 					local ok, summary = pcall(dkjson.decode, summaryJson or "")
 					if ok and type(summary) == "table" and xml then
@@ -150,6 +163,7 @@ function ParallelGeneratorClass:Fill()
 				end
 				finished()
 			end, function(errMsg)
+				mainTrace("error: " .. tostring(errMsg))
 				if not self.stopped and callbacks.onError then callbacks.onError(entry.index, errMsg) end
 				finished()
 			end)
