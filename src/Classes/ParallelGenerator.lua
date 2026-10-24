@@ -121,6 +121,7 @@ function ParallelGeneratorClass.JobFromOptions(options, extra)
 		archetypeId = options.archetype and options.archetype.id,
 		allowAnoints = options.allowAnoints, allowTattoos = options.allowTattoos, timeless = options.timeless,
 		synergies = options.synergies, quick = options.quick, meta = options.meta, learnFromPlayers = options.learnFromPlayers, variant = options.variant,
+		excludedUniques = options.excludedUniques, forcedUniques = options.forcedUniques,
 	}
 	for k, v in pairs(extra or { }) do job[k] = v end
 	return job

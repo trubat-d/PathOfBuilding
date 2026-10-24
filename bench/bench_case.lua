@@ -60,6 +60,9 @@ local gen = new("BuildGenerator"):BuildGenerator(build, {
 	meta = meta, configScenario = configScenario,
 	-- (LEARN=1: the player data steers the build; otherwise it's only shown)
 	learnFromPlayers = os.getenv("LEARN") == "1",
+	-- FORCE="Unique A;Unique B", EXCLUDE="..." (the window's Uniques list)
+	forcedUniques = (function() local t = { } for n in (os.getenv("FORCE") or ""):gmatch("[^;]+") do t[#t + 1] = n end return t end)(),
+	excludedUniques = (function() local t = { } for n in (os.getenv("EXCLUDE") or ""):gmatch("[^;]+") do t[n] = true end return t end)(),
 	gemId = gemId, classId = asc.classId, ascendClassId = asc.ascendClassId, level = 92,
 	investment = investment, focus = focus,
 	quick = mode == "quick", synergies = os.getenv("SYNERGIES") == "1", archetype = archetype, yieldEvery = 1e9,

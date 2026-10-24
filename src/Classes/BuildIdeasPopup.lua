@@ -46,6 +46,124 @@ local function addLines(list, text, size, width)
 	end
 end
 
+-- The player's unique choices for the generator: excluded (never used) and
+-- forced (built around), kept between sessions in the settings folder
+local uniqueChoices
+local function uniqueChoicesPath()
+	return main.userPath and (main.userPath .. "BuildIdeasUniques.json") or nil
+end
+local function loadUniqueChoices()
+	if uniqueChoices then return uniqueChoices end
+	uniqueChoices = { excluded = { }, forced = { } }
+	local path = uniqueChoicesPath()
+	local file = path and io.open(path, "r")
+	if file then
+		local ok, data = pcall(require("dkjson").decode, file:read("*a"))
+		file:close()
+		if ok and type(data) == "table" then
+			uniqueChoices.excluded = type(data.excluded) == "table" and data.excluded or { }
+			uniqueChoices.forced = type(data.forced) == "table" and data.forced or { }
+		end
+	end
+	return uniqueChoices
+end
+local function saveUniqueChoices()
+	local path = uniqueChoicesPath()
+	local file = path and io.open(path, "w")
+	if file then
+		file:write(require("dkjson").encode(uniqueChoices))
+		file:close()
+	end
+	-- (the Build Ideas search uses the same rules as the generator)
+	local rules = GetGeneratorRules()
+	rules.userExcluded, rules.userForced = { }, { }
+	for _, title in ipairs(uniqueChoices.excluded) do rules.userExcluded[title] = true end
+	for _, title in ipairs(uniqueChoices.forced) do rules.userForced[title] = true end
+end
+
+-- Window to exclude or force uniques before generating
+local function openUniqueChoices()
+	local choices = loadUniqueChoices()
+	local titles, seen = { }, { }
+	for _, item in pairs(main.uniqueDB.list) do
+		local title = item.title or item.name
+		if title and not seen[title] then seen[title] = true t_insert(titles, title) end
+	end
+	table.sort(titles)
+	local controls = { }
+	local function matches()
+		local text = (controls.search and controls.search.buf or ""):lower()
+		local list = { }
+		for _, title in ipairs(titles) do
+			if text == "" or title:lower():find(text, 1, true) then
+				t_insert(list, title)
+				if #list >= 300 then break end
+			end
+		end
+		if #list == 0 then list[1] = "(no unique matches)" end
+		return list
+	end
+	local function remove(list, title)
+		for i = #list, 1, -1 do if list[i] == title then t_remove(list, i) end end
+	end
+	local function listOrNone(list) return #list > 0 and list or { "(none)" } end
+	controls.searchLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 22, 0, 16}, "^7Find a unique:")
+	controls.search = new("EditControl"):EditControl({"TOPLEFT",nil,"TOPLEFT"}, {130, 20, 250, 20}, "", "Name", nil, 60, function()
+		controls.found.list = matches()
+		controls.found.selIndex = 1
+	end)
+	controls.found = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {130, 48, 330, 20}, matches())
+	controls.exclude = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {470, 48, 80, 20}, "Exclude", function()
+		local title = controls.found.list[controls.found.selIndex]
+		if not title or not seen[title] then return end
+		remove(choices.forced, title) remove(choices.excluded, title)
+		t_insert(choices.excluded, title)
+		saveUniqueChoices()
+		controls.excluded.list = listOrNone(choices.excluded)
+		controls.forced.list = listOrNone(choices.forced)
+	end)
+	controls.exclude.tooltipFunc = function(tooltip)
+		tooltip:Clear()
+		tooltip:AddLine(16, "^7Never use this unique (too rare, too expensive, or you don't have it).")
+	end
+	controls.force = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {556, 48, 80, 20}, "Force", function()
+		local title = controls.found.list[controls.found.selIndex]
+		if not title or not seen[title] then return end
+		remove(choices.forced, title) remove(choices.excluded, title)
+		t_insert(choices.forced, title)
+		saveUniqueChoices()
+		controls.excluded.list = listOrNone(choices.excluded)
+		controls.forced.list = listOrNone(choices.forced)
+	end)
+	controls.force.tooltipFunc = function(tooltip)
+		tooltip:Clear()
+		tooltip:AddLine(16, "^7Always use this unique: it's equipped early in the slot where it scores best,")
+		tooltip:AddLine(16, "^7and the rest of the build is made around it (whatever its price or rules).")
+	end
+	controls.excludedLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 90, 0, 16}, "^7Excluded:")
+	controls.excluded = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {130, 88, 330, 20}, listOrNone(choices.excluded))
+	controls.removeExcluded = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {470, 88, 80, 20}, "Remove", function()
+		remove(choices.excluded, controls.excluded.list[controls.excluded.selIndex])
+		saveUniqueChoices()
+		controls.excluded.list = listOrNone(choices.excluded)
+		controls.excluded.selIndex = 1
+	end)
+	controls.forcedLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 118, 0, 16}, "^7Forced:")
+	controls.forced = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {130, 116, 330, 20}, listOrNone(choices.forced))
+	controls.removeForced = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {470, 116, 80, 20}, "Remove", function()
+		remove(choices.forced, controls.forced.list[controls.forced.selIndex])
+		saveUniqueChoices()
+		controls.forced.list = listOrNone(choices.forced)
+		controls.forced.selIndex = 1
+	end)
+	controls.note = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 150, 0, 14},
+		"^xC0C0C0Stranglegasp is excluded unless forced (it needs the right anoints already on it).")
+	controls.done = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {556, 176, 80, 20}, "Done", function()
+		main:ClosePopup()
+	end)
+	main:OpenPopup(652, 206, "Uniques for the generator", controls, "done", nil, "done")
+end
+
 local function isPopupOpen(popup)
 	-- (the generator window folded into its side panel still counts as open)
 	if popup and popup.folded then return true end
@@ -463,7 +581,21 @@ function BuildIdeasPopupClass:OpenGenerator()
 		return list
 	end
 	controls.archetypeLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 136, 0, 16}, "^7Archetype:")
-	controls.archetype = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {120, 134, 620, 20}, archetypeList())
+	controls.archetype = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {120, 134, 500, 20}, archetypeList())
+	controls.uniqueChoices = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {628, 134, 114, 20}, function()
+		local c = loadUniqueChoices()
+		return string.format("Uniques (%d/%d)", #c.forced, #c.excluded)
+	end, function()
+		openUniqueChoices()
+	end)
+	controls.uniqueChoices.enabled = idle
+	controls.uniqueChoices.tooltipFunc = function(tooltip)
+		tooltip:Clear()
+		local c = loadUniqueChoices()
+		tooltip:AddLine(16, "^7Force uniques to build around, or exclude uniques the generator must not use.")
+		tooltip:AddLine(16, "^7Forced: " .. (#c.forced > 0 and table.concat(c.forced, ", ") or "none"))
+		tooltip:AddLine(16, "^7Excluded: " .. (#c.excluded > 0 and table.concat(c.excluded, ", ") or "none"))
+	end
 	controls.archetype.enabled = idle
 	controls.archetype.tooltipFunc = function(tooltip)
 		tooltip:Clear()
@@ -544,6 +676,12 @@ function BuildIdeasPopupClass:OpenGenerator()
 			yieldEvery = 80,
 		}
 		options.archetype = archetypeEntry and archetypeEntry.archetype
+		-- the player's unique choices
+		local choices = loadUniqueChoices()
+		options.excludedUniques = { }
+		for _, title in ipairs(choices.excluded) do options.excludedUniques[title] = true end
+		options.forcedUniques = { }
+		for _, title in ipairs(choices.forced) do t_insert(options.forcedUniques, title) end
 		return options
 	end
 

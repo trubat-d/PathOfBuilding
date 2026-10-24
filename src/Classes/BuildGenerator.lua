@@ -2701,6 +2701,60 @@ function BuildGeneratorClass:ChooseClusterJewels(maxJewels)
 	end
 end
 
+-- The uniques the player forces (the window's "Uniques..." list): each in
+-- the slot of its kind where it scores best, kept there (the rest of the
+-- build is made around it). Jewels go in the best free jewel socket in reach,
+-- flasks in the flask slot that loses least.
+function BuildGeneratorClass:ForceUniques()
+	local forced = self.options.forcedUniques
+	if not forced or #forced == 0 then return end
+	local byTitle = { }
+	for _, item in pairs(main.uniqueDB.list) do byTitle[item.title or item.name] = byTitle[item.title or item.name] or item end
+	self.lockedSlots = self.lockedSlots or { }
+	local placed = { }
+	for _, title in ipairs(forced) do
+		local item = byTitle[title]
+		if item then
+			self:Recalculate()
+			local best
+			if item.type == "Jewel" then
+				local spec = self.build.spec
+				for _, node in ipairs(nodesById(spec.nodes)) do
+					local slotName = "Jewel " .. node.id
+					if node.type == "Socket" and not node.expansionJewel and self.itemsTab.slots[slotName] and (spec.jewels[node.id] or 0) == 0
+						and (node.alloc or (node.path and #node.path <= 6)) and not self.lockedSlots[slotName] then
+						local cost = node.alloc and 0 or #node.path
+						if not best or cost < best.cost then best = { slot = slotName, node = node, cost = cost } end
+					end
+				end
+				if best and not best.node.alloc then self.build.spec:AllocNode(best.node) end
+			else
+				for _, slotName in ipairs(new("BestItemFinder"):BestItemFinder(self.itemsTab):GetActiveSlots()) do
+					if not self.lockedSlots[slotName] and self.itemsTab:IsItemValidForSlot(item, slotName) then
+						local score = self:Score({ repSlotName = slotName, repItem = item })
+						if not best or score > best.score then best = { slot = slotName, score = score } end
+					end
+				end
+			end
+			if best then
+				new("BestItemFinder"):BestItemFinder(self.itemsTab):Equip(item, best.slot, true)
+				self.itemsTab:PopulateSlots()
+				self.lockedSlots[best.slot] = true
+				if best.slot:match("^Weapon") then self.weaponFinalists = nil end
+				t_insert(placed, string.format("%s (%s)", title, best.slot))
+				local price = GetPriceSource():UniquePrice(item)
+				self.costs = self.costs or { }
+				t_insert(self.costs, price or false)
+			else
+				t_insert(placed, title .. " (no free slot for it)")
+			end
+		end
+	end
+	self:FitSockets()
+	self:Recalculate()
+	if #placed > 0 then self:Note("Forced uniques: " .. table.concat(placed, ", ")) end
+end
+
 -- The archetype's uniques: the best (item, slot) pairs are equipped and their
 -- slots kept. The first one is the archetype's commitment (kept unless it
 -- ruins the build); more are added only while they help.
@@ -4315,6 +4369,13 @@ function BuildGeneratorClass:Run()
 		self.subProgress, self.moveFrom, self.moveTo = 0, 0, 1
 		self:Tick()
 	end
+	-- the player's excluded / forced uniques (the window's "Uniques..." list)
+	do
+		local rules = GetGeneratorRules()
+		rules.userExcluded, rules.userForced = { }, { }
+		for title in pairs(opts.excludedUniques or { }) do rules.userExcluded[title] = true end
+		for _, title in ipairs(opts.forcedUniques or { }) do rules.userForced[title] = true end
+	end
 	-- Investment level decides rare quality and influences unless set
 	local probe = new("PriceSource"):PriceSource()
 	opts.investment = opts.investment or probe.levels[probe.defaultLevel]
@@ -4372,6 +4433,7 @@ function BuildGeneratorClass:Run()
 
 	stage(4, "Choosing item bases")
 	self:ChooseBases()
+	self:ForceUniques()
 	self:ApplyArchetypeUniques()
 
 	stage(5, "Generating rare items")

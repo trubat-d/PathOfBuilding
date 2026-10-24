@@ -193,6 +193,7 @@ return function(jobJson, userPath, scriptBase)
 		configScenario = byId(new("AutoConfig"):AutoConfig(build).scenarioList, job.configScenarioId),
 		allowAnoints = job.allowAnoints, allowTattoos = job.allowTattoos, timeless = job.timeless,
 		synergies = job.synergies, quick = job.quick, meta = job.meta, learnFromPlayers = job.learnFromPlayers, variant = job.variant,
+		excludedUniques = job.excludedUniques, forcedUniques = job.forcedUniques,
 		yieldEvery = 1e9,
 	}
 	local archetypes = new("BuildArchetypes"):BuildArchetypes()

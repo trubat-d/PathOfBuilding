@@ -45,6 +45,8 @@ rules.uniques = {
 	-- flasks it still uses, defences it still counts). chargeLoss: fine when
 	-- the build counts as having the maximum of those charges (Ralakesh's
 	-- Impatience): the loss then changes nothing - what top Winter Orbs do
+	-- worth it only with the right anoints already on it: rare to find
+	["Stranglegasp"] = { excluded = true, reason = "needs the right four anoints already on it (hard to find): only when forced" },
 	["Romira's Banquet"] = { chargeLoss = "Power", reason = "loses all power charges on critical strike" },
 	["Malachai's Loop"] = { chargeLoss = "Power", reason = "loses all power charges on reaching maximum" },
 	["Tulfall"] = { chargeLoss = "Power", reason = "loses all power charges on reaching maximum" },
@@ -114,8 +116,16 @@ rules.behaviourSupports = {
 
 -- Is a unique ever allowed? (only drawbacks with no counter are refused here;
 -- the others cost score through rules.Costs)
+-- The player's own choices before generating (the Build Ideas window's
+-- "Uniques..." list): excluded uniques are never used, forced ones are used
+-- whatever the rules say (set by the generator for its run)
+rules.userExcluded = { }
+rules.userForced = { }
+
 function rules.UniqueAllowed(item, output, countsMax)
 	local title = item and (item.title or item.name)
+	if title and rules.userForced[title] then return true end
+	if title and rules.userExcluded[title] then return false, "excluded in the Uniques list" end
 	local rule = title and rules.uniques[title]
 	if not rule then return true end
 	if rule.excluded then return false, rule.reason end
