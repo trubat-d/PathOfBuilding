@@ -115,6 +115,7 @@ function ParallelGeneratorClass.JobFromOptions(options, extra)
 	local job = {
 		gemId = options.gemId, classId = options.classId, ascendClassId = options.ascendClassId, level = options.level,
 		focusId = options.focus and options.focus.id, investmentId = options.investment and options.investment.id,
+		focusCustom = options.focus and options.focus.id == "CUSTOM" and options.focus or nil,
 		hitFloor = options.hitFloor,
 		scenarioId = options.scenario and options.scenario.id,
 		configScenarioId = options.configScenario and options.configScenario.id,

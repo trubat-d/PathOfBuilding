@@ -1602,7 +1602,8 @@ function BuildGeneratorClass:RunRaresParallel(finder, options)
 	end
 	local sc = self.scorer
 	local scorerJob = {
-		focusId = sc.focus and sc.focus.id, chargesPerSecond = sc.chargesPerSecond, ehpFloor = sc.ehpFloor, hitFloor = sc.hitFloor,
+		focusId = sc.focus and sc.focus.id, focusCustom = sc.focus and sc.focus.id == "CUSTOM" and sc.focus or nil,
+		chargesPerSecond = sc.chargesPerSecond, ehpFloor = sc.ehpFloor, hitFloor = sc.hitFloor,
 		bossTier = sc.bossTier, killsPerSecond = sc.killsPerSecond, flaskRealism = sc.flaskRealism,
 		scenarioId = self.options.scenario and self.options.scenario.id,
 		hitScale = sc.hitScale, resourceSustain = sc.resourceSustain, ignoreCosts = sc.ignoreCosts, ignoreAttributes = sc.ignoreAttributes,

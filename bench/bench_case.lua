@@ -44,6 +44,14 @@ local focus = new("BuildScorer"):BuildScorer(build).focusList[1]
 for _, f in ipairs(new("BuildScorer"):BuildScorer(build).focusList) do
 	if f.id == os.getenv("FOCUS") then focus = f end
 end
+-- FOCUS=CUSTOM GOALS="dps=0.5,ehp=1,avoid=0.8,clear=0.3,move=1": a custom mix of goals
+if os.getenv("FOCUS") == "CUSTOM" then
+	local weights = { goals = { } }
+	for k, v in (os.getenv("GOALS") or ""):gmatch("(%w+)=([%d%.]+)") do
+		if k == "dps" or k == "ehp" or k == "avoid" or k == "clear" then weights[k] = tonumber(v) else weights.goals[k] = tonumber(v) end
+	end
+	focus = new("BuildScorer"):BuildScorer(build).CustomFocus(weights)
+end
 -- optional: top player details (poe.ninja) saved as JSON, for offline tests
 local meta
 if os.getenv("META_DETAILS") then
@@ -98,6 +106,7 @@ else
 		light = o.LightningMaximumHitTaken, chaos = o.ChaosMaximumHitTaken,
 	}
 	result.life, result.es, result.chaosRes = o.Life, o.EnergyShield, o.ChaosResist
+	result.moveSpeed = o.EffectiveMovementSpeedMod
 	result.sustain = sustain
 	result.penalties = { }
 	for _, p in ipairs(res.final.penalties or { }) do table.insert(result.penalties, p.label) end

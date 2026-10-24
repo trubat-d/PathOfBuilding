@@ -127,7 +127,7 @@ return function(jobJson, userPath, scriptBase)
 			overlap = new("HitOverlap"):HitOverlap(b, byId(new("HitOverlap"):HitOverlap(b).scenarioList, sc.scenarioId))
 		end
 		local scorer = new("BuildScorer"):BuildScorer(b, {
-			focus = byId(statics.focusList, sc.focusId) or statics.focusList[1], chargesPerSecond = sc.chargesPerSecond, overlap = overlap,
+			focus = sc.focusCustom or byId(statics.focusList, sc.focusId) or statics.focusList[1], chargesPerSecond = sc.chargesPerSecond, overlap = overlap,
 			ehpFloor = sc.ehpFloor, hitFloor = sc.hitFloor, bossTier = sc.bossTier, killsPerSecond = sc.killsPerSecond, flaskRealism = sc.flaskRealism,
 		})
 		for _, key in ipairs({ "hitScale", "resourceSustain", "ignoreCosts", "ignoreAttributes", "ignoreReservation", "useChecklist",
@@ -186,7 +186,7 @@ return function(jobJson, userPath, scriptBase)
 	local scorerStatics = new("BuildScorer"):BuildScorer(build)
 	local options = {
 		gemId = job.gemId, classId = job.classId, ascendClassId = job.ascendClassId, level = job.level,
-		focus = byId(scorerStatics.focusList, job.focusId) or scorerStatics.focusList[1],
+		focus = job.focusCustom or byId(scorerStatics.focusList, job.focusId) or scorerStatics.focusList[1],
 		investment = byId(new("PriceSource"):PriceSource().levels, job.investmentId),
 		hitFloor = job.hitFloor,
 		scenario = byId(new("HitOverlap"):HitOverlap(build).scenarioList, job.scenarioId),

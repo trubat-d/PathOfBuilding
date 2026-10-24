@@ -33,6 +33,7 @@ BuildScorerClass.focusList = {
 	{ label = "Tankiness first", id = "TANK", dps = 0.35, ehp = 1, avoid = 1, clear = 0.2 },
 	{ label = "Damage, with a minimum max hit (every damage type)", id = "DPS_FLOOR", dps = 1, ehp = 0.15, avoid = 0.35, hitFloor = 10000, clear = 0.25 },
 	{ label = "Mapping (clear speed first)", id = "CLEAR", dps = 0.7, ehp = 0.6, avoid = 0.5, clear = 1, hitTarget = 25000 },
+	-- (a mix the player sets in the window: BuildScorer.CustomFocus)
 }
 
 local elements = { "Fire", "Cold", "Lightning" }
@@ -136,6 +137,58 @@ function BuildScorerClass:ClearTerm(output)
 		end
 	end
 	return term
+end
+
+-- Goals a custom mix can add on top of damage / tankiness / avoidance / clear:
+-- each a stat of the build's output, counted as weight x log(stat / base)
+-- (doubling it is worth "weight" whatever its size, like damage)
+BuildScorerClass.goalList = {
+	{ id = "move", label = "Movement speed", stat = "EffectiveMovementSpeedMod", base = 1 },
+	{ id = "speed", label = "Attack / cast speed", stat = "Speed", base = 1 },
+	{ id = "life", label = "Life", stat = "Life", base = 1000 },
+	{ id = "es", label = "Energy shield", stat = "EnergyShield", base = 1000 },
+	{ id = "armour", label = "Armour", stat = "Armour", base = 1000 },
+	{ id = "evasion", label = "Evasion", stat = "Evasion", base = 1000 },
+	{ id = "block", label = "Block (attacks and spells)", stat = "_block", base = 10 },
+	{ id = "recovery", label = "Recovery (life / ES per second)", stat = "_recovery", base = 0.02 },
+	{ id = "area", label = "Area of effect", stat = "AreaOfEffectRadius", base = 10 },
+}
+
+-- A focus from the player's weights: { dps, ehp, avoid, clear, goals = { [id] = weight } }
+function BuildScorerClass.CustomFocus(weights)
+	weights = weights or { }
+	local parts = { }
+	local focus = { id = "CUSTOM", dps = m_max(0.1, weights.dps or 1), ehp = weights.ehp or 0.5, avoid = weights.avoid or 0.3,
+		clear = weights.clear or 0.2, hitTarget = 30000, extra = { } }
+	for _, goal in ipairs(BuildScorerClass.goalList) do
+		local w = weights.goals and weights.goals[goal.id]
+		if w and w > 0 then
+			t_insert(focus.extra, { stat = goal.stat, base = goal.base, weight = w })
+			t_insert(parts, string.format("%s %g", goal.label:lower(), w))
+		end
+	end
+	focus.label = string.format("Custom: damage %g, tankiness %g, avoidance %g, clear %g%s", focus.dps, focus.ehp, focus.avoid, focus.clear,
+		#parts > 0 and (", " .. table.concat(parts, ", ")) or "")
+	return focus
+end
+
+-- The custom goals' share of the score
+function BuildScorerClass:GoalTerms(output)
+	local extra = self.focus.extra
+	if not extra or not output then return 0 end
+	local total = 0
+	for _, goal in ipairs(extra) do
+		local value
+		if goal.stat == "_block" then
+			value = (output.EffectiveBlockChance or 0) + (output.EffectiveSpellBlockChance or 0)
+		elseif goal.stat == "_recovery" then
+			value = self:RecoveryRatio(output)
+		else
+			value = output[goal.stat] or 0
+		end
+		total = total + goal.weight * m_log(m_max(value, goal.base * 0.05) / goal.base)
+	end
+	return total
 end
 
 -- Survivability and clear bonuses added to the score
@@ -479,7 +532,7 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 	else
 		tank = m_log(m_max(ehp, 1))
 	end
-	local score = self.focus.dps * m_log(m_max(dps, 1)) + self.focus.ehp * tank - penalty + self:ExtraTerms(output)
+	local score = self.focus.dps * m_log(m_max(dps, 1)) + self.focus.ehp * tank - penalty + self:ExtraTerms(output) + self:GoalTerms(output)
 	-- avoiding, blocking and suppressing hits (see DamageTakenShare): its own
 	-- weight, as top players value it (max block or 100% suppression is worth
 	-- about as much as doubling the damage to them)

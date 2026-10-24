@@ -81,6 +81,66 @@ local function saveUniqueChoices()
 	for _, title in ipairs(uniqueChoices.forced) do rules.userForced[title] = true end
 end
 
+-- The player's own mix of goals (the generator's "Aim for: Custom mix..."),
+-- kept between sessions in the settings folder
+local goalWeights
+local function goalWeightsPath() return main.userPath and (main.userPath .. "BuildIdeasGoals.json") or nil end
+local function loadGoalWeights()
+	if goalWeights then return goalWeights end
+	-- (default: fast and tanky - movement speed with tankiness and avoidance)
+	goalWeights = { dps = 0.5, ehp = 1, avoid = 0.8, clear = 0.3, goals = { move = 1 } }
+	local path = goalWeightsPath()
+	local file = path and io.open(path, "r")
+	if file then
+		local ok, data = pcall(require("dkjson").decode, file:read("*a"))
+		file:close()
+		if ok and type(data) == "table" then
+			goalWeights = data
+			goalWeights.goals = type(data.goals) == "table" and data.goals or { }
+		end
+	end
+	return goalWeights
+end
+local function saveGoalWeights()
+	local path = goalWeightsPath()
+	local file = path and io.open(path, "w")
+	if file then file:write(require("dkjson").encode(goalWeights)) file:close() end
+end
+
+-- Window to set the weights of a custom mix; onDone() when closed
+local function openGoalWeights(onDone)
+	local weights = loadGoalWeights()
+	local controls = { }
+	local rows = {
+		{ key = "dps", label = "Damage" },
+		{ key = "ehp", label = "Tankiness (max hit, EHP)" },
+		{ key = "avoid", label = "Avoidance (block, evade...)" },
+		{ key = "clear", label = "Clear speed" },
+	}
+	for _, goal in ipairs(new("BuildScorer"):BuildScorer({ }).goalList) do t_insert(rows, { goal = goal.id, label = goal.label }) end
+	local y = 22
+	for i, row in ipairs(rows) do
+		local value = row.key and weights[row.key] or (weights.goals[row.goal] or 0)
+		controls["label" .. i] = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, y + 2, 0, 16}, "^7" .. row.label .. ":")
+		controls["edit" .. i] = new("EditControl"):EditControl({"TOPLEFT",nil,"TOPLEFT"}, {250, y, 60, 20}, tostring(value), nil, "[^%d%.]", 4, function(buf)
+			local v = tonumber(buf) or 0
+			if row.key then weights[row.key] = v else weights.goals[row.goal] = v end
+		end)
+		y = y + 26
+	end
+	controls.help = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {330, 24, 0, 14}, "^xC0C0C0Weights from 0 to about 3.")
+	controls.help2 = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {330, 42, 0, 14}, "^xC0C0C0Weight 1: doubling the stat is worth")
+	controls.help3 = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {330, 58, 0, 14}, "^xC0C0C0as much as doubling the damage.")
+	controls.help4 = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {330, 82, 0, 14}, "^xC0C0C0Damage stays at least 0.1:")
+	controls.help5 = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {330, 98, 0, 14}, "^xC0C0C0a build must still kill things.")
+	controls.done = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {430, y + 4, 80, 20}, "Done", function()
+		saveGoalWeights()
+		main:ClosePopup()
+		if onDone then onDone() end
+	end)
+	main:OpenPopup(530, y + 36, "Custom mix of goals", controls, "done", nil, "done")
+end
+
 -- Window to exclude or force uniques before generating
 local function openUniqueChoices()
 	local choices = loadUniqueChoices()
@@ -451,6 +511,7 @@ end
 
 function BuildIdeasPopupClass:OpenGenerator()
 	local controls = { }
+	local selectedFocus
 	local popup
 	local state = { running = false, status = "", confirmDiscard = false }
 	local function idle() return not state.running end
@@ -474,8 +535,33 @@ function BuildIdeasPopupClass:OpenGenerator()
 	controls.level.enabled = idle
 
 	controls.focusLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 50, 0, 16}, "^7Aim for:")
-	controls.focus = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {120, 48, 260, 20}, focusDropList())
+	local focusList = focusDropList()
+	-- (the player's own mix: movement speed and tankiness, block and life...)
+	t_insert(focusList, { label = "Custom mix...", custom = true })
+	controls.focus = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {120, 48, 260, 20}, focusList, function(index, value)
+		if value and value.custom then
+			openGoalWeights(function()
+				value.label = "Custom: " .. new("BuildScorer"):BuildScorer({ }).CustomFocus(loadGoalWeights()).label:gsub("^Custom: ", "")
+			end)
+		end
+	end)
 	controls.focus.enabled = idle
+	selectedFocus = function()
+		local entry = controls.focus.list[controls.focus.selIndex]
+		if entry.custom then return new("BuildScorer"):BuildScorer({ }).CustomFocus(loadGoalWeights()) end
+		return entry.focus
+	end
+	controls.focus.tooltipFunc = function(tooltip)
+		tooltip:Clear()
+		local entry = controls.focus.list[controls.focus.selIndex]
+		if entry and entry.custom then
+			tooltip:AddLine(16, "^7" .. new("BuildScorer"):BuildScorer({ }).CustomFocus(loadGoalWeights()).label)
+			tooltip:AddLine(16, "^7Select it again to change the weights.")
+		else
+			tooltip:AddLine(16, "^7What the build is made for. \"Custom mix...\" sets your own weights:")
+			tooltip:AddLine(16, "^7damage, tankiness, avoidance, clear, movement speed, speed, life, ES, armour, evasion, block, recovery, area.")
+		end
+	end
 	controls.investmentLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {400, 50, 0, 16}, "^7Investment:")
 	controls.investment = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {490, 48, 276, 20}, investmentDropList())
 	controls.investment.selIndex = GetPriceSource().defaultLevel
@@ -483,7 +569,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 	controls.investment.tooltipFunc = investmentTooltip
 	controls.ehpFloorLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {776, 50, 0, 16}, "^7Min max hit:")
 	controls.ehpFloor = new("EditControl"):EditControl({"TOPLEFT",nil,"TOPLEFT"}, {856, 48, 50, 20}, "10000", nil, "%D", 8)
-	local function floorShown() return controls.focus.list[controls.focus.selIndex].focus.hitFloor ~= nil end
+	local function floorShown() return selectedFocus().hitFloor ~= nil end
 	controls.ehpFloorLabel.shown = floorShown
 	controls.ehpFloor.shown = floorShown
 	controls.ehpFloor.enabled = idle
@@ -662,9 +748,9 @@ function BuildIdeasPopupClass:OpenGenerator()
 		local options = {
 			gemId = skill.gemId, classId = asc.classId, ascendClassId = asc.ascendClassId,
 			level = m_min(100, math.max(1, tonumber(controls.level.buf) or 92)),
-			focus = controls.focus.list[controls.focus.selIndex].focus,
+			focus = selectedFocus(),
 			investment = controls.investment.list[controls.investment.selIndex].level,
-			hitFloor = controls.focus.list[controls.focus.selIndex].focus.hitFloor and tonumber(controls.ehpFloor.buf) or nil,
+			hitFloor = selectedFocus().hitFloor and tonumber(controls.ehpFloor.buf) or nil,
 			scenario = controls.scenario.list[controls.scenario.selIndex].scenario,
 			configScenario = controls.config.list[controls.config.selIndex].scenario,
 			allowAnoints = controls.anoints.state,
@@ -1175,7 +1261,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 		end
 		local skill = controls.skill.list[controls.skill.selIndex]
 		local investment = controls.investment.list[controls.investment.selIndex].level
-		local focus = controls.focus.list[controls.focus.selIndex].focus
+		local focus = selectedFocus()
 		local ours = build:SaveDB("code")
 		local function num(v) return formatNumSep(string.format("%.0f", v or 0)) end
 		state.running = true
