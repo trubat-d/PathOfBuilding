@@ -548,6 +548,9 @@ function RareItemGeneratorClass:AddEldritch(item, slotName, ctx, maxTier, range)
 		end
 		return lines
 	end
+	-- (Clearing + bossing: measured on the boss and while mapping, the
+	-- mapping score counting at its weight - on-kill implicits stay useful)
+	local blend = ctx.opts and ctx.opts.mappingBlend
 	local function measure(lines)
 		local saved = subject.implicitModLines
 		subject.implicitModLines = { }
@@ -555,9 +558,16 @@ function RareItemGeneratorClass:AddEldritch(item, slotName, ctx, maxTier, range)
 		for _, l in ipairs(lines or { }) do t_insert(subject.implicitModLines, l) end
 		subject:BuildModList()
 		local output = calcFunc({ repSlotName = slotName, repItem = subject }, useFullDPS)
+		local power = ctx.measure(output)
+		if blend then
+			blend.toggle(true)
+			local mapping = ctx.measure(calcFunc({ repSlotName = slotName, repItem = subject }, useFullDPS))
+			blend.toggle(false)
+			power = power + blend.weight * mapping
+		end
 		ctx.tick()
 		subject.implicitModLines = saved
-		return ctx.measure(output)
+		return power
 	end
 	-- Highest available tier of each mod (base and each presence variant separately)
 	local function candidates(kind)

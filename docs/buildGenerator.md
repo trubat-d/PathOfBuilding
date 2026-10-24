@@ -57,6 +57,8 @@ An Animate Guardian (from High investment, when sockets are free) wears the uniq
 
 Rares follow the budget: below Endgame investment, a rare has only the good natural mods a player can realistically craft or buy for it (3 at League start, 4 at Budget and Mid, 5 at High; plus the bench craft).
 
+The configuration choice "Clearing + bossing" configures and scores the build on a pinnacle boss (damage, the boss fight, max hits: the build opens with that configuration), while what only matters while mapping still counts: clear speed weighs more, and Eldritch implicits are also measured while mapping (killed recently, normal enemies), that score added at a third.
+
 Enemy debuffs the build keeps up are switched on in the configuration like ailments: intimidate, unnerve, blind, maim, hinder, ash, frost, crush, scorch, brittle, sap (a line that inflicts it on hit, with its chance, at the main skill's hit rate), and exposure from Wave of Conviction or Frost Bomb.
 
 Curses are tried on every way to apply them, each with what it costs in play (PoB counts a curse in full however it is applied): Arcanist Brand and casting by hand take time from the main skill, Hextouch on a movement skill only curses what it hits, Blasphemy reserves mana, a mark on Mark On Hit is free for attacks.

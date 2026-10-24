@@ -214,7 +214,7 @@ function BuildGeneratorClass:UpdateCombinedParts()
 	local gem = self.mainGem
 	local first = self.mainGroup and self.mainGroup.gemList[1]
 	local configScenario = self.options.configScenario
-	local ctx = { output = self.build.calcsTab.mainOutput or { }, boss = not configScenario or configScenario.id == "BOSS", gen = self }
+	local ctx = { output = self.build.calcsTab.mainOutput or { }, boss = not configScenario or configScenario.boss and true or false, gen = self }
 	local rule = gem and first and self.options.skillProfiles ~= false and self.skillProfiles.Combine(gem, ctx)
 	if not rule then
 		self.scorer.hitScale = nil
@@ -1655,6 +1655,7 @@ function BuildGeneratorClass:RareOptions(withInfluences)
 		eldritchTier = withInfluences and investment and investment.eldritchTier or 0,
 		weaponSeeds = self.options.weaponSeeds, crafts = self.options.crafts, lazyFill = self.options.lazyFill,
 		maxAffixes = investment and investment.rareAffixes,
+		mappingBlend = self:MappingBlend(),
 	}
 end
 
@@ -1672,6 +1673,7 @@ function BuildGeneratorClass:MakeRares(withInfluences)
 		eldritchTier = withInfluences and investment and investment.eldritchTier or 0,
 		weaponSeeds = self.options.weaponSeeds, crafts = self.options.crafts, lazyFill = self.options.lazyFill,
 		maxAffixes = investment and investment.rareAffixes,
+		mappingBlend = self:MappingBlend(),
 		yieldEvery = nil,
 	}
 	local function withSlots(slots)
@@ -3171,6 +3173,30 @@ function BuildGeneratorClass:Explain(final)
 	if #parts > 0 then self:Note("What carries it: " .. table.concat(parts, "; ")) end
 end
 
+-- Clearing + bossing: the score is the boss's, and Eldritch implicits are
+-- also measured while mapping (killed recently, normal enemies), that score
+-- counting at this weight. Returns { weight, toggle(on) } or nil.
+function BuildGeneratorClass:MappingBlend()
+	local sc = self.options.configScenario
+	if not (sc and sc.clear) then return nil end
+	local input = self.build.configTab.input
+	local saved
+	return {
+		weight = self.options.mappingWeight or 0.35,
+		toggle = function(on)
+			if on then
+				saved = { killed = input.conditionKilledRecently, boss = input.enemyIsBoss }
+				input.conditionKilledRecently = true
+				input.enemyIsBoss = "None"
+			else
+				input.conditionKilledRecently = saved and saved.killed
+				input.enemyIsBoss = saved and saved.boss
+			end
+			self.build.configTab:BuildModList()
+		end,
+	}
+end
+
 -- Is a gem in an enabled socket group?
 function BuildGeneratorClass:HasGem(name)
 	for _, group in ipairs(self.build.skillsTab.socketGroupList) do
@@ -3906,11 +3932,13 @@ function BuildGeneratorClass:Run()
 	stage(1, "Setting up the character and configuration")
 	self:Setup()
 	self.overlap = new("HitOverlap"):HitOverlap(self.build, opts.scenario)
-	local bossFight = not opts.configScenario or opts.configScenario.id == "BOSS"
+	local bossFight = not opts.configScenario or opts.configScenario.boss and true or false
 	opts.chargesPerSecond = opts.chargesPerSecond or (bossFight and 1.5 or 4)
 	self.scorer = new("BuildScorer"):BuildScorer(self.build, { focus = opts.focus, chargesPerSecond = opts.chargesPerSecond, overlap = self.overlap, ehpFloor = opts.ehpFloor, hitFloor = opts.hitFloor,
 		bossTier = opts.investment and opts.investment.awakenedGems and "uber" or "pinnacle" })
 	self.scorer.useChecklist = false -- on from the flask stage
+	-- (Clearing + bossing: clear speed counts more than the focus says)
+	if opts.configScenario and opts.configScenario.clear then self.scorer.clearBoost = opts.clearBoost or 0.35 end
 	-- the archetype's stacked stat, valued on its own while the build is made
 	if opts.archetype and opts.archetype.lens and opts.statLens ~= false then
 		self.scorer.lens = opts.archetype.lens

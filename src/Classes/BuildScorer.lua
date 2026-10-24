@@ -131,7 +131,7 @@ function BuildScorerClass:ExtraTerms(output)
 	-- 6-link support slot, which a big recovery weight made Life Leech take)
 	local ratio = m_min(0.15, m_max(0, self:RecoveryRatio(output)))
 	local extra = self.focus.ehp * 0.4 * m_log(1 + 10 * ratio)
-	extra = extra + (self.focus.clear or 0) * self:ClearTerm(output)
+	extra = extra + ((self.focus.clear or 0) + (self.clearBoost or 0)) * self:ClearTerm(output)
 	return extra
 end
 

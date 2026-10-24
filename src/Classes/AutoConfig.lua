@@ -20,9 +20,13 @@ local configOptions = require("Modules.ConfigOptions")
 ---@class AutoConfig
 local AutoConfigClass = newClass("AutoConfig")
 
+-- (boss: the configuration and damage are a pinnacle boss's; clear: what
+-- only matters while mapping - on-kill Eldritch implicits, movement speed,
+-- clear speed - is still valued, without changing the boss numbers)
 AutoConfigClass.scenarioList = {
-	{ label = "Pinnacle boss", id = "BOSS" },
+	{ label = "Pinnacle boss", id = "BOSS", boss = true },
 	{ label = "Clearing maps", id = "MAPPING" },
+	{ label = "Clearing + bossing (damage on a pinnacle boss)", id = "BOSS_CLEAR", boss = true, clear = true },
 }
 
 -- Skills that generate charges, beyond support gems named "... Charge ..."
@@ -139,8 +143,8 @@ function AutoConfigClass:RealisticCount(multName, output, env)
 	if not rule or not option then return nil end
 	local skill = env and env.player and env.player.mainSkill
 	local flags = skill and skill.skillFlags or { }
-	self.scorer = self.scorer or new("BuildScorer"):BuildScorer(self.build, { chargesPerSecond = self.scenario.id == "BOSS" and 0 or 4 })
-	local ctx = { boss = self.scenario.id == "BOSS", attack = flags.attack, channelling = skill and skill.skillTypes and skill.skillTypes[SkillType.Channel], scorer = self.scorer, env = env }
+	self.scorer = self.scorer or new("BuildScorer"):BuildScorer(self.build, { chargesPerSecond = self.scenario.boss and 0 or 4 })
+	local ctx = { boss = self.scenario.boss and true or false, attack = flags.attack, channelling = skill and skill.skillTypes and skill.skillTypes[SkillType.Channel], scorer = self.scorer, env = env }
 	local value, reason = rule(output, ctx)
 	return value, reason, option
 end
@@ -263,7 +267,7 @@ end
 function AutoConfigClass:Run()
 	self.changes = { }
 	self.changeIndex = { }
-	local boss = self.scenario.id == "BOSS"
+	local boss = self.scenario.boss and true or false
 	self:Set("enemyIsBoss", boss and "Pinnacle" or "None", boss and "pinnacle boss scenario" or "map clearing scenario")
 	for pass = 1, 4 do
 		self:Recalculate()

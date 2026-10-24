@@ -51,8 +51,13 @@ if os.getenv("META_DETAILS") then
 	meta = { items = { }, keystones = { }, anoints = { }, supports = { }, total = 0, details = dkjson.decode(f:read("*a")) }
 	f:close()
 end
+-- optional: CONFIG=<AutoConfig scenario id> (BOSS, MAPPING, BOSS_CLEAR)
+local configScenario
+for _, sc in ipairs(new("AutoConfig"):AutoConfig(build).scenarioList) do
+	if sc.id == os.getenv("CONFIG") then configScenario = sc end
+end
 local gen = new("BuildGenerator"):BuildGenerator(build, {
-	meta = meta,
+	meta = meta, configScenario = configScenario,
 	gemId = gemId, classId = asc.classId, ascendClassId = asc.ascendClassId, level = 92,
 	investment = investment, focus = focus,
 	quick = mode == "quick", synergies = os.getenv("SYNERGIES") == "1", archetype = archetype, yieldEvery = 1e9,

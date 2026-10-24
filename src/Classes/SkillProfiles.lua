@@ -136,7 +136,7 @@ function SkillProfilesClass.Apply(gen)
 	if not profile then return false end
 	local output = gen.build.calcsTab.mainOutput or { }
 	local configScenario = gen.options.configScenario
-	local ctx = { output = output, boss = not configScenario or configScenario.id == "BOSS", gen = gen }
+	local ctx = { output = output, boss = not configScenario or configScenario.boss and true or false, gen = gen }
 	local changed = false
 	local note = profile.note
 	if profile.stacks then
