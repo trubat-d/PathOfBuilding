@@ -187,6 +187,17 @@ elseif step == "bossskill" then
 	gen:AutoConfigure()
 	print("GAIN", gen:BossSkillMove())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
+elseif step == "fullscorecost" then
+	-- how long one full score and one quick score take on this build
+	local t = os.clock()
+	for _ = 1, 10 do gen:FullScore() end
+	local full = (os.clock() - t) / 10
+	t = os.clock()
+	for _ = 1, 10 do gen:Score() end
+	local quick = (os.clock() - t) / 10
+	t = os.clock()
+	for _ = 1, 10 do gen:Recalculate() end
+	print(string.format("FULLSCORE %.3f s  SCORE %.3f s  RECALC %.3f s", full, quick, (os.clock() - t) / 10))
 elseif step == "prune" then
 	print("REMOVED", gen:PruneUselessGems())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end

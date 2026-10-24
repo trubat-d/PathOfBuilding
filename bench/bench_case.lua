@@ -140,4 +140,5 @@ else
 	end
 end
 result.seconds = math.floor(os.clock() - t0)
+result.fullScores, result.recalcs = gen.fullScoreCount, gen.recalcCount
 print("BENCH " .. dkjson.encode(result))

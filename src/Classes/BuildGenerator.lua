@@ -196,6 +196,7 @@ end
 
 -- Recalculate the build now (normally done at the next frame)
 function BuildGeneratorClass:Recalculate()
+	self.recalcCount = (self.recalcCount or 0) + 1
 	wipeGlobalCache()
 	self.build.outputRevision = self.build.outputRevision + 1
 	self.build.buildFlag = false
@@ -252,6 +253,7 @@ function BuildGeneratorClass:UpdateCombinedParts()
 end
 
 function BuildGeneratorClass:FullScore()
+	self.fullScoreCount = (self.fullScoreCount or 0) + 1
 	self:Recalculate()
 	if self:AdjustSkillPart() then self:Recalculate() end
 	self:UpdateCombinedParts()
@@ -2009,8 +2011,9 @@ function BuildGeneratorClass:RepairSearch(rounds)
 	for round = 1, rounds or 8 do
 		self:Inner((round - 1) / (rounds or 8))
 		local kind = kinds[(round - 1) % #kinds + 1]
-		-- (configured as the round will be, so the comparison is fair)
-		self:AutoConfigure()
+		-- (configured as the round will be, so the comparison is fair; later
+		-- rounds start configured: the previous one ended with it)
+		if round == 1 then self:AutoConfigure() end
 		local before = self:FullScore()
 		local snap = self:Snapshot()
 		local savedLog = #self.log
@@ -4306,6 +4309,36 @@ function BuildGeneratorClass:PearlMove()
 		copy:BuildAndParseRaw()
 		return copy
 	end
+	-- (for scoring: the ring with only its current lines - the full item has
+	-- hundreds of variants, and parsing it for every support tried took a
+	-- tenth of a whole generation)
+	local baseLines, variantLine = { }, { }
+	for _, modLine in ipairs(pearl.explicitModLines or { }) do
+		if modLine.variantList then
+			for v in pairs(modLine.variantList) do variantLine[v] = modLine.line end
+		else
+			t_insert(baseLines, modLine.line)
+		end
+	end
+	local implicitLines = { }
+	for _, modLine in ipairs(pearl.implicitModLines or { }) do t_insert(implicitLines, modLine.line) end
+	local quickCache = { }
+	local function pearlQuick(slotName, first, second)
+		local key = slotName .. "|" .. first .. "|" .. (second or "")
+		if quickCache[key] then return quickCache[key] end
+		local a = variantLine[index[slotName .. " / " .. first]]
+		local b = second and variantLine[index[slotName .. " / " .. second]]
+		if not a then return pearlItem(slotName, first, second) end
+		local lines = { "Rarity: UNIQUE", "Pearl of Tsoatha", pearl.baseName, "Implicits: " .. #implicitLines }
+		for _, l in ipairs(implicitLines) do t_insert(lines, l) end
+		for _, l in ipairs(baseLines) do t_insert(lines, l) end
+		t_insert(lines, a)
+		if b and b ~= a then t_insert(lines, b) end
+		local item = new("Item"):Item(table.concat(lines, "\n"))
+		item:BuildModList()
+		quickCache[key] = item
+		return item
+	end
 	local supportNames = { }
 	for _, entry in ipairs(require("Data.PearlSupports")) do t_insert(supportNames, (entry.baseItemName:gsub(" Support$", ""))) end
 	local setup = new("GemSetup"):GemSetup(self)
@@ -4344,7 +4377,7 @@ function BuildGeneratorClass:PearlMove()
 				local bestName, bestScore
 				for _, name in ipairs(shortlist or supportNames) do
 					if not chosen[1] or chosen[1] ~= name then
-						local item = pearlItem(slotName, chosen[1] or name, chosen[1] and name or nil)
+						local item = pearlQuick(slotName, chosen[1] or name, chosen[1] and name or nil)
 						local score = self:Score({ repSlotName = ringSlot, repItem = item })
 						if k == 1 then t_insert(scored, { name = name, score = score }) end
 						if not bestScore or score > bestScore + 1e-9 then bestName, bestScore = name, score end
