@@ -101,6 +101,9 @@ function IdeaMinerClass.Ideas(info, opts)
 					uniqueLines = driver.patterns,
 					lens = { stat = driver.stat, base = driver.base, label = driver.label:gsub(" stacking", "") },
 					mined = true,
+					-- (stacking sets are several pieces: Winter Orb's power charge set is five)
+					maxUniques = ({ POWER = 5, FRENZY = 5, ENDURANCE = 5 })[driver.key],
+					setTolerance = ({ POWER = 0.25, FRENZY = 0.25, ENDURANCE = 0.25 })[driver.key],
 					applies = function() return true end,
 				})
 			end

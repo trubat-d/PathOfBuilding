@@ -42,14 +42,16 @@ rules.uniques = {
 	["Wraithlord"] = { noMinions = true, reason = "you can't have non-spectre minions" },
 	["Chains of Command"] = { noMinions = true, reason = "you can't have non-animated, non-manifested minions" },
 	-- no counter in the generated build (charges PoB assumes stay at maximum,
-	-- flasks it still uses, defences it still counts)
-	["Romira's Banquet"] = { excluded = true, reason = "loses all power charges on critical strike" },
-	["Malachai's Loop"] = { excluded = true, reason = "loses all power charges on reaching maximum" },
-	["Tulfall"] = { excluded = true, reason = "loses all power charges on reaching maximum" },
-	["Replica Tulfall"] = { excluded = true, reason = "loses all power charges on reaching maximum" },
-	["The Eternal Apple"] = { excluded = true, reason = "loses all endurance charges on reaching maximum" },
-	["Daresso's Defiance"] = { excluded = true, reason = "loses all endurance charges when hit" },
-	["Willclash"] = { excluded = true, reason = "loses all power charges when you block" },
+	-- flasks it still uses, defences it still counts). chargeLoss: fine when
+	-- the build counts as having the maximum of those charges (Ralakesh's
+	-- Impatience): the loss then changes nothing - what top Winter Orbs do
+	["Romira's Banquet"] = { chargeLoss = "Power", reason = "loses all power charges on critical strike" },
+	["Malachai's Loop"] = { chargeLoss = "Power", reason = "loses all power charges on reaching maximum" },
+	["Tulfall"] = { chargeLoss = "Power", reason = "loses all power charges on reaching maximum" },
+	["Replica Tulfall"] = { chargeLoss = "Power", reason = "loses all power charges on reaching maximum" },
+	["The Eternal Apple"] = { chargeLoss = "Endurance", reason = "loses all endurance charges on reaching maximum" },
+	["Daresso's Defiance"] = { chargeLoss = "Endurance", reason = "loses all endurance charges when hit" },
+	["Willclash"] = { chargeLoss = "Power", reason = "loses all power charges when you block" },
 	["Replica Powerlessness"] = { excluded = true, reason = "loses a power charge every second" },
 	["Replica Pacifism"] = { excluded = true, reason = "loses a frenzy charge every second" },
 	["Replica Fragility"] = { excluded = true, reason = "loses an endurance charge every second" },
@@ -112,11 +114,12 @@ rules.behaviourSupports = {
 
 -- Is a unique ever allowed? (only drawbacks with no counter are refused here;
 -- the others cost score through rules.Costs)
-function rules.UniqueAllowed(item, output)
+function rules.UniqueAllowed(item, output, countsMax)
 	local title = item and (item.title or item.name)
 	local rule = title and rules.uniques[title]
 	if not rule then return true end
 	if rule.excluded then return false, rule.reason end
+	if rule.chargeLoss and not (countsMax and countsMax[rule.chargeLoss]) then return false, rule.reason end
 	if rule.check and output and not rule.check(output) then return false, rule.reason end
 	return true
 end

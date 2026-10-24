@@ -2650,6 +2650,16 @@ function BuildGeneratorClass:ApplyArchetypeUniques()
 	if #candidates == 0 then return end
 	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
 	local filter = { obtainableOnly = true, levelOnly = true, investment = self.options.investment }
+	-- (a set with a piece that counts as maximum charges: the pieces that lose
+	-- those charges are candidates too - kept only if that piece is taken)
+	local enables = { }
+	for _, item in ipairs(candidates) do
+		for _, modLine in ipairs(item.explicitModLines or { }) do
+			local kind = (modLine.line or ""):match("^Count as having maximum number of (%a+) Charges")
+			if kind then enables[kind] = true end
+		end
+	end
+	if next(enables) then filter.assumeMaxCharges = enables end
 	local allowed = { }
 	for _, item in ipairs(candidates) do
 		if finder:IsItemAllowed(item, filter) then t_insert(allowed, item) end
@@ -2661,17 +2671,65 @@ function BuildGeneratorClass:ApplyArchetypeUniques()
 		self:Recalculate()
 		local current = self:Score()
 		local best
+		local singles = { }
 		for _, item in ipairs(allowed) do
 			if not used[item] then
 				for _, slotName in ipairs(slots) do
 					if not self.lockedSlots[slotName] and self.itemsTab:IsItemValidForSlot(item, slotName) then
 						local score = self:Score({ repSlotName = slotName, repItem = item })
+						t_insert(singles, { item = item, slot = slotName, score = score })
 						if not best or score > best.score + 1e-9 then best = { item = item, slot = slotName, score = score } end
 					end
 				end
 			end
 		end
-		local tolerance = round == 1 and 1.0 or -0.003
+		-- two steps ahead: a piece worth little alone can unlock the others
+		-- (Ralakesh's Impatience counts as maximum power charges: Tulfall's and
+		-- Malachai's Loop's "lose all at maximum" stop mattering). The pair
+		-- that scores best together picks this round's piece.
+		if archetype.lookahead ~= false and #singles > 1 then
+			t_sort(singles, function(a, b) return a.score > b.score end)
+			local firsts = { }
+			for i = 1, m_min(5, #singles) do t_insert(firsts, singles[i]) end
+			-- (and the enablers, whatever they score alone)
+			for _, sgl in ipairs(singles) do
+				for _, modLine in ipairs(sgl.item.explicitModLines or { }) do
+					local l = modLine.line or ""
+					if l:match("^Count as having maximum number of") or l:match("is equal to your Maximum") then t_insert(firsts, sgl) break end
+				end
+			end
+			local bestPair
+			for _, a in ipairs(firsts) do
+				for i = 1, m_min(12, #singles) do
+					local b = singles[i]
+					if b.item ~= a.item and b.slot ~= a.slot and not (a.slot:match("^Ring") and b.slot:match("^Ring") and a.item.title == b.item.title) then
+						local score = self:Score({ repItems = { [a.slot] = a.item, [b.slot] = b.item } })
+						if not bestPair or score > bestPair.score + 1e-9 then bestPair = { first = a, score = score } end
+					end
+				end
+			end
+			-- (the pair's first piece, if the pair beats the best single by a margin)
+			if bestPair and bestPair.score > best.score + 0.01 then
+				best = bestPair.first
+			end
+		end
+		-- a set whose pieces lose charges starts with the piece that counts them
+		-- at maximum (without it the others aren't taken at all)
+		if round == 1 and filter.assumeMaxCharges then
+			local enabler
+			for _, sgl in ipairs(singles) do
+				for _, modLine in ipairs(sgl.item.explicitModLines or { }) do
+					if (modLine.line or ""):match("^Count as having maximum number of") and (not enabler or sgl.score > enabler.score) then enabler = sgl end
+				end
+			end
+			if enabler then best = enabler end
+		end
+		-- (a stacking set - archetype.setTolerance - is committed to as a whole:
+		-- its pieces pay off once the tree and gear stack the stat, which the
+		-- rest of the generation does with the stat lens; the archetype scan
+		-- compares the finished builds, so a set that doesn't pay off loses there)
+		local tolerance = round == 1 and 1.0 or (archetype.setTolerance or -0.003)
+		if self.options.debugTiming and best then ConPrintf("[archetype uniques] round %d: best %s in %s %.3f (current %.3f)", round, best.item.title or "?", best.slot, best.score, current) end
 		if not best or best.score < current - tolerance then break end
 		used[best.item] = true
 		finder:Equip(best.item, best.slot, true)
@@ -2687,6 +2745,21 @@ function BuildGeneratorClass:ApplyArchetypeUniques()
 		t_insert(self.costs, price or false)
 	end
 	self:Recalculate()
+	-- (a piece that loses charges, kept without the piece that counts them at maximum: out again)
+	if filter.assumeMaxCharges then
+		local check = { obtainableOnly = true }
+		for slotName in pairs(self.lockedSlots) do
+			local slot = self.itemsTab.slots[slotName]
+			local item = slot and self.itemsTab.items[slot.selItemId]
+			if item and item.rarity == "UNIQUE" and not finder:IsItemAllowed(item, check) then
+				slot:SetSelItemId(0)
+				self.lockedSlots[slotName] = nil
+				for i = #kept, 1, -1 do if kept[i]:find(item.title, 1, true) == 1 then table.remove(kept, i) end end
+				self.itemsTab:PopulateSlots()
+				self:Recalculate()
+			end
+		end
+	end
 	if #kept > 0 then
 		self:Note("Archetype uniques: " .. table.concat(kept, ", "))
 	end

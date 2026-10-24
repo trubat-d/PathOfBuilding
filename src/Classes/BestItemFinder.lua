@@ -99,7 +99,18 @@ function BestItemFinderClass:IsItemAllowed(item, opts)
 	-- drawbacks PoB doesn't calculate (Modules/GeneratorRules)
 	local rules = GetGeneratorRules()
 	if item.rarity == "UNIQUE" or item.rarity == "RELIC" or not item.rarity then
-		if not rules.UniqueAllowed(item, self.build.calcsTab and self.build.calcsTab.mainOutput) then
+		-- (charges the build counts as always at maximum: items that lose them are fine)
+		local countsMax = opts.assumeMaxCharges
+		if not countsMax then
+			local env = self.build.calcsTab and self.build.calcsTab.mainEnv
+			local modDB = env and env.player and env.player.modDB
+			countsMax = modDB and {
+				Power = modDB:Flag(nil, "HaveMaximumPowerCharges"),
+				Frenzy = modDB:Flag(nil, "HaveMaximumFrenzyCharges"),
+				Endurance = modDB:Flag(nil, "HaveMaximumEnduranceCharges"),
+			} or nil
+		end
+		if not rules.UniqueAllowed(item, self.build.calcsTab and self.build.calcsTab.mainOutput, countsMax) then
 			return false
 		end
 	end
