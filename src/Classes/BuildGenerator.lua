@@ -2549,6 +2549,30 @@ function BuildGeneratorClass:ChooseMetaJewels(onlyKinds)
 	end
 end
 
+-- Thread of Hope, Intuitive Leap, Impossible Escape: passives in their
+-- radius allocated without a path (Classes/RadiusJewelFinder)
+function BuildGeneratorClass:ChooseRadiusJewels()
+	local investment = self.options.investment or { }
+	if investment.timeless == false then return end
+	local prices = GetPriceSource()
+	local function allowed(title)
+		if not prices.Available(investment, title) then return false end
+		local price = prices.uniques[title]
+		if price then return not investment.maxUnique or price <= investment.maxUnique end
+		return investment.unknownAllowed ~= false
+	end
+	local finder = new("RadiusJewelFinder"):RadiusJewelFinder(self)
+	local ok, result = pcall(function() return finder:Run(allowed, investment.corruptedSupports, self.options.radiusJewelTries or 3) end)
+	if not ok then ConPrintf("Radius jewels failed: %s", tostring(result)) return end
+	if result then
+		local price = prices.uniques[result.title]
+		self:Note(string.format("%s: %d passives allocated through it without a path%s, score %+.3f (%s)", result.label, #result.nodes,
+			#result.names > 0 and (" (" .. table.concat(result.names, ", ") .. ")") or "", result.gain, prices.FormatPrice(price)))
+		self.costs = self.costs or { }
+		t_insert(self.costs, price or false)
+	end
+end
+
 -- Large Cluster Jewels in the outer sockets (from Budget investment)
 function BuildGeneratorClass:ChooseClusterJewels(maxJewels)
 	local investment = self.options.investment or { }
@@ -3978,6 +4002,7 @@ function BuildGeneratorClass:Run()
 	if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'ChooseTimelessJewel', r.score, r.dps, r.ehp) end
 	if opts.metaJewels ~= false then self:ChooseMetaJewels() end
+	if opts.radiusJewels ~= false then self:ChooseRadiusJewels() end
 	if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'ChooseMetaJewels', r.score, r.dps, r.ehp) end
 	self:Move(8, 10, "Cluster jewels")

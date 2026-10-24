@@ -136,6 +136,8 @@ elseif step == "fitsockets" then
 		for _, gem in ipairs(g.gemList) do table.insert(names, gem.gemData and gem.gemData.name or "?") end
 		print("GROUP", g.slot, g.label, table.concat(names, ", "))
 	end
+elseif step == "radiusjewels" then
+	gen:ChooseRadiusJewels()
 elseif step == "clusters" then
 	gen:ChooseClusterJewels(tonumber(os.getenv("LARGE") or "0"))
 elseif step == "swap" then
