@@ -43,6 +43,8 @@ elseif step == "aurastack" then
 	gen:AuraStackMove()
 elseif step == "uniquesweep" then
 	print("KEPT", gen:UniqueSweep())
+elseif step == "mageblood" then
+	print("KEPT", gen:PermanentFlaskMove())
 elseif step == "uniqueflasks" then
 	print("KEPT", gen:UniqueFlaskSweep())
 elseif step == "learn" then

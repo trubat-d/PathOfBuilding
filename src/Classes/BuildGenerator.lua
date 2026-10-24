@@ -2533,6 +2533,13 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 	t_sort(candidates, function(a, b) return (a.title or a.name) < (b.title or b.name) end)
 	self:Recalculate()
 	local current = self:Score()
+	local fullCurrent = self.scorer:Evaluate(self.calcFunc, { }).score
+	local function flaskItem(item)
+		for _, modLine in ipairs(item.explicitModLines or { }) do
+			if modLine.line:find("Flask", 1, true) then return true end
+		end
+		return false
+	end
 	local gains = { }
 	for _, slotName in ipairs(finder:GetActiveSlots()) do
 		local slot = self.itemsTab.slots[slotName]
@@ -2543,7 +2550,13 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 				local relocate = noSockets(item) and self.mainGroup and self.mainGroup.slot == slotName and slotName == "Body Armour"
 				if self.itemsTab:IsItemValidForSlot(item, slotName) and not (equipped and equipped.title == item.title)
 					and (relocate or not (groupSlots[slotName] and noSockets(item))) and not changesHands(item, slotName) then
-					local score = self:Score({ repSlotName = slotName, repItem = item })
+					-- (items that change flasks, like Mageblood, need the flask uptimes: a full evaluation)
+					local score
+					if flaskItem(item) then
+						score = self.scorer:Evaluate(self.calcFunc, { repSlotName = slotName, repItem = item }).score - fullCurrent + current
+					else
+						score = self:Score({ repSlotName = slotName, repItem = item })
+					end
 					if score > current + 0.01 then
 						t_insert(gains, { item = item, slot = slotName, gain = score - current, relocate = relocate })
 					end
@@ -2729,6 +2742,70 @@ function BuildGeneratorClass:LearnFromTopBuilds(maxTries)
 		self:Note("Taken from the top players of the skill (poe.ninja): " .. table.concat(kept, "; "))
 	end
 	return #kept
+end
+
+-- Uniques that make flasks permanent (Mageblood): worth nothing until the
+-- flasks are chosen for them, so each one is equipped, the flasks are made
+-- again around it, and the result is kept if the build is better
+function BuildGeneratorClass:PermanentFlaskMove()
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local filter = { obtainableOnly = true, levelOnly = true, investment = self.options.investment }
+	local list = { }
+	for _, item in pairs(main.uniqueDB.list) do
+		for _, modLine in ipairs(item.explicitModLines or { }) do
+			if modLine.line:find("constantly apply their Flask Effects", 1, true) and finder:IsItemAllowed(item, filter) then
+				t_insert(list, item)
+				break
+			end
+		end
+	end
+	t_sort(list, function(a, b) return (a.title or a.name) < (b.title or b.name) end)
+	local kept = 0
+	for _, item in ipairs(list) do
+		for _, slotName in ipairs(finder:GetActiveSlots()) do
+			if self.itemsTab:IsItemValidForSlot(item, slotName) and not (self.lockedSlots and self.lockedSlots[slotName]) then
+				local slot = self.itemsTab.slots[slotName]
+				local equipped = self.itemsTab.items[slot.selItemId]
+				if not (equipped and equipped.title == item.title) then
+					local before = self:FullScore()
+					local savedLog = #self.log
+					local saved = { }
+					for i = 1, 5 do
+						local fs = self.itemsTab.slots["Flask " .. i]
+						if fs then saved[i] = { id = fs.selItemId, active = fs.active } end
+					end
+					local previous = slot.selItemId
+					local newItem = finder:Equip(item, slotName, true)
+					self.itemsTab:PopulateSlots()
+					self:MakeFlasks()
+					if self.options.uniqueSweep ~= false then self:UniqueFlaskSweep() end
+					local after = self:FullScore()
+					if self.options.debugTiming then ConPrintf("[mageblood] %s in %s: %.3f -> %.3f", item.title or item.name, slotName, before, after) end
+					if after > before + 0.01 then
+						kept = kept + 1
+						local price = GetPriceSource():UniquePrice(item)
+						self:Note(string.format("%s in %s with flasks made for it (+%.2f; %s)", item.title or item.name, slotName, after - before, GetPriceSource().FormatPrice(price)))
+						self.costs = self.costs or { }
+						t_insert(self.costs, price or false)
+					else
+						for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+						slot:SetSelItemId(previous)
+						self.itemsTab:DeleteItem(newItem, true)
+						for i, entry in pairs(saved) do
+							local fs = self.itemsTab.slots["Flask " .. i]
+							fs:SetSelItemId(entry.id)
+							fs.active = entry.active
+							if self.itemsTab.activeItemSet["Flask " .. i] then self.itemsTab.activeItemSet["Flask " .. i].active = entry.active end
+						end
+						self.itemsTab:PopulateSlots()
+						self:Recalculate()
+					end
+					break
+				end
+			end
+		end
+	end
+	return kept
 end
 
 -- Unique flasks (Dying Sun, Bottled Faith, Cinderswallow Urn...) against the
@@ -3069,6 +3146,7 @@ function BuildGeneratorClass:Run()
 	self:FullScore()
 	self:MakeFlasks()
 	if opts.uniqueSweep ~= false then self:UniqueFlaskSweep() end
+	if opts.permanentFlasks ~= false then self:PermanentFlaskMove() end
 	self:ChoosePantheonAndBandit()
 	if opts.auraStacking ~= false then
 		self.stage = "Trying aura stacking"
