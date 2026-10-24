@@ -1674,11 +1674,35 @@ function BuildGeneratorClass:RareOptions(withInfluences)
 		eldritchTier = withInfluences and investment and investment.eldritchTier or 0,
 		weaponSeeds = self.options.weaponSeeds, crafts = self.options.crafts, lazyFill = self.options.lazyFill,
 		maxAffixes = investment and investment.rareAffixes,
+		multiCraft = investment and investment.multiCraft,
 		mappingBlend = self:MappingBlend(),
 	}
 end
 
+-- Rares that can't exist (Eldritch implicits on an influenced item, from
+-- older versions): the Eldritch implicits taken off
+function BuildGeneratorClass:SanitizeRares()
+	local fixed = 0
+	for _, slot in ipairs(self.itemsTab.orderedSlots) do
+		local item = self.itemsTab.items[slot.selItemId]
+		if item and item.rarity == "RARE" then
+			local influenced = item.shaper or item.elder or item.adjudicator or item.basilisk or item.crusader or item.eyrie
+			if influenced then
+				local changed = false
+				for i = #(item.implicitModLines or { }), 1, -1 do
+					local l = item.implicitModLines[i]
+					if l.exarch or l.eater then t_remove(item.implicitModLines, i) changed = true end
+				end
+				if changed then item:BuildAndParseRaw() fixed = fixed + 1 end
+			end
+		end
+	end
+	if fixed > 0 then self:Recalculate() end
+	return fixed
+end
+
 function BuildGeneratorClass:MakeRares(withInfluences)
+	self:SanitizeRares()
 	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
 	local scorer, ratio = self.scorer, self.ratio
 	local investment = self.options.investment
@@ -1692,6 +1716,7 @@ function BuildGeneratorClass:MakeRares(withInfluences)
 		eldritchTier = withInfluences and investment and investment.eldritchTier or 0,
 		weaponSeeds = self.options.weaponSeeds, crafts = self.options.crafts, lazyFill = self.options.lazyFill,
 		maxAffixes = investment and investment.rareAffixes,
+		multiCraft = investment and investment.multiCraft,
 		mappingBlend = self:MappingBlend(),
 		yieldEvery = nil,
 	}
@@ -3008,6 +3033,79 @@ function BuildGeneratorClass:CrossIdeasMove(rounds)
 				return names
 			end)(), ", "), gain)
 	end, { threshold = 1.0, tries = 3 })
+end
+
+-- Damage behind conditions (Classes/ConditionAudit): the conditions the
+-- build's modifiers use that are off, measured; for the biggest ones, the
+-- uniques and passives that grant them are tried (a unique in the slot where
+-- it scores best, a passive with its path), and the best kept when the build
+-- is better. Repeated while it finds something.
+function BuildGeneratorClass:ConditionEnablerMove(rounds)
+	local audit = new("ConditionAudit"):ConditionAudit(self)
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local filter = { obtainableOnly = true, levelOnly = true, investment = self.options.investment }
+	local slots = finder:GetActiveSlots()
+	local total = 0
+	local tried = { }
+	for _ = 1, rounds or 2 do
+		local gains = audit:Gains(0.05)
+		self.conditionGains = gains
+		if #gains == 0 then break end
+		self:Recalculate()
+		local current = self:Score()
+		local best
+		for i = 1, math.min(5, #gains) do
+			local g = gains[i]
+			if not tried[g.var] then
+				tried[g.var] = true
+				for _, item in ipairs(audit:UniqueSources(g.condition, g.enemy)) do
+					if finder:IsItemAllowed(item, filter) then
+						for _, slotName in ipairs(slots) do
+							if not (self.lockedSlots and self.lockedSlots[slotName]) and self.itemsTab:IsItemValidForSlot(item, slotName) then
+								local score = self:Score({ repSlotName = slotName, repItem = item }) - self:PriceCost(item)
+								if score > current + 0.02 and (not best or score > best.score) then
+									best = { item = item, slot = slotName, score = score, g = g }
+								end
+							end
+						end
+					end
+				end
+				for _, node in ipairs(audit:PassiveSources(g.condition, g.enemy, 8)) do
+					local add = { }
+					for _, n in ipairs(node.path) do add[n] = true end
+					local score = self:Score({ addNodes = add }) - #node.path * 0.006
+					if score > current + 0.02 and (not best or score > best.score) then
+						best = { node = node, score = score, g = g }
+					end
+				end
+				self:Tick()
+			end
+		end
+		if not best then break end
+		local before = self:FullScore()
+		local snap = self:Snapshot()
+		if best.item then
+			finder:Equip(best.item, best.slot, true)
+			self.itemsTab:PopulateSlots()
+			self:FitSockets()
+		else
+			self.build.spec:AllocNode(best.node)
+			self:Recalculate()
+			self:TrimTree()
+		end
+		self:Recalculate()
+		local after = self:FullScore()
+		if after > before + 0.005 then
+			total = total + after - before
+			self.lockedSlots = self.lockedSlots or { }
+			if best.slot then self.lockedSlots[best.slot] = true end
+			self:Note(string.format("Condition found worth scaling: \"%s\" (switched on it gains %+.2f); kept up by %s, score %+.3f",
+				best.g.label, best.g.gain, best.item and string.format("%s in %s", best.item.title or best.item.name, best.slot) or ("the passive " .. best.node.dn), after - before))
+		else
+			self:Restore(snap)
+		end
+	end
+	return total
 end
 
 -- Two-piece unique combos (Classes/UniqueComboFinder): pairs that gain more
@@ -4582,6 +4680,11 @@ function BuildGeneratorClass:Run()
 		self:Move(3, 3, "Trying unique combos")
 		local ok, err = pcall(function() self:UniqueCombosMove(1) end)
 		if not ok then ConPrintf("Unique combos failed: %s", tostring(err)) end
+	end
+	if opts.conditionAudit ~= false then
+		self:Move(3, 3, "Damage behind conditions: what keeps them up")
+		local ok, err = pcall(function() self:ConditionEnablerMove(2) end)
+		if not ok then ConPrintf("Condition audit failed: %s", tostring(err)) end
 	end
 	if opts.crossIdeas ~= false then
 		self:Move(3, 3, "Trying the ideas of the other archetypes")

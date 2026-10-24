@@ -153,6 +153,17 @@ elseif step == "fillsockets" then
 	print("BEFORE-FILL", gen:FullScore())
 	print("DONE", gen:FillEmptySockets())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
+elseif step == "conditions" then
+	local audit = new("ConditionAudit"):ConditionAudit(gen)
+	for _, g in ipairs(audit:Gains(0.01)) do
+		local u = audit:UniqueSources(g.condition, g.enemy)
+		local names = { }
+		for i = 1, math.min(6, #u) do names[i] = u[i].title end
+		local p = audit:PassiveSources(g.condition, g.enemy, 8)
+		print(string.format("GAIN %+.3f %-45s uniques %d (%s) passives %d", g.gain, g.label, #u, table.concat(names, ", "), #p))
+	end
+	print("KEPT", gen:ConditionEnablerMove(2))
+	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
 elseif step == "prune" then
 	print("REMOVED", gen:PruneUselessGems())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end

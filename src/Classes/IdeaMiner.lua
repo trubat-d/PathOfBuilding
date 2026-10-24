@@ -109,5 +109,105 @@ function IdeaMinerClass.Ideas(info, opts)
 			end
 		end
 	end
+	-- the stats found in the data itself (IdeaMiner.DataDrivers): every stat
+	-- some uniques turn into damage, and the uniques that turn another stat
+	-- into it (two steps: stack A, A becomes B, B becomes damage)
+	if opts.dataDrivers ~= false then
+		for _, d in ipairs(IdeaMinerClass.DataDrivers()) do
+			if #d.payoffs >= (opts.minUniques or 2) and (not d.attackOnly or info.attack) then
+				local titles = { }
+				for _, t in ipairs(d.payoffs) do t_insert(titles, t) end
+				for _, t in ipairs(d.converters) do t_insert(titles, t) end
+				local shown = { }
+				for i = 1, math.min(4, #d.payoffs) do shown[i] = d.payoffs[i] end
+				t_insert(list, {
+					id = "MINED_DATA_" .. d.key:gsub("[^%w]", ""),
+					label = string.format("%s stacking (found in the data: %s%s%s)", d.label, table.concat(shown, ", "), #d.payoffs > 4 and "..." or "",
+						#d.converters > 0 and ("; turned into it by " .. table.concat(d.converters, ", ")) or ""),
+					summary = string.format("Uniques scale damage with %s: stack it (and the uniques that turn other stats into it).", d.label:lower()),
+					uniques = titles,
+					lens = d.lens,
+					mined = true,
+					maxUniques = 4,
+					setTolerance = 0.15,
+					applies = function() return true end,
+				})
+			end
+		end
+	end
 	return list
+end
+
+-- Stats the hand-written ideas (and the drivers above) already cover
+local coveredStats = {
+	Str = true, Dex = true, Int = true, Mana = true, Life = true, Evasion = true, Armour = true, EnergyShield = true, BlockChance = true,
+	["Multiplier:PowerCharge"] = true, ["Multiplier:FrenzyCharge"] = true, ["Multiplier:EnduranceCharge"] = true,
+	["Multiplier:Rage"] = true, ["Multiplier:RageEffect"] = true, FortificationStacks = true,
+}
+-- Stats that can't be stacked by the build (sockets of one item, level...)
+local function uncontrollable(key)
+	return key:find("{SlotName}", 1, true) or key == "Multiplier:Level" or key:match("Recently") or key:match("Enemy") or key == "?"
+end
+-- Output values a lens can follow, per stat key
+local lensStats = {
+	Accuracy = { stat = "Accuracy", base = 2000 }, LowestAttribute = { stat = "LowestAttribute", base = 100 },
+	ActiveZombieLimit = { stat = "ActiveZombieLimit", base = 1 }, ManaReserved = { stat = "ManaReserved", base = 500 },
+	LifeReserved = { stat = "LifeReserved", base = 500 },
+}
+-- Modifier names that are damage
+local function isDamage(name)
+	return name:match("Damage$") or name:match("Min$") or name:match("Max$") or name:match("^Crit") or name == "Speed"
+		or name:match("GainAs") or name:match("Penetration") or name:match("DotMultiplier") or name:match("Degen$")
+end
+
+local dataDrivers
+-- { { key, label, payoffs = { titles }, converters = { titles }, lens } }
+function IdeaMinerClass.DataDrivers()
+	if dataDrivers then return dataDrivers end
+	dataDrivers = { }
+	local payoffs, converters = { }, { }
+	local function add(map, key, title)
+		map[key] = map[key] or { }
+		map[key][title] = true
+	end
+	for _, item in pairs(main.uniqueDB.list) do
+		local title = item.title or item.name
+		if item.type ~= "Flask" and item.type ~= "Tincture" then
+			for _, modLine in ipairs(item.explicitModLines or { }) do
+				local current = not modLine.variantList or (item.variant and modLine.variantList[item.variant])
+				for _, mod in ipairs(current and modLine.modList or { }) do
+					for _, tag in ipairs(mod) do
+						if type(tag) == "table" and (tag.type == "PerStat" or tag.type == "Multiplier") then
+							local key = tag.type == "PerStat" and (tag.stat or "?") or ("Multiplier:" .. (tag.var or "?"))
+							if not uncontrollable(key) then
+								if isDamage(mod.name) then add(payoffs, key, title)
+								-- (a stat turned into another stat: "+1 to X per Y")
+								elseif mod.type == "BASE" or mod.type == "INC" then add(converters, mod.name, title .. "|" .. key) end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	for key, titles in pairs(payoffs) do
+		if not coveredStats[key] then
+			local list = { }
+			for t in pairs(titles) do t_insert(list, t) end
+			t_sort(list)
+			-- uniques turning a stat into this one
+			local conv = { }
+			for entry in pairs(converters[key] or { }) do
+				local t = entry:match("^(.-)|")
+				if t and not titles[t] then conv[t] = true end
+			end
+			local convList = { }
+			for t in pairs(conv) do t_insert(convList, t) end
+			t_sort(convList)
+			local label = key:gsub("^Multiplier:", ""):gsub("(%l)(%u)", "%1 %2")
+			t_insert(dataDrivers, { key = key, label = label, payoffs = list, converters = convList, lens = lensStats[key] and { stat = lensStats[key].stat, base = lensStats[key].base, label = label } or nil })
+		end
+	end
+	t_sort(dataDrivers, function(a, b) return #a.payoffs > #b.payoffs or (#a.payoffs == #b.payoffs and a.key < b.key) end)
+	return dataDrivers
 end

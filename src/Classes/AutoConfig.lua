@@ -153,6 +153,7 @@ function AutoConfigClass:AutoConfig(build, scenario)
 	self.build = build
 	self.scenario = scenario or self.scenarioList[1]
 	self.optionByVar = { }
+	self.optionList = configOptions
 	for _, option in ipairs(configOptions) do
 		if option.var then self.optionByVar[option.var] = option end
 	end

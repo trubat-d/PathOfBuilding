@@ -82,6 +82,14 @@ function RareItemGeneratorClass:MakeBlankRare(current, influences)
 	item.implicitModLines = { }
 	if current.rarity ~= "UNIQUE" and current.rarity ~= "RELIC" then
 		item.implicitModLines = copyTable(current.implicitModLines or { })
+		-- (an influenced item can't have Eldritch implicits: a rare that had
+		-- them, made again with an influence, loses them)
+		if influences and influences[1] then
+			for i = #item.implicitModLines, 1, -1 do
+				local l = item.implicitModLines[i]
+				if l.exarch or l.eater then table.remove(item.implicitModLines, i) end
+			end
+		end
 	elseif current.base.implicit then
 		local index = 1
 		for line in current.base.implicit:gmatch("[^\n]+") do
@@ -361,6 +369,10 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 		local chosen = { }
 		local usedGroups = { }
 		local counts = { Prefix = 0, Suffix = 0, crafted = 0 }
+		-- (opts.multiCraft: "Can have up to 3 Crafted Modifiers", itself a
+		-- crafted suffix, lets a second and third bench craft in)
+		local maxCrafts = opts.multiCraft and 3 or 1
+		local metaTaken = false
 		local limits = { Prefix = prefixLimit, Suffix = suffixLimit }
 		local currentPower = blankPower
 		local currentDeficit = blankDeficit
@@ -389,8 +401,11 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			local best, bestPower, bestDeficit
 			local order = { }
 			for _, candidate in ipairs(shortlist) do
-				if not usedGroups[candidate.group] and counts[candidate.type] < limits[candidate.type] and not (candidate.crafted and counts.crafted > 0)
-					and not (opts.maxAffixes and not candidate.crafted and natural >= opts.maxAffixes) then
+				local needMeta = candidate.crafted and counts.crafted >= 1 and not metaTaken
+				local metaRoom = not needMeta or (counts.Suffix + (candidate.type == "Suffix" and 1 or 0) + 1 <= limits.Suffix
+					and counts.Prefix + counts.Suffix + 2 <= total)
+				if not usedGroups[candidate.group] and counts[candidate.type] < limits[candidate.type] and not (candidate.crafted and counts.crafted >= maxCrafts)
+					and metaRoom and not (opts.maxAffixes and not candidate.crafted and natural >= opts.maxAffixes) then
 					t_insert(order, candidate)
 				end
 			end
@@ -423,6 +438,15 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			-- Stop when nothing helps any more
 			if not best or (bestPower <= currentPower and bestDeficit >= currentDeficit) then
 				break
+			end
+			if best.crafted and counts.crafted >= 1 and not metaTaken then
+				-- the multi-craft meta mod first (a crafted suffix of its own)
+				local meta = { modId = "craftMeta", crafted = true, meta = true, type = "Suffix", group = "ItemGenerationCanHaveMultipleCraftedMods",
+					lines = { "Can have up to 3 Crafted Modifiers" }, mod = { modTags = { } }, label = "Can have up to 3 Crafted Modifiers (crafted)" }
+				push(meta)
+				t_insert(chosen, meta)
+				counts.Suffix = counts.Suffix + 1
+				metaTaken = true
 			end
 			push(best)
 			t_insert(chosen, best)
@@ -618,6 +642,52 @@ RareItemGeneratorClass.influenceList = {
 	{ key = "crusader", label = "Crusader" }, { key = "eyrie", label = "Redeemer" },
 	{ key = "basilisk", label = "Hunter" }, { key = "adjudicator", label = "Warlord" },
 }
+
+-- Problems that make a rare impossible to craft: { "text" } (empty when legal)
+--   more prefixes / suffixes than the base allows, more than one bench craft,
+--   Eldritch implicits on an influenced item
+function RareItemGeneratorClass.Validate(item)
+	local problems = { }
+	if not item or item.rarity ~= "RARE" then return problems end
+	local prefixes, suffixes, crafts = 0, 0, 0
+	for _, list in ipairs({ item.prefixes or { }, item.suffixes or { } }) do
+		for _, affix in ipairs(list) do
+			local mod = affix.modId and item.affixes and item.affixes[affix.modId]
+			if mod then
+				if mod.type == "Prefix" then prefixes = prefixes + 1 elseif mod.type == "Suffix" then suffixes = suffixes + 1 end
+			end
+		end
+	end
+	-- (crafted lines: one bench craft, several lines at most; counted by kind)
+	local craftKinds = { }
+	for _, l in ipairs(item.explicitModLines or { }) do
+		if l.crafted then
+			local key = (l.prefix and "P" or "S") .. table.concat(l.modTags or { }, ",")
+			if not craftKinds[key] then
+				craftKinds[key] = true
+				crafts = crafts + 1
+				if l.prefix then prefixes = prefixes + 1 else suffixes = suffixes + 1 end
+			end
+		end
+	end
+	local limitP = item.prefixes and item.prefixes.limit or 3
+	local limitS = item.suffixes and item.suffixes.limit or 3
+	if prefixes > limitP then t_insert(problems, string.format("%d prefixes (max %d)", prefixes, limitP)) end
+	if suffixes > limitS then t_insert(problems, string.format("%d suffixes (max %d)", suffixes, limitS)) end
+	local multi = false
+	for _, l in ipairs(item.explicitModLines or { }) do
+		if l.crafted and (l.line or ""):match("^Can have up to 3 Crafted Modifiers") then multi = true end
+	end
+	if crafts > (multi and 4 or 1) then t_insert(problems, string.format("%d bench crafts (max %s)", crafts, multi and "3 with the multi-mod craft" or "1 without the multi-mod craft")) end
+	local influenced = false
+	for _, key in ipairs({ "shaper", "elder", "adjudicator", "basilisk", "crusader", "eyrie" }) do if item[key] then influenced = true end end
+	if influenced then
+		for _, l in ipairs(item.implicitModLines or { }) do
+			if l.exarch or l.eater then t_insert(problems, "Eldritch implicit on an influenced item") break end
+		end
+	end
+	return problems
+end
 
 function RareItemGeneratorClass.InfluenceLabel(influences)
 	local names = { }

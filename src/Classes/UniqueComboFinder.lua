@@ -91,9 +91,53 @@ local function lowerLines(item)
 	return list
 end
 
+-- States found in the game data: a condition some unique grants outright (a
+-- "Condition:X" flag with no condition of its own) and other uniques pay off
+-- ("... while X", a modifier needing Condition X). The pair is measured as
+-- it is (PoB counts the granted condition), so no configuration switch.
+local dataStates
+function UniqueComboFinderClass.DataStates()
+	if dataStates then return dataStates end
+	dataStates = { }
+	local known = { }
+	for _, state in ipairs(UniqueComboFinderClass.states) do known[(state.var or ""):gsub("^buff", ""):gsub("^condition", "")] = true end
+	local enablers, payoffs = { }, { }
+	for _, item in pairs(main.uniqueDB.list) do
+		local title = item.title or item.name
+		for _, modLine in ipairs(item.explicitModLines or { }) do
+			local current = not modLine.variantList or (item.variant and modLine.variantList[item.variant])
+			for _, mod in ipairs(current and modLine.modList or { }) do
+				local cond = mod.type == "FLAG" and mod.name:match("^Condition:(%a+)$")
+				if cond and #mod == 0 then
+					enablers[cond] = enablers[cond] or { }
+					enablers[cond][title] = true
+				end
+				for _, tag in ipairs(mod) do
+					if type(tag) == "table" and tag.type == "Condition" and tag.var and not tag.neg then
+						payoffs[tag.var] = payoffs[tag.var] or { }
+						payoffs[tag.var][title] = true
+					end
+				end
+			end
+		end
+	end
+	for cond, titles in pairs(enablers) do
+		if payoffs[cond] and not known[cond] then
+			t_insert(dataStates, { label = cond, enableTitles = titles, payTitles = payoffs[cond], data = true })
+		end
+	end
+	t_sort(dataStates, function(a, b) return a.label < b.label end)
+	return dataStates
+end
+
 -- Which states an item enables / pays off: { [state] = true }, { [state] = true }
 local function itemStates(item)
 	local enables, pays = { }, { }
+	local title = item.title or item.name
+	for _, state in ipairs(UniqueComboFinderClass.DataStates()) do
+		if state.enableTitles[title] then enables[state] = true end
+		if state.payTitles[title] then pays[state] = true end
+	end
 	for _, line in ipairs(lowerLines(item)) do
 		for _, state in ipairs(UniqueComboFinderClass.states) do
 			for _, pattern in ipairs(state.enable) do
@@ -176,10 +220,10 @@ function UniqueComboFinderClass:Find(opts)
 	-- 2. pairs in different slots (two rings count as different slots)
 	local pairsList = { }
 	local function stateVars(a, b)
-		local vars = { }
-		for state in pairs(a.enables) do if b.pays[state] or a.pays[state] then vars[state.var] = true end end
-		for state in pairs(b.enables) do if a.pays[state] or b.pays[state] then vars[state.var] = true end end
-		return vars
+		local vars, dataLinked = { }, false
+		for state in pairs(a.enables) do if b.pays[state] or a.pays[state] then if state.var then vars[state.var] = true else dataLinked = true end end end
+		for state in pairs(b.enables) do if a.pays[state] or b.pays[state] then if state.var then vars[state.var] = true else dataLinked = true end end end
+		return vars, dataLinked
 	end
 	local input = self.build.configTab.input
 	local function scoreWith(vars, override)
@@ -203,8 +247,8 @@ function UniqueComboFinderClass:Find(opts)
 		for j = i + 1, #pool do
 			local a, b = pool[i], pool[j]
 			if a.slot ~= b.slot and a.item ~= b.item and (a.item.title or a.item.name) ~= (b.item.title or b.item.name) then
-				local vars = stateVars(a, b)
-				local linked = next(vars) ~= nil
+				local vars, dataLinked = stateVars(a, b)
+				local linked = next(vars) ~= nil or dataLinked
 				local priority = (linked and 1 or 0) + a.gain + b.gain
 				t_insert(candidatesPairs, { a = a, b = b, vars = vars, linked = linked, priority = priority })
 			end
