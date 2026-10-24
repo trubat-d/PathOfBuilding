@@ -100,6 +100,12 @@ local function playstylePossible(info, playstyle)
 	return false
 end
 
+-- Can the skill be triggered by a trigger setup (a spell that isn't
+-- channelled, reserving, a totem / trap / mine or a brand)?
+local function triggerable(info)
+	return info.spell and new("TriggerSetups"):TriggerSetups().Triggerable(info.gem)
+end
+
 BuildArchetypesClass.list = {
 	{
 		id = "STANDARD", label = "Standard: life, self-cast / self-attack",
@@ -224,6 +230,27 @@ BuildArchetypesClass.list = {
 		id = "TOTEMS", label = "Totems / ballistas", playstyle = "totem",
 		summary = "Totems (or ballistas for bows) use the skill: safer, totem passives.",
 		applies = function(info) return not info.minion and playstylePossible(info, "totem") end,
+	},
+	-- trigger setups (Classes/TriggerSetups): the spell triggered, not cast by hand
+	{
+		id = "CWC", label = "Cast while Channelling (spell triggered by a channelling skill)", trigger = "CWC",
+		summary = "A channelling skill (Cyclone, Flameblast...) linked with Cast while Channelling triggers the spell several times a second.",
+		applies = function(info) return not info.minion and triggerable(info) end,
+	},
+	{
+		id = "COC", label = "Cast On Critical Strike (spell triggered by an attack's crits)", trigger = "COC",
+		summary = "An attack (Cyclone, Ice Shot, Lacerate...) linked with Cast On Critical Strike triggers the spell when it crits: crit chance and attack speed.",
+		applies = function(info) return not info.minion and triggerable(info) end,
+	},
+	{
+		id = "ARCANIST", label = "Arcanist Brand (spell triggered by a brand)", trigger = "ARCANIST",
+		summary = "The spell linked to Arcanist Brand, triggered each time the brand activates on the enemy.",
+		applies = function(info) return not info.minion and triggerable(info) end,
+	},
+	{
+		id = "SPELLSLINGER", label = "Spellslinger (spell triggered by wand attacks)", trigger = "SPELLSLINGER",
+		summary = "The spell linked to Spellslinger (mana reserved), triggered by the wand attacks fired from another link.",
+		applies = function(info) return not info.minion and triggerable(info) end,
 	},
 }
 
