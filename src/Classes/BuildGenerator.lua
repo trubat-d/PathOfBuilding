@@ -3401,10 +3401,14 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 	local candidates = { }
 	for _, item in pairs(main.uniqueDB.list) do
 		if item.type ~= "Jewel" and item.type ~= "Flask" and item.type ~= "Tincture" and finder:IsItemAllowed(item, filter) then
-			t_insert(candidates, item)
+			-- (each current version of it: Ralakesh's endurance, frenzy or power boots...)
+			for _, version in ipairs(finder.CurrentVariants(item)) do t_insert(candidates, version) end
 		end
 	end
-	t_sort(candidates, function(a, b) return (a.title or a.name) < (b.title or b.name) end)
+	t_sort(candidates, function(a, b)
+		if (a.title or a.name) ~= (b.title or b.name) then return (a.title or a.name) < (b.title or b.name) end
+		return (a.variant or 0) < (b.variant or 0)
+	end)
 	self:Recalculate()
 	local current = self:Score()
 	local fullCurrent = self.scorer:Evaluate(self.calcFunc, { }).score

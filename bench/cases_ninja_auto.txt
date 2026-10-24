@@ -1,0 +1,5 @@
+# compared with the top poe.ninja players of the league (fair scoring: bench/eval_build.lua), the way the app works: every archetype scanned, the best three built fully
+Cyclone of Tumult | Slayer | ENDGAME | auto
+Winter Orb | Occultist | ENDGAME | auto
+Ethereal Knives | Elementalist | ENDGAME | auto
+Flicker Strike | Berserker | ENDGAME | auto

@@ -73,6 +73,28 @@ function BestItemFinderClass:GetActiveSlots()
 	return list
 end
 
+-- The current versions of a unique with several (Ralakesh's Impatience:
+-- endurance, frenzy or power; a jewel's different modifiers...): one copy per
+-- variant, legacy ones ("Pre 3.19.0") left out. Uniques with very many
+-- variants (Pearl of Tsoatha's hundreds of supports) keep their default one.
+function BestItemFinderClass.CurrentVariants(item, maxVariants)
+	local list = { }
+	if not item.variantList or #item.variantList < 2 or item.hasAltVariant then return { item } end
+	local current = { }
+	for index, name in ipairs(item.variantList) do
+		if not name:match("^Pre ") and not name:match("%(Pre ") and not name:match("Legacy") then t_insert(current, index) end
+	end
+	if #current < 2 or #current > (maxVariants or 8) then return { item } end
+	for _, index in ipairs(current) do
+		local copy = new("Item"):Item(item:BuildRaw())
+		copy.variant = index
+		copy:BuildAndParseRaw()
+		copy.variantLabel = item.variantList[index]
+		t_insert(list, copy)
+	end
+	return list
+end
+
 function BestItemFinderClass:IsItemAllowed(item, opts)
 	-- drawbacks PoB doesn't calculate (Modules/GeneratorRules)
 	local rules = GetGeneratorRules()
