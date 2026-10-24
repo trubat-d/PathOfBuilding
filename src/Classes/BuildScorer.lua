@@ -121,7 +121,21 @@ function BuildScorerClass:ClearTerm(output)
 	local projectiles = (output.ProjectileCount or 1) - 1 + 0.5 * m_min(4, output.PierceCount or 0) + 0.7 * m_min(4, output.ChainMax or 0)
 	local projFactor = 1 + 0.25 * m_max(0, projectiles)
 	local explode = output.ClearExplodeValue or 0
-	return 0.6 * m_log(ms) + 0.25 * m_log(areaFactor * projFactor) + m_log(1 + 3 * explode)
+	local term = 0.6 * m_log(ms) + 0.25 * m_log(areaFactor * projFactor) + m_log(1 + 3 * explode)
+	-- Headhunter while clearing: the stolen rare modifiers (a typical set: 20%
+	-- movement speed, 40% damage, 20% speed - the configuration's "Headhunter"
+	-- switch counts them in PoB's numbers; when it's off, as against a boss,
+	-- they still count here for a build made to clear too)
+	if self.clearBuffs and not self.build.configTab.input.conditionHeadhunterBuffs then
+		local items = GeneratorOutputItems and GeneratorOutputItems[output]
+		for _, item in pairs(items or { }) do
+			if item and item.title == "Headhunter" then
+				term = term + 0.6 * m_log(1.2) + 0.3 * m_log(1.4 * 1.2)
+				break
+			end
+		end
+	end
+	return term
 end
 
 -- Survivability and clear bonuses added to the score

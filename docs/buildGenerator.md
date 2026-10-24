@@ -61,6 +61,8 @@ Rares follow the budget: below Endgame investment, a rare has only the good natu
 
 The configuration choice "Clearing + bossing" configures and scores the build on a pinnacle boss (damage, the boss fight, max hits: the build opens with that configuration), while what only matters while mapping still counts: clear speed weighs more, and Eldritch implicits are also measured while mapping (killed recently, normal enemies), that score added at a third.
 
+Headhunter's stolen rare modifiers are counted as a typical set (40% increased damage, 20% attack and cast speed, 20% movement speed) behind a configuration switch ("Headhunter: rare modifiers stolen?"): on while mapping, off against a boss. For a build made to clear ("Mapping", "Clearing + bossing", or the clear speed focus) the belt still counts for clear speed while the boss numbers stay without it.
+
 Enemy debuffs the build keeps up are switched on in the configuration like ailments: intimidate, unnerve, blind, maim, hinder, ash, frost, crush, scorch, brittle, sap (a line that inflicts it on hit, with its chance, at the main skill's hit rate), and exposure from Wave of Conviction or Frost Bomb.
 
 Supports that bring a damage source of their own are kept to the main skills they fit: Decay only for chaos skills that aren't attacks, Summon Phantasm only for minion skills (with white gear at the start, Decay's fixed damage beat a weak wand attack and the whole build then scaled Decay), and Culling Strike never (top players get it from another skill that hits). Channelling skills move with Frostblink or Flame Dash, never with a travel skill that stops the channel. The first curse is one that adds damage; Enfeeble, Temporal Chains and Warlord's Mark only come with more curse slots.

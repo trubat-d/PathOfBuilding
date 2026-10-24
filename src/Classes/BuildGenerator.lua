@@ -1610,6 +1610,7 @@ function BuildGeneratorClass:RunRaresParallel(finder, options)
 		-- (the generator's own settings: the threads must score as it does)
 		lens = sc.lens, avoidanceWeight = sc.avoidanceWeight, pastTarget = sc.pastTarget, fightWeight = sc.fightWeight,
 		smoothBuffs = sc.smoothBuffs, reservationSlope = sc.reservationSlope, focusEhp = sc.focus and sc.focus.ehp,
+		clearBoost = sc.clearBoost, clearBuffs = sc.clearBuffs,
 	}
 	local xml = self.build:SaveDB("code")
 	-- weapons first (their seeded fills take longest), then round robin
@@ -3269,11 +3270,13 @@ function BuildGeneratorClass:MappingBlend()
 		weight = self.options.mappingWeight or 0.35,
 		toggle = function(on)
 			if on then
-				saved = { killed = input.conditionKilledRecently, boss = input.enemyIsBoss }
+				saved = { killed = input.conditionKilledRecently, boss = input.enemyIsBoss, hh = input.conditionHeadhunterBuffs }
 				input.conditionKilledRecently = true
+				input.conditionHeadhunterBuffs = true
 				input.enemyIsBoss = "None"
 			else
 				input.conditionKilledRecently = saved and saved.killed
+				input.conditionHeadhunterBuffs = saved and saved.hh
 				input.enemyIsBoss = saved and saved.boss
 			end
 			self.build.configTab:BuildModList()
@@ -4074,6 +4077,9 @@ function BuildGeneratorClass:Run()
 	self.scorer.useChecklist = false -- on from the flask stage
 	-- (Clearing + bossing: clear speed counts more than the focus says)
 	if opts.configScenario and opts.configScenario.clear then self.scorer.clearBoost = opts.clearBoost or 0.35 end
+	-- (buffs that only exist while clearing - Headhunter's stolen modifiers -
+	-- count for clear speed when the build is made for clearing too)
+	self.scorer.clearBuffs = (opts.configScenario and (opts.configScenario.clear or not opts.configScenario.boss)) or (opts.focus and opts.focus.id == "CLEAR") or nil
 	-- the archetype's stacked stat, valued on its own while the build is made
 	if opts.archetype and opts.archetype.lens and opts.statLens ~= false then
 		self.scorer.lens = opts.archetype.lens

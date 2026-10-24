@@ -1278,6 +1278,9 @@ Huge sets the radius to 11.
 	{ var = "conditionHitRecentlyWithWeapon", type = "check", label = "Have you Hit Recently with Your Weapon?", ifCond = "HitRecentlyWithWeapon", tooltip = "This also implies that you have Hit Recently.", apply = function(val, modList, enemyModList)
 		modList:NewMod("Condition:HitRecentlyWithWeapon", "FLAG", true, "Config", { type = "Condition", var = "Combat" })
 	end },
+	{ var = "conditionHeadhunterBuffs", type = "check", label = "Headhunter: rare modifiers stolen?", ifCond = "HeadhunterBuffs", tooltip = "While clearing maps, Headhunter gives you the modifiers of the rare monsters you kill.\nCounted as a typical set: 40% increased Damage, 20% increased Attack and Cast Speed, 20% increased Movement Speed.\nNot against bosses.", apply = function(val, modList, enemyModList)
+		modList:NewMod("Condition:HeadhunterBuffs", "FLAG", true, "Config")
+	end },
 	{ var = "conditionKilledRecently", type = "check", label = "Have you Killed Recently?", ifCond = "KilledRecently", apply = function(val, modList, enemyModList)
 		modList:NewMod("Condition:KilledRecently", "FLAG", true, "Config", { type = "Condition", var = "Combat" })
 	end },

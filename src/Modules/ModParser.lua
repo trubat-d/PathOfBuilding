@@ -2224,6 +2224,14 @@ local specialModList = {
 	["dexterity provides no inherent bonus to evasion rating"] = { flag("NoDexBonusToEvasion") },
 	["strength's damage bonus applies to all spell damage as well"] = { flag("IronWill") },
 	["your hits can't be evaded"] = { flag("CannotBeEvaded") },
+	-- Headhunter: rare monsters' modifiers stolen while clearing maps (random in
+	-- the game: a typical set - speed and damage auras of rares - counted only
+	-- when the configuration says buffs are stolen, never against a boss)
+	["when you kill a rare monster, you gain its modifiers for 60 seconds"] = {
+		mod("Damage", "INC", 40, { type = "Condition", var = "HeadhunterBuffs" }),
+		mod("Speed", "INC", 20, { type = "Condition", var = "HeadhunterBuffs" }),
+		mod("MovementSpeed", "INC", 20, { type = "Condition", var = "HeadhunterBuffs" }),
+	},
 	["your melee hits can't be evaded while wielding a sword"] = { flag("CannotBeEvaded", nil, bor(ModFlag.Melee, ModFlag.Hit), { type = "Condition", var = "UsingSword" }) },
 	["minion hits can't be evaded"] = { mod("MinionModifier", "LIST", { mod = flag("CannotBeEvaded") }) },
 	["never deal critical strikes"] = { flag("NeverCrit"), flag("Condition:NeverCrit") },

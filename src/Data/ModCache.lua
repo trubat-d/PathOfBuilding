@@ -8235,7 +8235,6 @@ c["30% increased Damage with Bows"]={{[1]={flags=131076,keywordFlags=0,name="Dam
 c["30% increased Damage with Hits against Magic monsters"]={{[1]={flags=0,keywordFlags=262144,name="Damage",type="INC",value=30}},"   against Magic monsters "}
 c["30% increased Damage with Hits against Magic monsters 20% chance when you Kill a Magic Monster to gain its Modifiers for 60 seconds"]={{[1]={flags=0,keywordFlags=262144,name="Damage",type="INC",value=30}},"   against Magic monsters 20% chance when you Kill a Magic Monster to gain its Modifiers  "}
 c["30% increased Damage with Hits against Rare monsters"]={{[1]={flags=0,keywordFlags=262144,name="Damage",type="INC",value=30}},"   against Rare monsters "}
-c["30% increased Damage with Hits against Rare monsters When you Kill a Rare monster, you gain its Modifiers for 60 seconds"]={{[1]={flags=0,keywordFlags=262144,name="Damage",type="INC",value=30}},"   against Rare monsters When you Kill a Rare monster, you gain its Modifiers  "}
 c["30% increased Damage with Ignites inflicted on Cursed Enemies"]={{[1]={[1]={actor="enemy",type="ActorCondition",var="Cursed"},flags=0,keywordFlags=8388608,name="Damage",type="INC",value=30}},nil}
 c["30% increased Damage with Maces, Sceptres or Staves"]={{[1]={[1]={modFlags=3145728,type="ModFlagOr"},flags=4,keywordFlags=0,name="Damage",type="INC",value=30}},nil}
 c["30% increased Damage with Poison"]={{[1]={flags=0,keywordFlags=2097152,name="Damage",type="INC",value=30}},nil}
@@ -22464,7 +22463,6 @@ c["When you Cast a Spell, Sacrifice all Mana to gain Added Maximum Lightning Dam
 c["When you Kill a Rare Monster, 18% chance to gain one of its Modifiers for 10 seconds"]={nil,"When you Kill a Rare Monster, 18% chance to gain one of its Modifiers for 10 seconds "}
 c["When you Kill a Rare Monster, 26% chance to gain one of its Modifiers for 10 seconds"]={nil,"When you Kill a Rare Monster, 26% chance to gain one of its Modifiers for 10 seconds "}
 c["When you Kill a Rare Monster, 36% chance to gain one of its Modifiers for 10 seconds"]={nil,"When you Kill a Rare Monster, 36% chance to gain one of its Modifiers for 10 seconds "}
-c["When you Kill a Rare monster, you gain its Modifiers for 60 seconds"]={nil,"When you Kill a Rare monster, you gain its Modifiers for 60 seconds "}
 c["When you Kill a Shocked Enemy, inflict an equivalent Shock on each nearby Enemy"]={nil,"When you Kill a Shocked Enemy, inflict an equivalent Shock on each nearby Enemy "}
 c["When you Kill a Shocked Enemy, inflict an equivalent Shock on each nearby Enemy When you Kill an Ignited Enemy, inflict an equivalent Ignite on each nearby Enemy"]={nil,"When you Kill a Shocked Enemy, inflict an equivalent Shock on each nearby Enemy When you Kill an Ignited Enemy, inflict an equivalent Ignite on each nearby Enemy "}
 c["When you Kill an Enemy Cursed with a Non-Aura Hex, become Immune to"]={nil,"When you Kill an Enemy Cursed with a Non-Aura Hex, become Immune to "}

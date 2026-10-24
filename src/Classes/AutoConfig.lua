@@ -311,6 +311,7 @@ function AutoConfigClass:Run()
 		local crit = skillValue(output, "CritChance") or 0
 		setIfUsed("conditionCritRecently", crit >= 30, string.format("%.0f%% critical strike chance", crit))
 		setIfUsed("conditionKilledRecently", not boss, boss and "not while fighting a boss" or "clearing maps")
+		setIfUsed("conditionHeadhunterBuffs", not boss, boss and "no rare monsters to steal from on a boss" or "rare monsters' modifiers stolen while clearing maps")
 		local impale = math.max(skillValue(output, "ImpaleChance") or 0, skillValue(output, "ImpaleChanceOnCrit") or 0)
 		setIfUsed("conditionImpaledRecently", impale * speedOf(output) >= 100, string.format("%.0f%% impale chance", impale))
 
