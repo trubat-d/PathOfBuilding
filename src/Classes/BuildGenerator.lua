@@ -598,6 +598,38 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 		end
 	end
 	self:TryTopPlayerSupports(supports, forced, maxSupports)
+	-- swaps: each chosen support against every other one (supports that work
+	-- together, like Impale with Pride's impale mods, can lose one at a time;
+	-- a swap sees the pair). The archetype's and playstyle's supports stay.
+	if self.options.supportSwaps ~= false and self.swapSupports then
+		local keep = { }
+		for _, gemId in ipairs(forced) do keep[gemId] = true end
+		for _ = 1, 2 do
+			self.build.skillsTab:ProcessSocketGroup(group)
+			local base = self:Score()
+			local best, bestScore, bestPos
+			for pos = 2, #group.gemList do
+				local old = group.gemList[pos]
+				-- (charge supports switched their charges on in the configuration: kept)
+				if not keep[old.gemId] and not data.gems[old.gemId].name:find("Charge", 1, true) then
+					for _, gemId in ipairs(supports) do
+						if not inGroup(gemId) then
+							local gem = data.gems[gemId]
+							group.gemList[pos] = { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId }
+							self.build.skillsTab:ProcessSocketGroup(group)
+							local score = self:WithChargesOf(gem, function() return self:Score() end)
+							if score > (bestScore or base) + 1e-9 then best, bestScore, bestPos = gemId, score, pos end
+						end
+					end
+					group.gemList[pos] = old
+				end
+			end
+			if not best or bestScore <= base + 0.002 then break end
+			local gem = data.gems[best]
+			group.gemList[bestPos] = { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = best }
+		end
+		self.build.skillsTab:ProcessSocketGroup(group)
+	end
 	local names = { }
 	for i = 2, #group.gemList do t_insert(names, data.gems[group.gemList[i].gemId].name) end
 	self:Note("Supports: " .. table.concat(names, ", "))
@@ -1242,7 +1274,10 @@ function BuildGeneratorClass:FinalSupports()
 		return table.concat(list, ", ")
 	end
 	local old = names()
+	-- (with swaps: worth their time on the finished build)
+	self.swapSupports = true
 	self:ChooseSupports(5)
+	self.swapSupports = nil
 	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
 	self:AutoConfigure()
 	self:Recalculate()
