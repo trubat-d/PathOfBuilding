@@ -1663,6 +1663,22 @@ function BuildGeneratorClass:RunRaresParallel(finder, options)
 	return report
 end
 
+-- Options for making rares the way MakeRares does
+function BuildGeneratorClass:RareOptions(withInfluences)
+	local scorer, ratio = self.scorer, self.ratio
+	local investment = self.options.investment
+	return {
+		quality = self.options.quality,
+		levelOnly = true,
+		keepResists = false, keepAttributes = false, keepLife = false,
+		scoreFunc = function(output) return scorer:ScoreOutput(output, ratio) end,
+		influences = withInfluences and investment and investment.influences or 0,
+		elevated = withInfluences and investment and investment.elevated or false,
+		eldritchTier = withInfluences and investment and investment.eldritchTier or 0,
+		weaponSeeds = self.options.weaponSeeds, crafts = self.options.crafts, lazyFill = self.options.lazyFill,
+	}
+end
+
 function BuildGeneratorClass:MakeRares(withInfluences)
 	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
 	local scorer, ratio = self.scorer, self.ratio
@@ -1839,6 +1855,217 @@ function BuildGeneratorClass:FlaskEnchantMove()
 		end
 	end
 	if #kept > 0 then self:Note("Flask enchantments (Enkindling Orb): " .. table.concat(kept, "; ")) end
+end
+
+-- Everything a late move can change (tree, gear, gem groups, configuration),
+-- to put it back exactly when the move doesn't help
+function BuildGeneratorClass:Snapshot()
+	local snap = { tree = self.build.spec:CreateUndoState(), items = { }, active = { }, input = { }, groups = self:SaveGroups(),
+		locked = { }, newItems = { } }
+	for name, slot in pairs(self.itemsTab.slots) do snap.items[name] = slot.selItemId; snap.active[name] = slot.active end
+	for k, v in pairs(self.build.configTab.input) do snap.input[k] = v end
+	for k, v in pairs(self.lockedSlots or { }) do snap.locked[k] = v end
+	snap.itemIds = { }
+	for id in pairs(self.itemsTab.items) do snap.itemIds[id] = true end
+	return snap
+end
+function BuildGeneratorClass:Restore(snap)
+	for name, id in pairs(snap.items) do
+		local slot = self.itemsTab.slots[name]
+		if slot and slot.selItemId ~= id then slot:SetSelItemId(id) end
+		if slot then slot.active = snap.active[name] end
+	end
+	-- items added since the snapshot
+	local added = { }
+	for id, item in pairs(self.itemsTab.items) do if not snap.itemIds[id] then t_insert(added, item) end end
+	for _, item in ipairs(added) do self.itemsTab:DeleteItem(item, true) end
+	local log = { }
+	for i, l in ipairs(self.log) do log[i] = l end
+	self:RestoreGroups(snap.groups)
+	for i = #self.log, 1, -1 do self.log[i] = nil end
+	for i, l in ipairs(log) do self.log[i] = l end
+	local input = self.build.configTab.input
+	for k in pairs(input) do input[k] = nil end
+	for k, v in pairs(snap.input) do input[k] = v end
+	self.build.configTab:BuildModList()
+	self.lockedSlots = { }
+	for k, v in pairs(snap.locked) do self.lockedSlots[k] = v end
+	self.build.spec:RestoreUndoState(snap.tree)
+	self.build.spec:BuildClusterJewelGraphs()
+	self.build.spec:BuildAllDependsAndPaths()
+	self.itemsTab:PopulateSlots()
+	self:Recalculate()
+end
+
+-- Deterministic pseudo-random numbers for the search (a run gives the same
+-- build every time; the variant changes the sequence)
+function BuildGeneratorClass:Random(n)
+	self.rngState = self.rngState or (12345 + 7919 * (self.options.variant or 1))
+	self.rngState = (self.rngState * 1103515245 + 12345) % 2147483648
+	return (self.rngState % n) + 1
+end
+
+-- Branches of the allocated tree: each leaf with the nodes leading to it up
+-- to the last node with other branches (pruning a branch frees all its
+-- points at once). Value per point: score lost without it.
+function BuildGeneratorClass:TreeBranches()
+	local spec = self.build.spec
+	local current = self:Score()
+	local function removable(node)
+		local holdsJewel = node.type == "Socket" and (spec.jewels[node.id] or 0) ~= 0
+		return node.alloc and not node.ascendancyName and not holdsJewel and node.type ~= "ClassStart" and node.type ~= "Mastery"
+			and not node.isProxy and not (self.protectedNodes and self.protectedNodes[node.id]) and not node.expansionJewel
+	end
+	local function allocatedNeighbours(node)
+		local list = { }
+		for _, other in ipairs(node.linked or { }) do
+			if other.alloc and not other.ascendancyName then t_insert(list, other) end
+		end
+		return list
+	end
+	local branches = { }
+	for _, node in ipairs(nodesById(spec.allocNodes)) do
+		if removable(node) and #allocatedNeighbours(node) == 1 then
+			-- walk back while the next node only continues this branch
+			local branch, seen = { node }, { [node] = true }
+			local prev, cur = node, allocatedNeighbours(node)[1]
+			while cur and removable(cur) and #allocatedNeighbours(cur) == 2 and #branch < 12 do
+				t_insert(branch, cur)
+				seen[cur] = true
+				local nextNode
+				for _, n in ipairs(allocatedNeighbours(cur)) do if not seen[n] then nextNode = n end end
+				prev, cur = cur, nextNode
+			end
+			local remove = { }
+			for _, n in ipairs(branch) do remove[n] = true end
+			local loss = current - self:Score({ removeNodes = remove })
+			t_insert(branches, { nodes = branch, loss = loss, perPoint = loss / #branch })
+		end
+	end
+	t_sort(branches, function(a, b)
+		if a.perPoint ~= b.perPoint then return a.perPoint < b.perPoint end
+		return a.nodes[1].id < b.nodes[1].id
+	end)
+	return branches
+end
+
+-- Large neighbourhood search on the finished build: part of it is undone
+-- and rebuilt with everything else in place, and the result kept only if the
+-- build is better. Each round takes one kind of rebuild:
+--   * tree: weak branches pruned as a whole (by value per point, with a
+--     random pick among the weakest), then the freed points re-spent where
+--     they gain the most (multi-node swaps one-point greedy can't make);
+--   * gear: one or two rare slots made again for the build as it is;
+--   * links: two supports of the main link taken out and chosen again.
+-- Starting from a good build, each round is cheap; it is how the search gets
+-- out of the path the greedy steps took.
+function BuildGeneratorClass:RepairSearch(rounds)
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local kinds = { "tree", "gear", "tree", "links", "tree", "gear" }
+	local kept, gainTotal = { }, 0
+	for round = 1, rounds or 8 do
+		self:Inner((round - 1) / (rounds or 8))
+		local kind = kinds[(round - 1) % #kinds + 1]
+		-- (configured as the round will be, so the comparison is fair)
+		self:AutoConfigure()
+		local before = self:FullScore()
+		local snap = self:Snapshot()
+		local savedLog = #self.log
+		local label
+		local ok, err = pcall(function()
+			if kind == "tree" then
+				local branches = self:TreeBranches()
+				local weakest = m_min(#branches, 12)
+				if weakest == 0 then return end
+				-- prune some of the weakest branches, 10 to 20 points
+				local pruned, points = { }, 0
+				local target = 10 + self:Random(11) - 1
+				for _ = 1, 12 do
+					local b = branches[self:Random(weakest)]
+					if b and not pruned[b] then
+						pruned[b] = true
+						for _, node in ipairs(b.nodes) do
+							if node.alloc then self.build.spec:DeallocNode(node); points = points + 1 end
+						end
+					end
+					if points >= target then break end
+				end
+				self.build.spec:BuildAllDependsAndPaths()
+				self:Recalculate()
+				-- (the pruned branches' leaves can't come straight back this round:
+				-- the points go somewhere else, which is the point of the move)
+				local savedForbidden = self.forbiddenNodes
+				self.forbiddenNodes = { }
+				for k, v in pairs(savedForbidden or { }) do self.forbiddenNodes[k] = v end
+				for b in pairs(pruned) do self.forbiddenNodes[b.nodes[1].id] = true end
+				if self.options.debugTiming then ConPrintf("[repair] pruned %d points: %.3f", points, (self:FullScore())) end
+				self:AllocateTree(true)
+				self.forbiddenNodes = savedForbidden
+				if self.options.debugTiming then ConPrintf("[repair] regrown: %.3f (%d allocated, budget %d)", (self:FullScore()), self.build.spec:CountAllocNodes(), self:PointBudget()) end
+				self:RefineTree(6)
+				label = string.format("%d passive points re-spent", points)
+			elseif kind == "gear" then
+				local rares = { }
+				for _, slotName in ipairs(finder:GetActiveSlots()) do
+					local slot = self.itemsTab.slots[slotName]
+					local item = slot and self.itemsTab.items[slot.selItemId]
+					if item and item.rarity == "RARE" and not (self.lockedSlots and self.lockedSlots[slotName]) and not slotName:match("^Weapon") then
+						t_insert(rares, slotName)
+					end
+				end
+				if #rares == 0 then return end
+				local chosen = { rares[self:Random(#rares)] }
+				local second = rares[self:Random(#rares)]
+				if second ~= chosen[1] then t_insert(chosen, second) end
+				for _, slotName in ipairs(chosen) do
+					local item = self.itemsTab.items[self.itemsTab.slots[slotName].selItemId]
+					local influenced = false
+					for _, info in ipairs(finder.rareGenerator.influenceList) do if item[info.key] then influenced = true end end
+					self:Equip(makeBase(item.baseName), slotName)
+					self.itemsTab:PopulateSlots()
+					self:Recalculate()
+					local opts = self:RareOptions(influenced)
+					opts.slots = { slotName }
+					finder:EquipAll(finder:RunRares(opts))
+				end
+				self:Recalculate()
+				self:RefineTree(6)
+				label = "rares made again: " .. table.concat(chosen, ", ")
+			else
+				local group = self.mainGroup
+				if not group or #group.gemList < 3 then return end
+				for _ = 1, 2 do
+					local supports = { }
+					for i, g in ipairs(group.gemList) do
+						if i > 1 and g.gemId and data.gems[g.gemId].grantedEffect.support then t_insert(supports, i) end
+					end
+					if #supports == 0 then break end
+					t_remove(group.gemList, supports[self:Random(#supports)])
+				end
+				self.build.skillsTab:ProcessSocketGroup(group)
+				self:ChooseSupports(5)
+				self:RefineTree(6)
+				label = "main link supports chosen again"
+			end
+		end)
+		if not ok then ConPrintf("Repair round failed: %s", tostring(err)) end
+		self:AutoConfigure()
+		local after = ok and label and self:FullScore() or before
+		for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+		if self.options.debugTiming then ConPrintf("[repair] round %d (%s): %s: %.3f -> %.3f", round, kind, tostring(label), before, after) end
+		if ok and label and after > before + 0.002 then
+			t_insert(kept, label)
+			gainTotal = gainTotal + after - before
+		else
+			self:Restore(snap)
+			self:AutoConfigure()
+		end
+		self:Tick()
+	end
+	if #kept > 0 then
+		self:Note(string.format("Rebuild-and-repair search: %d of %d rounds improved the build (%s), score %+.3f", #kept, rounds or 8, table.concat(kept, "; "), gainTotal))
+	end
+	return gainTotal
 end
 
 -- Hard requirements solved directly: when the finished build is below the
@@ -3644,10 +3871,16 @@ function BuildGeneratorClass:Run()
 	-- the archetype's stacked stat, valued on its own while the build is made
 	if opts.archetype and opts.archetype.lens and opts.statLens ~= false then
 		self.scorer.lens = opts.archetype.lens
+		if opts.lensWeight then
+			self.scorer.lens = copyTable(opts.archetype.lens, true)
+			self.scorer.lens.weight = opts.lensWeight
+		end
 		self:Note(string.format("Commitment: %s is valued on its own while the build is made (gear, passives, jewels follow it)", opts.archetype.lens.label or opts.archetype.lens.stat))
 	end
 	-- (A/B options: weight of avoidance in tankiness, weight of tankiness)
 	self.scorer.avoidanceWeight = opts.avoidanceWeight
+	self.scorer.pastTarget = opts.pastTarget
+	self.scorer.fightWeight = opts.fightWeight
 	if opts.ehpWeight and self.scorer.focus then
 		self.scorer.focus = copyTable(self.scorer.focus, true)
 		self.scorer.focus.ehp = opts.ehpWeight
@@ -3780,6 +4013,18 @@ function BuildGeneratorClass:Run()
 	if opts.finalRares ~= false then
 		self:Move(5, 6, "Making the rares again for the finished build")
 		self:FinalRares()
+		-- gear and tree made for each other: passives again for the new rares,
+		-- rares again for the new passives, until neither gains
+		local alternated = 0
+		for _ = 1, opts.alternateRounds or 2 do
+			local tree = self:RefineTree(10)
+			if tree < 0.01 then break end
+			alternated = alternated + tree
+			local rares = self:FinalRares()
+			alternated = alternated + (rares or 0)
+			if (rares or 0) < 0.01 then break end
+		end
+		if alternated > 0.005 then self:Note(string.format("Passives and rares adjusted to each other in turns: score %+.3f", alternated)) end
 	end
 
 	stage(11, "Looking for unique items, synergies and the top players' gear")
@@ -3831,6 +4076,11 @@ function BuildGeneratorClass:Run()
 		end
 	end
 
+	-- the finished build partly rebuilt, again and again (large neighbourhood search)
+	if (opts.repairRounds or 8) > 0 then
+		self:Move(6, 6, "Rebuilding parts of the build to improve it")
+		self:RepairSearch(opts.repairRounds or 8)
+	end
 	-- hard requirements (resistances, attributes) fixed with bench crafts
 	if opts.requirements ~= false then self:RequirementsMove() end
 	self:RemoveUnusedItems()

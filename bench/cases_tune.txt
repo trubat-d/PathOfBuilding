@@ -1,0 +1,11 @@
+# tuning set: quick builds over skills, archetypes (stat stacking, mined ideas) and two budgets
+Ball Lightning | Hierophant | ENDGAME | quick | INT
+Righteous Fire | Chieftain | ENDGAME | quick | LIFE
+Cyclone | Slayer | ENDGAME | quick | IMPALE
+Tornado Shot | Deadeye | ENDGAME | quick | CRIT
+Boneshatter | Juggernaut | MID | quick | STR
+Lightning Arrow | Deadeye | MID | quick | DEX
+Toxic Rain | Pathfinder | ENDGAME | quick | STANDARD
+Cyclone | Slayer | ENDGAME | quick | MINED_BLOCK
+Ball Lightning | Hierophant | MID | quick | MINED_POWER
+Righteous Fire | Chieftain | MID | quick | STANDARD

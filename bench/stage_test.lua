@@ -98,6 +98,21 @@ elseif step == "refine" then
 	-- (one allocation first, as the generator's tree has been allocated before refining)
 	gen:AllocateTree(true)
 	for _, n in ipairs({ 6, 10, 16, 6 }) do print("REFINE", n, gen:RefineTree(n)) end
+elseif step == "repair" then
+	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
+	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
+	print("GAIN", gen:RepairSearch(tonumber(os.getenv("ROUNDS") or "6")))
+elseif step == "snapdebug" then
+	local snap = gen:Snapshot()
+	gen:AutoConfigure()
+	print("AFTERSNAP", (gen:FullScore()), build.spec:CountAllocNodes(), gen:PointBudget(), build.calcsTab.mainOutput.ExtraPoints)
+	gen:AllocateTree(true)
+	print("AFTERALLOC", (gen:FullScore()))
+	gen:Restore(snap)
+	print("AFTERRESTORE", (gen:FullScore()))
+	local branches = gen:TreeBranches()
+	print("BRANCHES", #branches)
+	for i = 1, math.min(5, #branches) do print("BR", #branches[i].nodes, branches[i].perPoint, branches[i].nodes[1].dn) end
 elseif step == "cross" then
 	gen:CrossIdeasMove(1)
 elseif step == "explain" then

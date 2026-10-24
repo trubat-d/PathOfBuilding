@@ -41,6 +41,22 @@ local ailments = {
 	{ ailment = "Poison", var = "conditionEnemyPoisoned", cond = "Poisoned", duration = 2 },
 }
 
+-- Enemy debuffs inflicted by hits (lines found in the build's passives and
+-- items, or gems that inflict them), with how long one lasts
+local enemyDebuffs = {
+	{ var = "conditionEnemyIntimidated", words = { "intimidate" }, gems = { "Intimidating Cry" }, duration = 4 },
+	{ var = "conditionEnemyUnnerved", words = { "unnerve" }, duration = 4 },
+	{ var = "conditionEnemyBlinded", words = { "blind" }, gems = { "Blind" }, duration = 4 },
+	{ var = "conditionEnemyMaimed", words = { "maim" }, gems = { "Maim" }, duration = 4 },
+	{ var = "conditionEnemyHindered", words = { "hinder" }, duration = 4 },
+	{ var = "conditionEnemyCoveredInAsh", words = { "cover enemies in ash" }, duration = 5 },
+	{ var = "conditionEnemyCoveredInFrost", words = { "cover enemies in frost" }, duration = 5 },
+	{ var = "conditionEnemyCrushed", words = { "crush" }, duration = 4 },
+	{ var = "conditionEnemyScorched", words = { "scorch" }, duration = 4 },
+	{ var = "conditionEnemyBrittle", words = { "brittle" }, duration = 4 },
+	{ var = "conditionEnemySapped", words = { "inflict sap", "to sap " }, duration = 4 },
+}
+
 -- Realistic values for "count" options, from what the build does in 4 seconds
 -- ("recently" in Path of Exile means the past 4 seconds).
 -- Each rule: multiplier name -> function(output, ctx) returning value, reason
@@ -352,6 +368,55 @@ function AutoConfigClass:Run()
 					self:Set(option.var, value, reason)
 				end
 			end
+		end
+
+		-- enemy debuffs the build keeps up: a line that inflicts it on hit (with
+		-- its chance) or a gem that does, kept up at the main skill's hit rate
+		-- for the debuff's duration (as ailments above)
+		for _, debuff in ipairs(enemyDebuffs) do
+			local option = self.optionByVar[debuff.var]
+			if option and self:IsUsed(option) then
+				local best = 0
+				for _, line in ipairs(lines) do
+					local found = false
+					for _, word in ipairs(debuff.words) do
+						if line:find(word, 1, true) then found = true break end
+					end
+					if found and (line:find("on hit", 1, true) or line:find("when you hit", 1, true) or line:find("with hits", 1, true)
+						or line:find("on melee hit", 1, true) or line:find("on critical", 1, true))
+						and not line:find("against", 1, true) and not line:find("you are", 1, true) and not line:find("cannot", 1, true)
+						and not line:find("while", 1, true) then
+						local chance = tonumber(line:match("(%d+)%% chance")) or 100
+						if line:find("on critical", 1, true) then chance = chance * math.min(1, crit / 100) end
+						best = math.max(best, chance)
+					end
+				end
+				for _, name in ipairs(gems) do
+					for _, g in ipairs(debuff.gems or { }) do
+						if name == g then best = 100 end
+					end
+				end
+				local p = math.min(1, best / 100)
+				local uptime = p >= 1 and 1 or (1 - (1 - p) ^ (hitRate * debuff.duration))
+				if best > 0 then
+					self:Set(debuff.var, uptime >= threshold, string.format("%.0f%% chance per hit, %.1f hits/s: up %.0f%% of the time", best, hitRate, uptime * 100))
+				end
+			end
+		end
+		-- exposure from a skill the build keeps casting (Wave of Conviction on
+		-- Automation: the element the build deals most of; Frost Bomb: cold)
+		local hasGem = { }
+		for _, name in ipairs(gems) do hasGem[name] = true end
+		if hasGem["Wave of Conviction"] then
+			local bestType, bestHit
+			for _, t in ipairs({ "Fire", "Cold", "Lightning" }) do
+				local hit = skillValue(output, t .. "HitAverage") or 0
+				if hit > 0 and (not bestHit or hit > bestHit) then bestType, bestHit = t, hit end
+			end
+			if bestType then setIfUsed("conditionEnemy" .. bestType .. "Exposure", true, "Wave of Conviction applies " .. bestType:lower() .. " exposure") end
+		end
+		if hasGem["Frost Bomb"] then
+			setIfUsed("conditionEnemyColdExposure", true, "Frost Bomb applies cold exposure")
 		end
 
 		-- leech and life

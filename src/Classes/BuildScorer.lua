@@ -361,6 +361,31 @@ function BuildScorerClass:BossHitRatio(output)
 	return worst, worstName
 end
 
+-- The pressure of a pinnacle boss fight between its big telegraphed hits
+-- (those are dodged, or taken as BossHitRatio says): its regular hits and
+-- ground effects take a tenth of its worst hit each second (as a share of
+-- the life + energy shield pool: 0.1 / BossHitRatio), less what evasion,
+-- block and suppression avoid (DamageTakenShare), against what the build
+-- recovers (RecoveryRatio: leech, regeneration, recoup...). Simulated a
+-- tenth of a second at a time; returns the seconds survived (out of 60) and
+-- the lowest share of the pool.
+local fightLength = 60
+function BuildScorerClass:FightSurvival(output)
+	local ratio = self:BossHitRatio(output)
+	if not ratio or ratio <= 0 then return nil end
+	local drain = 0.1 / ratio * self:DamageTakenShare(output)
+	local recovery = m_max(0, self:RecoveryRatio(output))
+	local pool, lowest = 1, 1
+	local step = 0.1
+	for i = 1, fightLength / step do
+		pool = pool - drain * step
+		if pool <= 0 then return i * step, 0 end
+		lowest = m_min(lowest, pool)
+		pool = m_min(1, pool + recovery * step)
+	end
+	return fightLength, lowest
+end
+
 -- Things every endgame build needs that hit pools don't show: being frozen,
 -- shocked, bled... Each missing one costs score (flask immunities count while
 -- the flask is up). Returns total, { { label, value, ok } }
@@ -451,6 +476,15 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 	if self.lens and output then
 		local value = output[self.lens.stat] or 0
 		score = score + (self.lens.weight or 0.3) * m_log(m_max(1, value) / (self.lens.base or 100))
+	end
+	-- surviving a whole boss fight (FightSurvival): dying early costs, a fight
+	-- survived with room to spare gains a little (a defence layer with a target)
+	if output and self.fightSim ~= false then
+		local seconds, lowest = self:FightSurvival(output)
+		if seconds then
+			local fight = m_log((seconds + 6) / (fightLength + 6)) + 0.15 * m_min(lowest, 0.5)
+			score = score + (self.focus.ehp or 0.5) * (self.fightWeight or 1.5) * fight
+		end
 	end
 	-- (a layer with a target too: taking half the hit damage on average; past
 	-- it, more avoidance counts for a third)

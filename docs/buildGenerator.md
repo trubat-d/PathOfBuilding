@@ -6,6 +6,7 @@ Every decision is made by [`BuildScorer`](../src/Classes/BuildScorer.lua) on PoB
 - **Damage**: the main skill's DPS (combined parts for skills like Kinetic Blast), reduced when the skill can't be paid for in a long fight.
 - **Tankiness**: mostly the maximum hit taken of the weakest damage type, then all damage types, a little EHP, and how many times over the build takes the toughest pinnacle (or uber) boss hit.
 - **Defence targets**: past its target (the max hit: 2.5x the focus's floor; the boss hit: taken twice over; avoidance: half the hit damage avoided) each layer counts for a third, so damage isn't traded for tankiness the build doesn't need.
+- **Boss fight**: the pressure between a pinnacle boss's big hits (its regular hits and ground effects, a tenth of its worst hit a second, less what is avoided) against what the build recovers, simulated over a minute: dying before the end costs score. Our Righteous Fire build held 40 seconds; the top players' builds the whole fight.
 - **Avoidance**: the share of incoming hit damage the build takes on average (melee, projectile, spell and spell projectile hits) after evasion, dodge, block and spell suppression, with its own weight in every focus. Top players build max block or 100% suppression and value it about as much as doubling their damage; inside EHP it was worth a few % damage.
 - **Focus**: the weights of damage and tankiness. "Damage, with a minimum max hit" (`DPS_FLOOR`) is damage first with a 10,000 max hit floor; below the floor every missing bit costs more than damage can pay back.
 - **Penalties**: elemental resistances below the cap, missing attributes, reservation over 100% (more the further over), self-damage over time bigger than regeneration, a defence checklist (freeze, shock, bleed, poison, stun...) and drawbacks PoB doesn't calculate ([`GeneratorRules`](../src/Modules/GeneratorRules.lua)).
@@ -42,9 +43,13 @@ A quick build ranks archetypes by how they start, so the scan also runs the chea
 11. Optional: unique / keystone ideas ([`SynergyFinder`](../src/Classes/SynergyFinder.lua)), packages the top players use together, the top players' gear and main link tried in the build, the passives most top players of the class take (read from their PoB codes) allocated as a set with the tree trimmed around them.
 12. Ascendancy and supports checked again (each support swapped against every other one), the tree rebuilt with shorter paths ([`TreeOptimizer`](../src/Classes/TreeOptimizer.lua)), then a short second round (aura stacking, supports, ascendancy) on the rebuilt tree.
 
+13. Rebuild and repair (large neighbourhood search): the finished build is partly undone and rebuilt, again and again, each round kept only if the build is better: the weakest branches of the passive tree pruned as a whole (10 to 20 points, by score lost per point; they can't grow straight back that round) and the points re-spent; one or two rares made again; two supports chosen again. Rares and passives are also made again in turns before that, until neither gains.
+
 Every late move is kept only when the full score (with flask uptimes) is better. Bought items must gain more the more they cost (up to 0.04 at the investment level's item limit), and resistances or attributes still missing at the end are fixed by swapping a rare's bench craft.
 
 Items and gems follow what can be found at the investment level, not only prices: below High investment there are no exceptional gems (Enlighten, Empower, Enhance) and no scarce uniques (Split Personality, Watcher's Eye, Cinderswallow Urn, Forbidden jewels... `PriceSource.scarceUniques`). Gem setups always fit the items' real sockets: uniques with a fixed count (Crest of Desire's single socket) or abyssal sockets pack the setups again, and a main link that no longer fits moves to a 4-link. Items whose granted supports change what a gem does there (traps, totems, triggers: `behaviourSupports`, from `bench/unique_audit.lua`) get no utility setup.
+
+Enemy debuffs the build keeps up are switched on in the configuration like ailments: intimidate, unnerve, blind, maim, hinder, ash, frost, crush, scorch, brittle, sap (a line that inflicts it on hit, with its chance, at the main skill's hit rate), and exposure from Wave of Conviction or Frost Bomb.
 
 Curses are tried on every way to apply them, each with what it costs in play (PoB counts a curse in full however it is applied): Arcanist Brand and casting by hand take time from the main skill, Hextouch on a movement skill only curses what it hits, Blasphemy reserves mana, a mark on Mark On Hit is free for attacks.
 
@@ -62,6 +67,9 @@ The same inputs always give the same build: passive nodes are walked in id order
 - with three or more workers (six cores), a generation in the app shares the gear slots out between threads for each pass of rare items.
 
 Each worker holds its own copy of the game data (about 1 GB), so at most 3 run together by default (2 below six cores); `main.generatorWorkers` overrides it. Without background threads (headless runs, inside a worker) everything runs in one thread as before.
+
+#### Tuning
+`bench/tune.py` tries generator settings (`GEN_OPTS`: lensWeight, pastTarget, fightWeight, avoidanceWeight, ehpWeight...) on a set of cases and scores every build with the same reference scorer (`bench/rescore.lua`), so settings that change how the search scores can be compared.
 
 #### Measuring a change
 The [benchmark](../bench/README.md) generates fixed cases headless and compares them with an earlier run. Because generation is deterministic, two runs of the same code give the same builds, and a difference between two versions is the change's effect on that case (builds are path dependent, so judge a change on several cases). `GEN_OPTS="name=value,..."` switches generator options for A/B runs; `stage_test.lua` runs one step on a saved build; `profile_gen.lua` times every method; `eval_build.lua`, `ablate_build.lua` and `transplant.lua` compare generated builds with top players' builds.
