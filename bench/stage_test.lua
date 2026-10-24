@@ -98,6 +98,8 @@ elseif step == "refine" then
 	-- (one allocation first, as the generator's tree has been allocated before refining)
 	gen:AllocateTree(true)
 	for _, n in ipairs({ 6, 10, 16, 6 }) do print("REFINE", n, gen:RefineTree(n)) end
+elseif step == "cross" then
+	gen:CrossIdeasMove(1)
 elseif step == "explain" then
 	gen:FullScore()
 	gen:Explain()

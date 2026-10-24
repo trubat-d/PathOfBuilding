@@ -3,6 +3,7 @@
 -- From the src folder: FILES="<build .xml> ..." [FOCUS=DPS_FLOOR] [INVEST=ENDGAME] luajit ../bench/rescore.lua
 io.stdout:setvbuf("no")
 dofile("HeadlessWrapper.lua")
+dofile("../bench/inflate.lua")
 while main.uniqueDB.loading do runCallback("OnFrame") end
 local investment
 for _, level in ipairs(new("PriceSource"):PriceSource().levels) do if level.id == (os.getenv("INVEST") or "ENDGAME") then investment = level end end

@@ -2518,6 +2518,64 @@ function BuildGeneratorClass:JointMoves(rounds)
 		end
 	end
 	if #moves == 0 then return end
+	self:EvaluatePackages(moves, rounds, function(best, gain)
+		return string.format("Package from top players (%d%% of them): %s, with passives and supports adapted: score %+.3f",
+			math.floor(best.share * 100 + 0.5), best.label, gain)
+	end)
+end
+
+-- Ideas of the other archetypes tried on the finished build: each one's
+-- keystone and best uniques as a package, applied for real and adapted like
+-- the top players' packages (a crossover between ideas: the best build with
+-- the commitment another idea is built around)
+function BuildGeneratorClass:CrossIdeasMove(rounds)
+	if not self.mainGem then return end
+	local archetypes = new("BuildArchetypes"):BuildArchetypes()
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local filter = { obtainableOnly = true, levelOnly = true, investment = self.options.investment }
+	local current = self.options.archetype and self.options.archetype.id
+	local function equipped(title)
+		for _, slot in pairs(self.itemsTab.slots) do
+			local item = self.itemsTab.items[slot.selItemId]
+			if item and item.title == title then return true end
+		end
+		return false
+	end
+	local moves = { }
+	for _, a in ipairs(archetypes.ForSkill(self.mainGem, self.options.meta)) do
+		if a.id ~= current and not a.playstyle then
+			local move = { label = a.label, uniques = { }, share = 0, idea = a }
+			for _, item in ipairs(archetypes.UniqueCandidates(a)) do
+				if #move.uniques < 2 and finder:IsItemAllowed(item, filter) and not equipped(item.title or item.name) then
+					t_insert(move.uniques, item)
+				end
+			end
+			for _, name in ipairs(a.keystones or { }) do
+				local node = archetypes.NodeByName(self.build.spec, name)
+				if node and not node.alloc and node.path and not (self.forbiddenNodes and self.forbiddenNodes[node.id]) then move.keystone = node break end
+			end
+			if #move.uniques > 0 or move.keystone then t_insert(moves, move) end
+		end
+	end
+	if self.options.debugTiming then ConPrintf("[cross] %d ideas", #moves) end
+	if #moves == 0 then return end
+	self:EvaluatePackages(moves, rounds, function(best, gain)
+		return string.format("Idea from another archetype added: %s (%s), with passives and supports adapted: score %+.3f",
+			best.idea.label, table.concat((function()
+				local names = { }
+				for _, p in ipairs(best.placement) do t_insert(names, p.item.title or p.item.name) end
+				if best.keystone then t_insert(names, best.keystone.dn) end
+				return names
+			end)(), ", "), gain)
+	end, { threshold = 1.0, tries = 3 })
+end
+
+-- Packages (uniques and / or a keystone) screened with the quick score,
+-- the most promising applied for real with the build adapted around them
+-- (passives trimmed and refined, supports again), the best one kept per round
+function BuildGeneratorClass:EvaluatePackages(moves, rounds, describe, opts)
+	opts = opts or { }
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
 	local slots = finder:GetActiveSlots()
 	for _ = 1, rounds or 1 do
 		local base = self:FullScore()
@@ -2594,11 +2652,13 @@ function BuildGeneratorClass:JointMoves(rounds)
 		end
 		local savedLog = #self.log
 		local best, bestScore
-		for i = 1, math.min(self.options.jointMoveTries or 5, #moves) do
+		for i = 1, math.min(opts.tries or self.options.jointMoveTries or 5, #moves) do
 			local move = moves[i]
-			if move.quick > current - 0.4 then
+			if self.options.debugTiming then ConPrintf("[packages] %s: quick %+.3f", move.label, move.quick - current) end
+			if move.quick > current - (opts.threshold or 0.4) then
 				local state = apply(move)
 				local score = self:FullScore()
+				if self.options.debugTiming then ConPrintf("[packages] %s applied and adapted: %.3f (base %.3f)", move.label, score, base) end
 				revert(state)
 				for j = #self.log, savedLog + 1, -1 do t_remove(self.log, j) end
 				if score > base + 0.01 and (not bestScore or score > bestScore + 1e-9) then best, bestScore = move, score end
@@ -2608,8 +2668,7 @@ function BuildGeneratorClass:JointMoves(rounds)
 		if not best then break end
 		apply(best)
 		local after = self:FullScore()
-		self:Note(string.format("Package from top players (%d%% of them): %s, with passives and supports adapted: score %+.3f",
-			math.floor(best.share * 100 + 0.5), best.label, after - base))
+		self:Note(describe(best, after - base))
 		for _, p in ipairs(best.placement) do
 			local price = GetPriceSource():UniquePrice(p.item)
 			self.costs = self.costs or { }
@@ -3731,6 +3790,11 @@ function BuildGeneratorClass:Run()
 	if opts.jointMoves ~= false then
 		self:Move(2, 3, "Trying packages from top players")
 		self:JointMoves(opts.jointMoveRounds or 2)
+	end
+	if opts.crossIdeas ~= false then
+		self:Move(3, 3, "Trying the ideas of the other archetypes")
+		local ok, err = pcall(function() self:CrossIdeasMove(1) end)
+		if not ok then ConPrintf("Cross ideas failed: %s", tostring(err)) end
 	end
 	if opts.learnFromTop ~= false then
 		self:Move(3, 3, "Trying the top players' gear and links")
