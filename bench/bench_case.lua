@@ -75,6 +75,8 @@ local gen = new("BuildGenerator"):BuildGenerator(build, {
 	-- FORCE="Unique A;Unique B", EXCLUDE="..." (the window's Uniques list)
 	forcedUniques = (function() local t = { } for n in (os.getenv("FORCE") or ""):gmatch("[^;]+") do t[#t + 1] = n end return t end)(),
 	excludedUniques = (function() local t = { } for n in (os.getenv("EXCLUDE") or ""):gmatch("[^;]+") do t[n] = true end return t end)(),
+	-- BUDGET=<divines>: a total budget for the whole build
+	totalBudget = tonumber(os.getenv("BUDGET") or ""),
 	gemId = gemId, classId = asc.classId, ascendClassId = asc.ascendClassId, level = 92,
 	investment = investment, focus = focus,
 	quick = mode == "quick", synergies = os.getenv("SYNERGIES") == "1", archetype = archetype, yieldEvery = 1e9,
@@ -124,6 +126,7 @@ else
 	for i, g in ipairs(gen.mainGroup.gemList) do if i > 1 and g.gemId then table.insert(gems, data.gems[g.gemId].name) end end
 	result.supports = gems
 	result.log = res.log
+	result.cost = (gen:BuildCost())
 	-- the generated build, for comparisons (bench/transplant.lua)
 	local saveDir = os.getenv("BENCH_SAVE")
 	if saveDir and saveDir ~= "" then

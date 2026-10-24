@@ -211,6 +211,8 @@ local fightLength = 60
 -- other skills (movement, curses, guard...) also cost mana: the main skill
 -- needs this much more recovery than its own cost
 local costMargin = 1.15
+-- (share of the cost a build must recover to count as paying for it all the time)
+local sustainTolerance = 0.8
 function BuildScorerClass:SustainableRate(output, resource)
 	local recovery, pool = 0, 0
 	if resource == "Mana" then
@@ -250,9 +252,19 @@ function BuildScorerClass:SkillSustain(output)
 	local flags = env and env.player.mainSkill and env.player.mainSkill.skillFlags or { }
 	local extra = GetGeneratorRules().ExtraCosts(output, flags.attack, flags.spell)
 	for _, resource in ipairs({ "Mana", "Life" }) do
-		local cost = ((output[resource .. "PerSecondCost"] or 0) + (extra[resource] or 0)) * costMargin
+		local perSecond = output[resource .. "PerSecondCost"] or 0
+		-- totems and brands are placed again only when they expire, not at the
+		-- placement / cast speed PoB's per-second cost assumes
+		if perSecond > 0 and (flags.totem or flags.brand) and (output[resource .. "Cost"] or 0) > 0 then
+			local count = flags.totem and (output.ActiveTotemLimit or 1) or (output.ActiveBrandLimit or 1)
+			local duration = flags.totem and (output.TotemDuration or 8) or m_max(output.Duration or 4, 2)
+			perSecond = m_min(perSecond, output[resource .. "Cost"] * m_max(1, count) / m_max(duration, 1))
+		end
+		local cost = (perSecond + (extra[resource] or 0)) * costMargin
 		if cost > 0 then
-			local f = math.min(1, self:SustainableRate(output, resource) / cost)
+			-- (calibrated on the top players' builds: a fifth of a long fight short
+			-- of the cost is covered by flasks, pauses and positioning)
+			local f = math.min(1, self:SustainableRate(output, resource) / cost / sustainTolerance)
 			if f < fraction then fraction, limiting = f, resource end
 		end
 	end
@@ -351,6 +363,14 @@ function BuildScorerClass:GetPenalties(output)
 		total = total + missingTotal
 		t_insert(penalties, { label = "Missing defences: " .. table.concat(names, ", "), value = missingTotal })
 	end
+	-- Gem colours an item can't realistically roll (six blue gems in a
+	-- strength body armour...)
+	if self.socketColours ~= false then
+		for _, entry in ipairs(self:SocketColourIssues()) do
+			total = total + entry.penalty
+			t_insert(penalties, { label = entry.label, value = entry.penalty })
+		end
+	end
 	-- Unique drawbacks the build doesn't counter (Modules/GeneratorRules)
 	for _, p in ipairs(GetGeneratorRules().Penalties(output)) do
 		total = total + p.value
@@ -359,7 +379,16 @@ function BuildScorerClass:GetPenalties(output)
 	-- One-shot by a pinnacle boss hit
 	local bossRatio, bossName = self:BossHitRatio(output)
 	if bossRatio and bossRatio < 1 then
-		local p = 1.5 * m_log(1 / m_max(bossRatio, 0.01))
+		-- Uber hits, calibrated on the top players' builds (half survive less
+		-- than 58% of the worst, and dodge it): full weight below 60%, a light
+		-- one from 60% to surviving it
+		local p
+		if self.bossTier == "uber" then
+			local target = 0.6
+			p = 1.5 * m_log(target / m_min(target, m_max(bossRatio, 0.01))) + 0.4 * m_log(1 / m_max(bossRatio, target))
+		else
+			p = 1.5 * m_log(1 / m_max(bossRatio, 0.01))
+		end
 		total = total + p
 		t_insert(penalties, { label = string.format("One-shot by %s%s (survives %d%% of the hit)", self.bossTier == "uber" and "Uber " or "", bossName, bossRatio * 100), value = p })
 	end
@@ -370,6 +399,96 @@ function BuildScorerClass:GetPenalties(output)
 		t_insert(penalties, { label = "Not enough unreserved mana to cast the main skill", value = 1 })
 	end
 	return total, penalties
+end
+
+-- Chance that n random sockets give at least the wanted number of each
+-- colour (probabilities pr, pg, pb per socket)
+local function colourChance(n, want, probs)
+	local total = 0
+	local fact = { [0] = 1 }
+	for i = 1, n do fact[i] = fact[i - 1] * i end
+	for r = 0, n do
+		for g = 0, n - r do
+			local b = n - r - g
+			if r >= want[1] and g >= want[2] and b >= want[3] then
+				total = total + fact[n] / (fact[r] * fact[g] * fact[b]) * probs[1] ^ r * probs[2] ^ g * probs[3] ^ b
+			end
+		end
+	end
+	return total
+end
+BuildScorerClass.ColourChance = colourChance
+
+-- Items whose gems need socket colours that are very hard to roll: the
+-- chromatic odds from the base's attribute requirements (weight 12 + the
+-- requirement for each attribute the base asks for, 12 for the others),
+-- with the crafting bench forcing up to three sockets of the hardest colour.
+-- White sockets fit any gem. { { slot, label, penalty, chance } }
+local colourNames = { "red", "green", "blue" }
+function BuildScorerClass:SocketColourIssues()
+	local build = self.build
+	local itemsTab = build.itemsTab
+	local skillsTab = build.skillsTab
+	if not itemsTab or not skillsTab then return { } end
+	local need = { }
+	for _, group in ipairs(skillsTab.socketGroupList) do
+		if group.enabled ~= false and group.slot and not group.source and itemsTab.slots[group.slot] then
+			local counts = need[group.slot] or { 0, 0, 0 }
+			for _, gem in ipairs(group.gemList) do
+				local effect = gem.gemData and gem.gemData.grantedEffect
+				local colour = effect and effect.color
+				if gem.enabled ~= false and colour and colour >= 1 and colour <= 3 then counts[colour] = counts[colour] + 1 end
+			end
+			need[group.slot] = counts
+		end
+	end
+	local issues = { }
+	self.colourCache = self.colourCache or { }
+	for slotName, counts in pairs(need) do
+		local slot = itemsTab.slots[slotName]
+		local item = slot and itemsTab.items[slot.selItemId]
+		local n = counts[1] + counts[2] + counts[3]
+		if item and item.base and n >= 4 then
+			-- (white sockets fit anything)
+			local white = 0
+			for _, socket in ipairs(item.sockets or { }) do if socket.color == "W" then white = white + 1 end end
+			local key = (item.baseName or "?") .. ":" .. counts[1] .. counts[2] .. counts[3] .. ":" .. white
+			local chance = self.colourCache[key]
+			if not chance then
+				local req = item.base.req or { }
+				local weights = { 12 + (req.str or 0), 12 + (req.dex or 0), 12 + (req.int or 0) }
+				local sum = weights[1] + weights[2] + weights[3]
+				local probs = { weights[1] / sum, weights[2] / sum, weights[3] / sum }
+				local want = { counts[1], counts[2], counts[3] }
+				-- white sockets take the hardest colours first
+				for _ = 1, white do
+					local worst, worstP
+					for c = 1, 3 do if want[c] > 0 and (not worstP or probs[c] < worstP) then worst, worstP = c, probs[c] end end
+					if worst then want[worst] = want[worst] - 1 end
+				end
+				-- the bench: up to three sockets of the hardest colour forced
+				local hardest, hardestP
+				for c = 1, 3 do if want[c] > 0 and (not hardestP or probs[c] < hardestP) then hardest, hardestP = c, probs[c] end end
+				local rest = n - white
+				if hardest then
+					local forced = m_min(3, want[hardest])
+					want[hardest] = want[hardest] - forced
+					rest = rest - forced
+				end
+				chance = rest > 0 and colourChance(rest, want, probs) or 1
+				self.colourCache[key] = chance
+			end
+			-- (a thousand chromatic orbs is affordable; past that it gets unrealistic)
+			if chance < 1e-3 then
+				local penalty = 0.4 * (m_log(1 / chance) / m_log(10) - 3)
+				local parts = { }
+				for c = 1, 3 do if counts[c] > 0 then t_insert(parts, counts[c] .. " " .. colourNames[c]) end end
+				t_insert(issues, { slot = slotName, chance = chance, penalty = penalty,
+					label = string.format("%s: %s gems on a %s base, about 1 in %s chromatic rolls", slotName, table.concat(parts, " + "), item.baseName or "?", chance > 0 and string.format("%.0f", 1 / chance) or "never") })
+			end
+		end
+	end
+	return issues
 end
 
 -- Smallest of the maximum hits the build survives (physical, elemental,

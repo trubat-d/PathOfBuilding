@@ -172,6 +172,21 @@ elseif step == "ostentation" then
 	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
 	print("GAIN", gen:SupremeOstentationMove())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
+elseif step == "cost" or step == "upgrade" or step == "fitbudget" then
+	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
+	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
+	local total, entries = gen:BuildCost()
+	for _, e in ipairs(entries) do print(string.format("PART %-8s %-14s %-40s %8.2f%s", e.kind, tostring(e.slot), e.label, e.price, e.known and "" or " (no price)")) end
+	print("TOTAL", total)
+	if step == "upgrade" then gen:UpgradeOrder() end
+	if step == "fitbudget" then gen.options.totalBudget = tonumber(os.getenv("BUDGET") or "30") gen:FitTotalBudget() local t2, e2 = gen:BuildCost() for _, e in ipairs(e2) do print(string.format("PART2 %-8s %-14s %-40s %8.2f", e.kind, tostring(e.slot), e.label, e.price)) end print("TOTAL AFTER", t2) end
+	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
+elseif step == "bossskill" then
+	-- CONFIG=MAPPING or BOSS_CLEAR (the build's scenario)
+	for _, sc in ipairs(new("AutoConfig"):AutoConfig(build).scenarioList) do if sc.id == (os.getenv("CONFIG") or "MAPPING") then gen.options.configScenario = sc end end
+	gen:AutoConfigure()
+	print("GAIN", gen:BossSkillMove())
+	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
 elseif step == "prune" then
 	print("REMOVED", gen:PruneUselessGems())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end

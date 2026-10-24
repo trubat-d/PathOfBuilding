@@ -293,7 +293,7 @@ local function addPriceControls(controls, x, y, idle)
 	controls.updatePrices.enabled = function() return idle() and not GetPriceSource().loading end
 	controls.updatePrices.tooltipFunc = function(tooltip)
 		tooltip:Clear()
-		tooltip:AddLine(16, "^7Download unique, tattoo, runegraft and oil prices from poe.ninja (current league).")
+		tooltip:AddLine(16, "^7Download unique, gem, tattoo, runegraft and oil prices from poe.ninja (current league).")
 		tooltip:AddLine(16, "^7Prices are cached for 6 hours. Without prices nothing is filtered by price.")
 	end
 end
@@ -667,7 +667,20 @@ function BuildIdeasPopupClass:OpenGenerator()
 		return list
 	end
 	controls.archetypeLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 136, 0, 16}, "^7Archetype:")
-	controls.archetype = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {120, 134, 500, 20}, archetypeList())
+	controls.archetype = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {120, 134, 378, 20}, archetypeList())
+	-- optional total budget for the whole build (divines)
+	controls.totalBudgetLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {506, 136, 0, 16}, "^7Total div:")
+	controls.totalBudget = new("EditControl"):EditControl({"TOPLEFT",nil,"TOPLEFT"}, {568, 134, 54, 20}, "", nil, "%D", 6)
+	controls.totalBudget.enabled = idle
+	controls.totalBudget.tooltipFunc = function(tooltip)
+		tooltip:Clear()
+		tooltip:AddLine(16, "^7Optional: the total budget for the whole build, in divines (uniques, rares, anoints,")
+		tooltip:AddLine(16, "^7tattoos, awakened gems). When set, it replaces the Investment level: the level is picked")
+		tooltip:AddLine(16, "^7from it (rares, influences, gems), one item can't take more than half of it, and the")
+		tooltip:AddLine(16, "^7finished build is fitted under it by making the parts worth least per divine cheaper.")
+		tooltip:AddLine(16, "^7Every full build also lists its upgrade order: what to buy first, best score per divine.")
+		tooltip:AddLine(16, "^7Rares are priced roughly by level (poe.ninja doesn't list them). Leave empty for no total.")
+	end
 	controls.uniqueChoices = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {628, 134, 114, 20}, function()
 		local c = loadUniqueChoices()
 		return string.format("Uniques (%d/%d)", #c.forced, #c.excluded)
@@ -760,6 +773,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 			allowTattoos = controls.tattoos.state,
 			timeless = controls.timeless.state,
 			synergies = controls.synergies.state,
+			totalBudget = tonumber(controls.totalBudget.buf) and tonumber(controls.totalBudget.buf) > 0 and tonumber(controls.totalBudget.buf) or nil,
 			-- (the generation runs between frames: longer slices leave more of
 			-- the time to it; the window still redraws about 12 times a second)
 			yieldEvery = 80,

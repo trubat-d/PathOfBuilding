@@ -16,6 +16,7 @@ local t_remove = table.remove
 local t_sort = table.sort
 local m_min = math.min
 local m_max = math.max
+local m_log = math.log
 local m_floor = math.floor
 
 ---@class BuildGenerator
@@ -121,6 +122,11 @@ function BuildGeneratorClass:BuildGenerator(build, options)
 	if self.options.meta and not self.options.learnFromPlayers then
 		self.options.metaShown = self.options.meta
 		self.options.meta = nil
+	end
+	-- a total budget (divines for the whole build) picks the investment level
+	-- and caps one item at half of it; the finished build is fitted under it
+	if self.options.totalBudget and self.options.totalBudget > 0 then
+		self.options.investment = new("PriceSource"):PriceSource().ForBudget(self.options.totalBudget)
 	end
 	self.log = { }
 	return self
@@ -3169,6 +3175,466 @@ function BuildGeneratorClass:CorruptionMove()
 	return total
 end
 
+------------------------------------------------------------------------------
+-- A second skill for bosses
+------------------------------------------------------------------------------
+
+local damageTags = { "fire", "cold", "lightning", "physical", "chaos" }
+
+-- Builds made for clearing (Clearing maps, Clearing + bossing): the main skill
+-- is chosen for packs, and another skill sharing its scaling (same damage
+-- types, attack or spell) can do far more to one target. Each such skill is
+-- measured on a pinnacle boss alone in a 4-link of the helmet, gloves or
+-- boots, the best few with their own supports; the best is linked there (or
+-- only suggested, if what it displaces is worth more) when it beats the main
+-- skill on a boss by 30% or more.
+function BuildGeneratorClass:BossSkillMove()
+	local scenario = self.options.configScenario
+	if not scenario or (scenario.boss and not scenario.clear) then return 0 end
+	local mainGem, mainGroup = self.mainGem, self.mainGroup
+	if not mainGem or not mainGroup then return 0 end
+	local skillsTab = self.build.skillsTab
+	local setup = new("GemSetup"):GemSetup(self)
+	-- the 4-link with the fewest utility gems
+	local slotName, fewest
+	for _, name in ipairs({ "Gloves", "Helmet", "Boots" }) do
+		if setup:SlotSockets(name) >= 4 and mainGroup.slot ~= name then
+			local gems = 0
+			for _, g in ipairs(skillsTab.socketGroupList) do if g.slot == name then gems = gems + #g.gemList end end
+			if not fewest or gems < fewest then slotName, fewest = name, gems end
+		end
+	end
+	if self.options.debugTiming then
+		for _, name in ipairs({ "Gloves", "Helmet", "Boots" }) do ConPrintf("[boss skill] %s: %d sockets", name, setup:SlotSockets(name)) end
+	end
+	if not slotName then return 0 end
+	local mainTags = mainGem.tags or { }
+	local candidates = { }
+	for _, entry in ipairs(self.SkillList()) do
+		local gem = data.gems[entry.gemId]
+		local tags = gem.tags or { }
+		-- (same damage types; a main skill without any - most physical attacks -
+		-- takes the same kind of skill: melee for melee, bow for bow)
+		local shares, mainHas = false, false
+		for _, t in ipairs(damageTags) do
+			if mainTags[t] then mainHas = true end
+			if tags[t] and mainTags[t] then shares = true end
+		end
+		if not mainHas then
+			shares = (mainTags.melee and tags.melee) or (mainTags.bow and tags.bow) or (mainTags.spell and tags.spell) or false
+		end
+		local sameKind = (tags.attack and mainTags.attack) or (tags.spell and mainTags.spell)
+		if shares and sameKind and gem ~= mainGem and self.GemFamily(gem) ~= self.GemFamily(mainGem)
+			and (not tags.minion or mainTags.minion) then
+			t_insert(candidates, entry.gemId)
+		end
+	end
+	if self.options.debugTiming then ConPrintf("[boss skill] %s, %d candidates", slotName, #candidates) end
+	if #candidates == 0 then return 0 end
+	local before = self:FullScore()
+	local snap = self:Snapshot()
+	local savedLog = #self.log
+	local savedMainGem, savedMainGroup, savedLimit, savedMainIndex = self.mainGem, self.mainGroup, self.mainLinkLimit, self.build.mainSocketGroup
+	local bossScenario
+	for _, sc in ipairs(new("AutoConfig"):AutoConfig(self.build).scenarioList) do if sc.id == "BOSS" then bossScenario = sc end end
+	local function dpsNow()
+		self:Recalculate()
+		return self.scorer:GetDPS(self.build.calcsTab.mainOutput)
+	end
+	local best
+	local ok, err = pcall(function()
+		self.options.configScenario = bossScenario
+		self:AutoConfigure()
+		local mainDps = dpsNow()
+		-- the slot's own setups out, a group for the candidates in
+		local list = skillsTab.socketGroupList
+		for i = #list, 1, -1 do if list[i].slot == slotName then t_remove(list, i) end end
+		local group = { label = "Boss skill (generated)", enabled = true, slot = slotName, gemList = { } }
+		t_insert(list, group)
+		self.build.mainSocketGroup = #list
+		local function try(gemId)
+			local gem = data.gems[gemId]
+			group.gemList = { { level = self:GemLevel(gem, true), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId } }
+			local part = self.RealisticSkillPart(gem.grantedEffect)
+			if part then group.gemList[1].skillPart, group.gemList[1].skillPartCalcs = part, part end
+			skillsTab:ProcessSocketGroup(group)
+			return dpsNow()
+		end
+		-- 1. bare, to keep the best few
+		local ranked = { }
+		for _, gemId in ipairs(candidates) do
+			local dps = try(gemId)
+			if dps > 0 then t_insert(ranked, { gemId = gemId, dps = dps }) end
+			self:Tick()
+		end
+		t_sort(ranked, function(a, b) return a.dps > b.dps end)
+		-- 2. with their own three supports
+		self.mainGroup, self.mainLinkLimit = group, 3
+		for i = 1, m_min(4, #ranked) do
+			self.mainGem = data.gems[ranked[i].gemId]
+			try(ranked[i].gemId)
+			self:ChooseSupports(3)
+			local dps = dpsNow()
+			if not best or dps > best.dps then
+				local gems = { }
+				for _, g in ipairs(group.gemList) do t_insert(gems, g) end
+				best = { gemId = ranked[i].gemId, dps = dps, gems = gems }
+			end
+		end
+		if best then best.mainDps = mainDps end
+	end)
+	if not ok then ConPrintf("Boss skill search failed: %s", tostring(err)) end
+	self.mainGem, self.mainGroup, self.mainLinkLimit = savedMainGem, savedMainGroup, savedLimit
+	self.options.configScenario = scenario
+	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+	self:Restore(snap)
+	self.build.mainSocketGroup = savedMainIndex
+	self:AutoConfigure()
+	if self.options.debugTiming and best then ConPrintf("[boss skill] best %s %.0f vs main %.0f", data.gems[best.gemId].name, best.dps, best.mainDps) end
+	if not best or best.dps < best.mainDps * 1.3 then return 0 end
+	-- linked for real: the slot's setups give way, kept if that costs little
+	local names = { }
+	for i, g in ipairs(best.gems) do if i > 1 then t_insert(names, data.gems[g.gemId].name) end end
+	local text = string.format("%s in the %s (with %s): %s DPS on a pinnacle boss, %.1fx the main skill's %s",
+		data.gems[best.gemId].name, slotName, #names > 0 and table.concat(names, ", ") or "no supports", formatNumSep(math.floor(best.dps)), best.dps / m_max(best.mainDps, 1), formatNumSep(math.floor(best.mainDps)))
+	local list = skillsTab.socketGroupList
+	local displaced = { }
+	for i = #list, 1, -1 do
+		if list[i].slot == slotName then
+			for _, g in ipairs(list[i].gemList) do if g.gemId then t_insert(displaced, data.gems[g.gemId].name) end end
+			t_remove(list, i)
+		end
+	end
+	local group = { label = "Boss skill (generated)", enabled = true, slot = slotName, gemList = best.gems }
+	t_insert(list, group)
+	for i, g in ipairs(list) do if g == savedMainGroup then self.build.mainSocketGroup = i end end
+	skillsTab:ProcessSocketGroup(group)
+	local after = self:FullScore()
+	if after < before - 0.1 then
+		self:Restore(snap)
+		self.build.mainSocketGroup = savedMainIndex
+		self:AutoConfigure()
+		self:Note("Boss skill (suggestion, not linked: the setups it would displace are worth more): " .. text)
+		return 0
+	end
+	self:Note("Boss skill, for when the main skill is too slow on one target: " .. text .. (#displaced > 0 and (" (replaces " .. table.concat(displaced, ", ") .. ")") or ""))
+	return after - before
+end
+
+------------------------------------------------------------------------------
+-- Stat target planning for stacking archetypes
+------------------------------------------------------------------------------
+
+local lensLines = {
+	Int = "+%d to Intelligence", Str = "+%d to Strength", Dex = "+%d to Dexterity",
+	Life = "+%d to maximum Life", EnergyShield = "+%d to maximum Energy Shield", Mana = "+%d to maximum Mana",
+}
+
+-- A stacking build's stat is worth more the more of it there is (damage per
+-- 10 Intelligence on top of increased Intelligence...), so its value now
+-- undersells it: gear and passives would never start stacking. The plan
+-- measures what doubling the stat is worth (the uniques equipped, the lens
+-- off) against what the first steps are worth, and gives the lens the
+-- difference: the build is steered towards the target, not the next point.
+function BuildGeneratorClass:PlanStatTarget(label)
+	local lens = self.scorer.lens
+	if not lens or not lensLines[lens.stat] then return end
+	local savedLens, savedLens2 = self.scorer.lens, self.scorer.lens2
+	self.scorer.lens, self.scorer.lens2 = nil, nil
+	self:Recalculate()
+	local output = self.build.calcsTab.mainOutput
+	local current = m_max(output[lens.stat] or 0, lens.base or 100)
+	local tree = self.build.spec.tree
+	local probeId = -950000
+	local function probe(amount)
+		probeId = probeId - 1
+		local node = { id = probeId, type = "Normal", name = "stat probe", dn = "stat probe", sd = { string.format(lensLines[lens.stat], m_max(1, math.floor(amount + 0.5))) } }
+		tree:ProcessStats(node)
+		local override = { addNodes = { [node] = true } }
+		local out = self.calcFunc(override)
+		return self:Score(override), (out[lens.stat] or 0)
+	end
+	local base = self:Score()
+	-- (flat stat is multiplied by the build's increases: scaled to reach the target)
+	local _, outSmall = probe(100)
+	local ratio = m_max(0.2, (outSmall - (output[lens.stat] or 0)) / 100)
+	local step = current * 0.1
+	local scoreStep = probe(step / ratio)
+	local scoreDouble, reached = probe(current / ratio)
+	self.scorer.lens, self.scorer.lens2 = savedLens, savedLens2
+	-- what doubling is worth beyond ten times the first tenth (the convex part)
+	local convex = (scoreDouble - base) - 10 * (scoreStep - base)
+	-- (never below the lens's own weight: a linear payoff still needs the push
+	-- of a stat the gear isn't stacking yet; measured, lowering it lost 0.6)
+	local weight = m_min(1.0, m_max(lens.weight or 0.3, convex / m_log(2)))
+	self.scorer.lens = copyTable(lens, true)
+	self.scorer.lens.weight = self.options.lensWeight or weight
+	self:Note(string.format("Stat plan (%s): %s %d now, target about %d; doubling it is worth %+.3f score (the first tenth %+.3f), so it is valued at weight %.2f while the build is made",
+		label, lens.label or lens.stat, math.floor(output[lens.stat] or 0), math.floor(reached), scoreDouble - base, scoreStep - base, self.scorer.lens.weight))
+end
+
+------------------------------------------------------------------------------
+-- Cost of the build, total budget and upgrade order
+------------------------------------------------------------------------------
+
+local exceptionalGems = { ["Enlighten Support"] = true, ["Empower Support"] = true, ["Enhance Support"] = true }
+
+-- What the finished build costs, item by item (divines): uniques at their
+-- poe.ninja price, rares at the level's typical price, anoints at their oils,
+-- tattoos, awakened and exceptional gems (when gem prices are loaded).
+-- Returns total, entries { kind, slot, label, price, known, item, gem, group }
+function BuildGeneratorClass:BuildCost()
+	local prices = GetPriceSource()
+	local level = self.options.investment or { }
+	local rare = level.rarePrice or 1
+	local spec = self.build.spec
+	local entries = { }
+	local function add(entry)
+		entry.known = entry.price ~= nil
+		entry.price = entry.price or 0
+		t_insert(entries, entry)
+	end
+	for _, slot in ipairs(self.itemsTab.orderedSlots) do
+		local item = self.itemsTab.items[slot.selItemId]
+		local active = item and not slot.slotName:match("Swap") and not slot.inactive
+			and (not slot.nodeId or spec.allocNodes[slot.nodeId])
+		if active then
+			local kind = (slot.nodeId or item.type == "Jewel") and "jewel" or (item.base and (item.base.flask or item.base.tincture) and "flask") or "gear"
+			if item.rarity == "UNIQUE" or item.rarity == "RELIC" then
+				add({ kind = kind, slot = slot.slotName, label = item.title or item.name, price = prices:UniquePrice(item), item = item, unique = true })
+			elseif item.rarity == "RARE" then
+				-- (rares made at a cheaper level, by the total budget, at that level's price)
+				local own = self.rarePriceById and self.rarePriceById[item.id] or rare
+				local price = kind == "gear" and own or (item.clusterJewel and own * 0.5) or own * 0.25
+				add({ kind = kind, slot = slot.slotName, label = "rare " .. (item.baseName or item.type or "item"), price = price, item = item, estimate = true })
+			end
+			-- anoints (the oils), on any amulet
+			if item.type == "Amulet" then
+				local total, names = 0, { }
+				for _, modLine in ipairs(item.enchantModLines or { }) do
+					local name = modLine.line:match("^Allocates (.+)$")
+					local node = name and spec.tree.notableMap and spec.tree.notableMap[name:lower()]
+					if node then
+						total = total + (prices:AnointPrice(node) or 0)
+						t_insert(names, node.dn)
+					end
+				end
+				if #names > 0 then add({ kind = "anoint", slot = slot.slotName, label = "anoint " .. table.concat(names, " + "), price = total, item = item }) end
+			end
+		end
+	end
+	local tattoos, tattooCount = 0, 0
+	for nodeId, tattoo in pairs(spec.hashOverrides or { }) do
+		if spec.allocNodes[nodeId] then
+			tattoos = tattoos + (prices:TattooPrice(tattoo.dn) or 0)
+			tattooCount = tattooCount + 1
+		end
+	end
+	if tattooCount > 0 then add({ kind = "tattoos", label = tattooCount .. " tattoo" .. (tattooCount == 1 and "" or "s"), price = tattoos }) end
+	for _, group in ipairs(self.build.skillsTab.socketGroupList) do
+		for index, g in ipairs(group.gemList) do
+			local gemData = g.gemId and data.gems[g.gemId]
+			if gemData and g.enabled ~= false and (gemData.name:match("^Awakened ") or exceptionalGems[gemData.name]) then
+				add({ kind = "gem", label = gemData.name .. " " .. (g.level or 20), price = prices:GemPrice(gemData.name, g.level), gem = g, group = group, index = index })
+			end
+		end
+	end
+	local total = 0
+	for _, entry in ipairs(entries) do total = total + entry.price end
+	return total, entries
+end
+
+-- Replaces a priced part of the build by its cheap version: a unique by a
+-- rare on the same base (jewels: a rare jewel; flasks: taken out), an anoint
+-- taken off, an awakened gem by its normal version, an exceptional gem taken out
+function BuildGeneratorClass:CheapVersion(entry)
+	if entry.kind == "gear" or entry.kind == "jewel" then
+		local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+		local generator = finder.rareGenerator
+		-- (measured against the empty slot: a rare is only kept if it beats what's there)
+		self.itemsTab.slots[entry.slot]:SetSelItemId(0)
+		self.itemsTab:PopulateSlots()
+		self:Recalculate()
+		local measure = function(output) return self.scorer:ScoreOutput(output, self.ratio) end
+		local baseOutput = self.calcFunc({ })
+		local opts = self:RareOptions(false)
+		-- (a rare: made again as a cheaper level makes it)
+		if entry.cheapLevel then
+			opts.maxAffixes, opts.multiCraft = entry.cheapLevel.rareAffixes, entry.cheapLevel.multiCraft
+			opts.quality = generator.qualityList[entry.cheapLevel.quality or generator.defaultQuality] or opts.quality
+		end
+		local ctx = { calcFunc = self.calcFunc, baseOutput = baseOutput, basePower = measure(baseOutput), measure = measure, tick = function() self:Tick() end, opts = opts }
+		local bases = entry.kind == "jewel" and { "Crimson Jewel", "Viridian Jewel", "Cobalt Jewel" } or { entry.item.baseName }
+		local best
+		for _, baseName in ipairs(bases) do
+			if data.itemBases[baseName] and not (entry.kind == "jewel" and entry.item.base and entry.item.base.subType == "Abyss") then
+				local result = generator:GenerateForSlotWith(entry.slot, makeBase(baseName), ctx, nil)
+				if result and (not best or result.power > best.power) then best = result end
+			end
+		end
+		if best then
+			local item = self:Equip(best.item, entry.slot)
+			self.rarePriceById = self.rarePriceById or { }
+			self.rarePriceById[item.id] = entry.cheapLevel and entry.cheapLevel.rarePrice or (self.options.investment or { }).rarePrice
+		elseif entry.kind == "gear" and data.itemBases[entry.item.baseName] then
+			-- (no rare helps there: the plain base, so the slot isn't left empty)
+			self:Equip(makeBase(entry.item.baseName), entry.slot)
+		end
+		if self.lockedSlots then self.lockedSlots[entry.slot] = nil end
+	elseif entry.kind == "flask" then
+		self.itemsTab.slots[entry.slot]:SetSelItemId(0)
+	elseif entry.kind == "anoint" then
+		local copy = new("Item"):Item(entry.item:BuildRaw())
+		for i = #copy.enchantModLines, 1, -1 do
+			if copy.enchantModLines[i].line:match("^Allocates ") then t_remove(copy.enchantModLines, i) end
+		end
+		copy:BuildAndParseRaw()
+		self:Equip(copy, entry.slot)
+	elseif entry.kind == "gem" then
+		-- (where the gem is now: other gems of the group may have gone)
+		entry.index = nil
+		for i, g in ipairs(entry.group.gemList) do if g == entry.gem then entry.index = i end end
+		if not entry.index then return false end
+		local name = data.gems[entry.gem.gemId].name
+		local plain = name:match("^Awakened (.+)$")
+		local gemId
+		if plain then
+			for id, gem in pairs(data.gems) do if gem.name == plain then gemId = id end end
+		end
+		if gemId then
+			local g = copyTable(entry.gem, true)
+			g.gemId, g.skillId, g.gemData, g.grantedEffect, g.level, g.nameSpec = gemId, nil, nil, nil, 20, nil
+			entry.group.gemList[entry.index] = g
+		else
+			t_remove(entry.group.gemList, entry.index)
+		end
+		self.build.skillsTab:ProcessSocketGroup(entry.group)
+	else
+		return false
+	end
+	self.itemsTab:PopulateSlots()
+	self:Recalculate()
+	return true
+end
+
+-- Score each priced part is worth: the build with its cheap version instead
+-- (everything else as it is). Returns the entries with .loss, priced ones only
+function BuildGeneratorClass:PartValues(minPrice, withRares, withUnknown)
+	local _, entries = self:BuildCost()
+	local list = { }
+	local before = self:FullScore()
+	-- rares compared with the ones two investment levels down
+	local levels = GetPriceSource().levels
+	local investment = self.options.investment or { }
+	local cheapLevel
+	for i, level in ipairs(levels) do
+		if level.id == (investment.baseId or investment.id) then cheapLevel = levels[m_max(1, i - 2)] end
+	end
+	for _, entry in ipairs(entries) do
+		local wanted
+		if entry.estimate then
+			wanted = withRares and entry.kind == "gear" and cheapLevel and cheapLevel.rarePrice < entry.price
+			if wanted then
+				entry.cheapLevel = cheapLevel
+				entry.label = entry.label .. " (" .. (investment.baseId or investment.id or "") .. " rare instead of " .. cheapLevel.id .. ")"
+				entry.price = entry.price - cheapLevel.rarePrice
+			end
+		elseif entry.known then
+			wanted = entry.price >= (minPrice or 0.5)
+		else
+			wanted = withUnknown
+		end
+		if wanted then
+			local snap = self:Snapshot()
+			local savedLog = #self.log
+			local ok, done = pcall(function() return self:CheapVersion(entry) end)
+			if ok and done then
+				entry.loss = before - self:FullScore()
+				t_insert(list, entry)
+			elseif not ok then
+				ConPrintf("Cheap version of %s failed: %s", entry.label, tostring(done))
+			end
+			for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+			self:Restore(snap)
+			self:Tick()
+		end
+	end
+	return list
+end
+
+-- Total budget: while the build costs more, the part giving the least score
+-- per divine is replaced by its cheap version
+function BuildGeneratorClass:FitTotalBudget()
+	local budget = self.options.totalBudget
+	if not budget or budget <= 0 or not GetPriceSource().loaded then return end
+	local replaced = { }
+	for _ = 1, 6 do
+		local total = self:BuildCost()
+		if total <= budget then break end
+		local values = self:PartValues(0.5, true)
+		t_sort(values, function(a, b) return a.loss / a.price < b.loss / b.price end)
+		local entry = values[1]
+		if not entry then break end
+		-- (several cheap parts at once when far over: the worst value first)
+		local over = total - budget
+		local chosen = { }
+		for _, e in ipairs(values) do
+			t_insert(chosen, e)
+			over = over - e.price
+			if over <= 0 or #chosen >= 3 then break end
+		end
+		for _, e in ipairs(chosen) do
+			if self:CheapVersion(e) then
+				t_insert(replaced, string.format("%s (%s, %+.3f)", e.label, GetPriceSource().FormatPrice(e.price), -e.loss))
+			end
+		end
+		self:RefineTree(6)
+	end
+	local total = self:BuildCost()
+	if #replaced > 0 then
+		self:Note(string.format("Fitted under the total budget of %s: %s replaced by cheaper versions; build now about %s",
+			GetPriceSource().FormatPrice(budget), table.concat(replaced, ", "), GetPriceSource().FormatPrice(total)))
+	end
+	if total > budget * 1.05 then
+		self:Note(string.format("Still over the total budget (about %s): rares at this level cost about %s each", GetPriceSource().FormatPrice(total), GetPriceSource().FormatPrice((self.options.investment or { }).rarePrice)))
+	end
+end
+
+-- Upgrade order: the priced parts sorted by score per divine, with what the
+-- build has after each step (what to buy first when building it up)
+function BuildGeneratorClass:UpgradeOrder()
+	if not GetPriceSource().loaded then return end
+	local prices = GetPriceSource()
+	local total = self:BuildCost()
+	local all = self:PartValues(1, true, true)
+	local values, unknown = { }, { }
+	for _, e in ipairs(all) do
+		if e.loss > 0.002 then t_insert(e.known and values or unknown, e) end
+	end
+	if #values == 0 and #unknown == 0 then return end
+	t_sort(values, function(a, b) return a.loss / m_max(a.price, 0.1) > b.loss / m_max(b.price, 0.1) end)
+	t_sort(unknown, function(a, b) return a.loss > b.loss end)
+	local base = total
+	for _, e in ipairs(values) do base = base - e.price end
+	self:Note(string.format("Cost: about %s (uniques at their cheapest poe.ninja copy: chosen mods and seeds cost more; rares about %s each). Upgrade order, best score per divine first, from about %s:",
+		prices.FormatPrice(total), prices.FormatPrice((self.options.investment or { }).rarePrice), prices.FormatPrice(base)))
+	local spent = base
+	for i, e in ipairs(values) do
+		if i > 12 then break end
+		spent = spent + e.price
+		self:Note(string.format("    %d. %s (%s): score %+.3f, build about %s", i, e.label, prices.FormatPrice(e.price), e.loss, prices.FormatPrice(spent)))
+	end
+	if #unknown > 0 then
+		local parts = { }
+		for i, e in ipairs(unknown) do
+			if i > 6 then break end
+			t_insert(parts, string.format("%s %+.3f", e.label, e.loss))
+		end
+		self:Note("    Not priced (update prices to place them): " .. table.concat(parts, ", "))
+	end
+	self.upgradeOrder = values
+end
+
 -- Supreme Ostentation (Elegant Hubris, Caspiro): attribute requirements ignored.
 -- Its value only shows once the build is rebuilt without them: the passives
 -- taken for attributes spent elsewhere and the rares made without attribute
@@ -4693,6 +5159,7 @@ function BuildGeneratorClass:Run()
 	self:ChooseBases()
 	self:ForceUniques()
 	self:ApplyArchetypeUniques()
+	if opts.statPlan ~= false then self:PlanStatTarget("with the archetype's uniques") end
 
 	stage(5, "Generating rare items")
 	self:FullScore()
@@ -4746,6 +5213,8 @@ function BuildGeneratorClass:Run()
 	self:ChooseBloodline()
 
 	stage(8, (opts.investment.influences or 0) > 0 and "Generating influenced rare items" or "Generating rare items again")
+	-- (the plan again with the first gear: the target follows what the build reached)
+	if opts.statPlan ~= false and self.scorer.lens then self:PlanStatTarget("with the first gear") end
 	self:FullScore()
 	self:MakeRares(true)
 
@@ -4901,6 +5370,11 @@ function BuildGeneratorClass:Run()
 		local ok, err = pcall(function() self:SupremeOstentationMove() end)
 		if not ok then ConPrintf("Supreme Ostentation move failed: %s", tostring(err)) end
 	end
+	-- a second skill for bosses (builds made for clearing)
+	if opts.bossSkill ~= false then
+		local ok, err = pcall(function() self:BossSkillMove() end)
+		if not ok then ConPrintf("Boss skill move failed: %s", tostring(err)) end
+	end
 	-- the finished build partly rebuilt, again and again (large neighbourhood search)
 	if (opts.repairRounds or 8) > 0 then
 		self:Move(6, 6, "Rebuilding parts of the build to improve it")
@@ -4910,6 +5384,11 @@ function BuildGeneratorClass:Run()
 	if opts.pruneGems ~= false then
 		local ok, err = pcall(function() self:PruneUselessGems() end)
 		if not ok then ConPrintf("Pruning gems failed: %s", tostring(err)) end
+	end
+	-- total budget: the parts worth least per divine made cheap until it fits
+	if opts.totalBudget then
+		local ok, err = pcall(function() self:FitTotalBudget() end)
+		if not ok then ConPrintf("Fitting the total budget failed: %s", tostring(err)) end
 	end
 	-- hard requirements (resistances, attributes) fixed with bench crafts
 	if opts.requirements ~= false then self:RequirementsMove() end
@@ -4925,6 +5404,13 @@ function BuildGeneratorClass:Run()
 	self:SanitizeRares()
 	self:AutoConfigure()
 	self:Recalculate()
+	-- what each bought part is worth, best value first (not for quick builds)
+	if opts.upgradeOrder ~= false and not opts.quick then
+		local ok, err = pcall(function() self:UpgradeOrder() end)
+		if not ok then ConPrintf("Upgrade order failed: %s", tostring(err)) end
+		self:AutoConfigure()
+		self:Recalculate()
+	end
 	if self.skillProfileNote then self:Note("Main skill as used in a fight: " .. self.skillProfileNote) end
 	-- (the archetype's stat lens left out: archetypes compared as they are)
 	self.scorer.lens = nil
@@ -4988,7 +5474,11 @@ function BuildGeneratorClass:Run()
 	if not prices.loaded then
 		costLine = "Prices not loaded: uniques, anoints and tattoos were not filtered by price"
 	else
-		costLine = string.format("Estimated cost of uniques, anoint and tattoos: %s%s (rares not priced)", prices.FormatPrice(total), unknown > 0 and string.format(", plus %d with no price", unknown) or "")
+		local buildTotal, entries = self:BuildCost()
+		local noPrice = 0
+		for _, e in ipairs(entries) do if not e.known then noPrice = noPrice + 1 end end
+		costLine = string.format("Estimated cost of the build: %s (uniques, anoints, tattoos and gems at poe.ninja prices, rares about %s each)%s",
+			prices.FormatPrice(buildTotal), prices.FormatPrice(opts.investment.rarePrice), noPrice > 0 and string.format(", plus %d part%s with no price", noPrice, noPrice == 1 and "" or "s") or "")
 	end
 	return {
 		log = self.log,

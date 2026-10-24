@@ -26,19 +26,21 @@ local exchangeTypes = { "Tattoo", "Oil" }
 
 -- Investment levels: max price per item in divines (nil = no limit);
 -- rareAffixes: the good natural mods a rare of the budget realistically has
--- (plus the bench craft; nil = all six)
+-- (plus the bench craft; nil = all six); rarePrice: rough price of one rare
+-- piece of gear made at that level (rares aren't on poe.ninja); budgetUpTo:
+-- the level a total budget up to that many divines uses
 PriceSourceClass.levels = {
-	{ id = "LEAGUE_START", label = "League start (items up to 1 divine)", rareAffixes = 3, maxUnique = 1, maxAnoint = 1, maxTattoo = 0.1, influences = 0, eldritchTier = 1, quality = 3, unknownAllowed = false,
+	{ id = "LEAGUE_START", label = "League start (items up to 1 divine)", rarePrice = 0.05, budgetUpTo = 3, rareAffixes = 3, maxUnique = 1, maxAnoint = 1, maxTattoo = 0.1, influences = 0, eldritchTier = 1, quality = 3, unknownAllowed = false,
 		enlighten = nil, exceptionalGems = false, awakenedGems = false, timeless = false, scarce = false },
-	{ id = "BUDGET", label = "Budget (items up to 5 divines)", rareAffixes = 4, maxUnique = 5, maxAnoint = 3, maxTattoo = 0.5, influences = 0, eldritchTier = 3, quality = 2, unknownAllowed = false,
+	{ id = "BUDGET", label = "Budget (items up to 5 divines)", rarePrice = 0.3, budgetUpTo = 15, rareAffixes = 4, maxUnique = 5, maxAnoint = 3, maxTattoo = 0.5, influences = 0, eldritchTier = 3, quality = 2, unknownAllowed = false,
 		enlighten = nil, exceptionalGems = false, awakenedGems = false, timeless = true, scarce = false },
-	{ id = "MID", label = "Mid investment (items up to 30 divines)", rareAffixes = 4, maxUnique = 30, maxAnoint = 10, maxTattoo = 2, influences = 1, maxInfluenced = 2, eldritchTier = 4, quality = 2, unknownAllowed = false,
+	{ id = "MID", label = "Mid investment (items up to 30 divines)", rarePrice = 1.5, budgetUpTo = 100, rareAffixes = 4, maxUnique = 30, maxAnoint = 10, maxTattoo = 2, influences = 1, maxInfluenced = 2, eldritchTier = 4, quality = 2, unknownAllowed = false,
 		enlighten = nil, exceptionalGems = false, awakenedGems = false, timeless = true, scarce = false },
-	{ id = "HIGH", label = "High investment (items up to 150 divines)", rareAffixes = 5, maxUnique = 150, maxAnoint = 50, maxTattoo = 10, influences = 2, maxInfluenced = 4, eldritchTier = 5, quality = 2, unknownAllowed = true,
+	{ id = "HIGH", label = "High investment (items up to 150 divines)", rarePrice = 8, budgetUpTo = 450, rareAffixes = 5, maxUnique = 150, maxAnoint = 50, maxTattoo = 10, influences = 2, maxInfluenced = 4, eldritchTier = 5, quality = 2, unknownAllowed = true,
 		enlighten = { name = "Enlighten", level = 4 }, exceptionalGems = true, awakenedGems = true, timeless = true, corruptedMain = true },
-	{ id = "ENDGAME", label = "Endgame investment (items up to 500 divines, Mageblood level)", multiCraft = true, maxUnique = 500, maxAnoint = 150, maxTattoo = 30, influences = 2, maxInfluenced = 7, eldritchTier = 6, quality = 4, unknownAllowed = true,
+	{ id = "ENDGAME", label = "Endgame investment (items up to 500 divines, Mageblood level)", rarePrice = 30, budgetUpTo = 2000, multiCraft = true, maxUnique = 500, maxAnoint = 150, maxTattoo = 30, influences = 2, maxInfluenced = 7, eldritchTier = 6, quality = 4, unknownAllowed = true,
 		enlighten = { name = "Awakened Enlighten", level = 5 }, exceptionalGems = true, awakenedGems = true, timeless = true, corruptedMain = true, corruptedSupports = true },
-	{ id = "MIRROR", label = "No limit (mirror tier)", multiCraft = true, influences = 2, eldritchTier = 6, elevated = true, quality = 1, unknownAllowed = true,
+	{ id = "MIRROR", label = "No limit (mirror tier)", rarePrice = 150, multiCraft = true, influences = 2, eldritchTier = 6, elevated = true, quality = 1, unknownAllowed = true,
 		enlighten = { name = "Awakened Enlighten", level = 5 }, exceptionalGems = true, awakenedGems = true, timeless = true, corruptedMain = true, corruptedSupports = true },
 }
 PriceSourceClass.defaultLevel = 3
@@ -57,6 +59,26 @@ PriceSourceClass.scarceUniques = {
 	["Thread of Hope"] = false,
 }
 
+-- The investment level for a total budget (divines for the whole build): the
+-- level whose rares and features fit, with per-item caps from the total (one
+-- item can't take more than half of it)
+function PriceSourceClass.ForBudget(total)
+	local chosen
+	for _, level in ipairs(PriceSourceClass.levels) do
+		chosen = level
+		if level.budgetUpTo and total <= level.budgetUpTo then break end
+	end
+	local level = copyTable(chosen, true)
+	level.totalBudget = total
+	level.baseId = chosen.id
+	local function cap(value, share) return value and math.min(value, total * share) or total * share end
+	level.maxUnique = cap(chosen.maxUnique, 0.5)
+	level.maxAnoint = cap(chosen.maxAnoint, 0.25)
+	level.maxTattoo = cap(chosen.maxTattoo, 0.05)
+	level.label = string.format("Total budget %s (%s rares)", PriceSourceClass.FormatPrice(total), chosen.label:match("^([^%(]+)"):gsub("%s+$", ""))
+	return level
+end
+
 -- Can a unique be counted on at an investment level (scarce ones from High)?
 function PriceSourceClass.Available(level, title)
 	if not level or not title then return true end
@@ -65,7 +87,7 @@ function PriceSourceClass.Available(level, title)
 end
 
 function PriceSourceClass:PriceSource()
-	self.uniques, self.tattoos, self.oils = { }, { }, { }
+	self.uniques, self.tattoos, self.oils, self.gems = { }, { }, { }, { }
 	self.loaded = false
 	self:LoadCache()
 	return self
@@ -91,7 +113,7 @@ function PriceSourceClass:SaveCache()
 	local path = self:CachePath()
 	local file = path and io.open(path, "w")
 	if not file then return end
-	file:write(dkjson.encode({ time = self.time, league = self.league, uniques = self.uniques, tattoos = self.tattoos, oils = self.oils }))
+	file:write(dkjson.encode({ time = self.time, league = self.league, uniques = self.uniques, tattoos = self.tattoos, oils = self.oils, gems = self.gems }))
 	file:close()
 end
 
@@ -101,6 +123,7 @@ function PriceSourceClass:SetData(data)
 	self.uniques = data.uniques or { }
 	self.tattoos = data.tattoos or { }
 	self.oils = data.oils or { }
+	self.gems = data.gems or { }
 	local count = 0
 	for _ in pairs(self.uniques) do count = count + 1 end
 	self.uniqueCount = count
@@ -135,6 +158,19 @@ local function parseItems(json, into)
 	end
 end
 
+-- Reads the skill gem overview: the cheapest uncorrupted copy of each gem
+-- at each level ("Awakened Added Fire Damage Support:5")
+local function parseGems(json, into)
+	for _, line in ipairs(json.lines or { }) do
+		local name, value, level = line.name, tonumber(line.divineValue), tonumber(line.gemLevel)
+		if name and value and level and not line.corrupted then
+			local key = name .. ":" .. level
+			into[key] = into[key] and m_min(into[key], value) or value
+		end
+	end
+end
+PriceSourceClass.ParseGems = parseGems
+
 -- Reads one exchange overview: prices in chaos (primaryValue), names in items[]
 local function parseExchange(json, into)
 	local rate = json.core and json.core.rates and tonumber(json.core.rates.divine) or nil
@@ -167,7 +203,7 @@ function PriceSourceClass:Refresh(callback, leagueOverride)
 	end
 	self.loading, self.error = true, nil
 	local header = "User-Agent: " .. userAgent .. "\r\nAccept: application/json"
-	local data = { uniques = { }, tattoos = { }, oils = { } }
+	local data = { uniques = { }, tattoos = { }, oils = { }, gems = { } }
 	local queue = { }
 	local function fail(msg)
 		self.loading = false
@@ -185,11 +221,14 @@ function PriceSourceClass:Refresh(callback, leagueOverride)
 			return
 		end
 		launch:DownloadPage(request.url, function(response, errMsg)
+			-- (optional lists, like gem prices, are skipped when they fail)
 			if errMsg then
+				if request.optional then return nextRequest() end
 				return fail("download failed (" .. tostring(errMsg) .. ")")
 			end
 			local ok, json = pcall(dkjson.decode, response.body)
 			if not ok or type(json) ~= "table" then
+				if request.optional then return nextRequest() end
 				return fail("unexpected answer from poe.ninja")
 			end
 			request.parse(json)
@@ -211,6 +250,7 @@ function PriceSourceClass:Refresh(callback, leagueOverride)
 		for _, itemType in ipairs(itemTypes) do
 			t_insert(queue, { url = apiBase .. "stash/current/item/overview?league=" .. league .. "&type=" .. itemType, parse = function(json) parseItems(json, data.uniques) end })
 		end
+		t_insert(queue, { url = apiBase .. "stash/current/item/overview?league=" .. league .. "&type=SkillGem", optional = true, parse = function(json) parseGems(json, data.gems) end })
 		t_insert(queue, { url = apiBase .. "exchange/current/overview?league=" .. league .. "&type=Tattoo", parse = function(json) parseExchange(json, data.tattoos) end })
 		t_insert(queue, { url = apiBase .. "exchange/current/overview?league=" .. league .. "&type=Oil", parse = function(json) parseExchange(json, data.oils) end })
 		t_insert(queue, { url = apiBase .. "exchange/current/overview?league=" .. league .. "&type=Runegraft", parse = function(json) parseExchange(json, data.tattoos) end })
@@ -225,6 +265,15 @@ end
 function PriceSourceClass:UniquePrice(item)
 	local title = item.title or (item.name and item.name:match("^([^,]+),")) or item.name
 	return title and self.uniques[title]
+end
+
+-- Price of a gem at a level (the nearest listed level at or below it); nil = not listed
+function PriceSourceClass:GemPrice(name, level)
+	for l = level or 20, 1, -1 do
+		local price = self.gems[name .. ":" .. l]
+		if price then return price end
+	end
+	return nil
 end
 
 function PriceSourceClass:TattooPrice(name)
