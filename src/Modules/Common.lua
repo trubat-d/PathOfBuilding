@@ -1154,6 +1154,13 @@ function GetPriceSource()
 end
 
 -- Shared poe.ninja build statistics source for the build ideas tools
+-- Rules for the build generator (uniques / gems with drawbacks PoB can't calculate)
+local generatorRules
+function GetGeneratorRules()
+	generatorRules = generatorRules or LoadModule("Modules/GeneratorRules")
+	return generatorRules
+end
+
 function GetBuildMetaSource()
 	if not main.buildMetaSource then
 		main.buildMetaSource = new("BuildMetaSource"):BuildMetaSource()

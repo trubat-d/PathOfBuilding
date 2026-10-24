@@ -163,7 +163,7 @@ end
 function GemSetupClass:FreeSockets()
 	local free = { }
 	for _, slotName in ipairs(utilitySlots) do
-		free[slotName] = self:SlotSockets(slotName)
+		free[slotName] = self:BehaviourSlot(slotName) and 0 or self:SlotSockets(slotName)
 	end
 	for _, group in ipairs(self.groups) do
 		if group.slot and free[group.slot] then
@@ -186,6 +186,20 @@ function GemSetupClass:SlotGrantsSupport(slotName, pattern)
 		end
 	end
 	return false
+end
+
+-- Slots whose item supports its gems with something that changes what a
+-- utility gem does there (traps, totems, Generosity, triggers...): left out of
+-- utility setups (blessing items are handled on their own)
+function GemSetupClass:BehaviourSlot(slotName)
+	if self.behaviourCache and self.behaviourCache[slotName] ~= nil then return self.behaviourCache[slotName] end
+	self.behaviourCache = self.behaviourCache or { }
+	local found = false
+	for _, name in ipairs(GetGeneratorRules().behaviourSupports) do
+		if name ~= "Divine Blessing" and name ~= "Eternal Blessing" and self:SlotGrantsSupport(slotName, name) then found = true break end
+	end
+	self.behaviourCache[slotName] = found
+	return found
 end
 
 -- Slots whose item turns auras into blessings (one aura there, not a group)

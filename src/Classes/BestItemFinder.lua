@@ -74,6 +74,13 @@ function BestItemFinderClass:GetActiveSlots()
 end
 
 function BestItemFinderClass:IsItemAllowed(item, opts)
+	-- drawbacks PoB doesn't calculate (Modules/GeneratorRules)
+	local rules = GetGeneratorRules()
+	if item.rarity == "UNIQUE" or item.rarity == "RELIC" or not item.rarity then
+		if not rules.UniqueAllowed(item, self.build.calcsTab and self.build.calcsTab.mainOutput) then
+			return false
+		end
+	end
 	if opts.obtainableOnly then
 		local source = item.source or ""
 		if source == "No longer obtainable" or (item.league and item.league == "Race Events") then
