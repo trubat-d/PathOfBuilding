@@ -452,12 +452,20 @@ function BuildIdeasPopupClass:OpenGenerator()
 			t_insert(list, { label = label, archetype = a, scan = scan })
 		end
 		if results then
-			-- built archetypes first (by score), then the estimated ones
+			-- built archetypes first (by predicted full score: Modules/GeneratorLearning), then the estimated ones
+			local learning = LoadModule("Modules/GeneratorLearning")
+			for _, entry in ipairs(list) do
+				if entry.scan and entry.scan.built and entry.scan.score then
+					entry.priority = learning.Priority(entry.archetype.id, entry.scan.score)
+					entry.label = entry.label .. string.format(", full build expected about %.1f", entry.scan.score + learning.Uplift(entry.archetype.id))
+				end
+			end
 			table.sort(list, function(x, y)
 				local bx, by = x.scan and x.scan.built and 1 or 0, y.scan and y.scan.built and 1 or 0
 				if bx ~= by then return bx > by end
-				local sx, sy = x.scan and x.scan.score or -math.huge, y.scan and y.scan.score or -math.huge
-				return sx > sy
+				local sx, sy = x.priority or (x.scan and x.scan.score) or -math.huge, y.priority or (y.scan and y.scan.score) or -math.huge
+				if sx ~= sy then return sx > sy end
+				return x.archetype.id < y.archetype.id
 			end)
 		else
 			t_insert(list, 1, { label = "Automatic: scan every archetype, then fully build the best one", auto = true })
@@ -907,18 +915,33 @@ function BuildIdeasPopupClass:OpenGenerator()
 		-- start, and the one that ends best is often second or third)
 		-- (and up to five when more start close to the best one; archetypes whose
 		-- quick builds came out the same, e.g. one adding nothing usable, once)
-		local candidates, scores = { }, { }
-		local bestScore
+		-- (ranked by predicted full score: the quick score plus what a full
+		-- build of the archetype usually gains over its quick build, learnt
+		-- from earlier generations, with a bonus for little-tried ones:
+		-- Modules/GeneratorLearning)
+		local learning = LoadModule("Modules/GeneratorLearning")
+		local ranked = { }
 		for _, entry in ipairs(controls.archetype.list) do
 			local scan = entry.scan
 			if entry.archetype and scan and scan.built and not scan.error and scan.score then
-				local same = false
-				for _, s in ipairs(scores) do if math.abs(s - scan.score) < 1e-6 then same = true end end
-				bestScore = bestScore or scan.score
-				if not same and (#candidates < 3 or (#candidates < 5 and scan.score >= bestScore - 0.5)) then
-					t_insert(candidates, entry.archetype)
-					t_insert(scores, scan.score)
-				end
+				t_insert(ranked, { archetype = entry.archetype, quick = scan.score, priority = learning.Priority(entry.archetype.id, scan.score) })
+			end
+		end
+		table.sort(ranked, function(a, b)
+			if a.priority ~= b.priority then return a.priority > b.priority end
+			return a.archetype.id < b.archetype.id
+		end)
+		local candidates, scores = { }, { }
+		state.quickScores = { }
+		local bestScore
+		for _, r in ipairs(ranked) do
+			local same = false
+			for _, s in ipairs(scores) do if math.abs(s - r.quick) < 1e-6 then same = true end end
+			bestScore = bestScore or r.priority
+			if not same and (#candidates < 3 or (#candidates < 5 and r.priority >= bestScore - 0.5)) then
+				t_insert(candidates, r.archetype)
+				t_insert(scores, r.quick)
+				state.quickScores[r.archetype.id] = r.quick
 			end
 		end
 		if #candidates < 2 then return false end
@@ -939,9 +962,22 @@ function BuildIdeasPopupClass:OpenGenerator()
 		local skill = controls.skill.list[controls.skill.selIndex]
 		local asc = controls.ascend.list[controls.ascend.selIndex]
 		state.running = true
+		state.builtByArchetype = { }
+		state.alternatives = nil
 		local best
 		local failures = { }
 		runParallel(candidates, false, state.meta, function(archetype, summary, xml, variant)
+			-- (learnt: how much the full build gained over the quick one)
+			local quick = state.quickScores and state.quickScores[archetype.id]
+			if quick and summary.score and (variant or 1) == 1 then
+				pcall(function() LoadModule("Modules/GeneratorLearning").Record(archetype.id, skill.label, quick, summary.score) end)
+			end
+			-- (each archetype's best build kept: the close ones are offered as alternatives)
+			state.builtByArchetype = state.builtByArchetype or { }
+			local prev = state.builtByArchetype[archetype.id]
+			if summary.score and (not prev or summary.score > prev.score) then
+				state.builtByArchetype[archetype.id] = { archetype = archetype, score = summary.score, dps = summary.dps, ehp = summary.ehp, xml = xml }
+			end
 			if not best or (summary.score or -math.huge) > (best.summary.score or -math.huge) then
 				best = { archetype = archetype, summary = summary, xml = xml, variant = variant }
 			end
@@ -969,6 +1005,25 @@ function BuildIdeasPopupClass:OpenGenerator()
 			for _, pen in ipairs(result.penalties or { }) do t_insert(lines, colorCodes.NEGATIVE .. "Cost: ^7" .. pen.label) end
 			for _, a in ipairs(result.assumptions or { }) do t_insert(lines, "^x66CCFFAssumes: ^7" .. a) end
 			for _, f in ipairs(failures) do t_insert(lines, colorCodes.NEGATIVE .. "Failed: ^7" .. f) end
+			-- other ideas that came close: kept so they can be opened (uncommon
+			-- builds within reach of the best one)
+			local alternatives = { }
+			for id, built in pairs(state.builtByArchetype or { }) do
+				if id ~= best.archetype.id and built.score >= result.score - 1.0 then t_insert(alternatives, built) end
+			end
+			table.sort(alternatives, function(a, b) return a.score > b.score end)
+			if #alternatives > 0 then
+				t_insert(lines, "^7Other ideas close to it (open them below, Alternatives):")
+				for _, alt in ipairs(alternatives) do
+					t_insert(lines, string.format("^7- %s: score %.2f (%+.2f), damage %s, effective hit pool %s", alt.archetype.label, alt.score, alt.score - result.score,
+						formatNumSep(string.format("%.0f", alt.dps or 0)), formatNumSep(string.format("%.0f", alt.ehp or 0))))
+				end
+				state.alternatives = alternatives
+				local list = { }
+				for _, alt in ipairs(alternatives) do t_insert(list, { label = string.format("%s (%+.2f)", alt.archetype.label, alt.score - result.score), alt = alt }) end
+				controls.alternatives:SetList(list)
+				controls.alternatives.selIndex = 1
+			end
 			setLog(lines)
 			state.status = "^7Finished."
 		end)
@@ -1055,6 +1110,21 @@ function BuildIdeasPopupClass:OpenGenerator()
 		return state.running and state.progress or nil
 	end)
 	addPriceControls(controls, 16, 464, idle)
+	-- builds of other ideas that came close to the best one (automatic mode)
+	controls.alternatives = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {120, 464, 400, 20}, { })
+	controls.alternatives.shown = function() return state.alternatives ~= nil and #state.alternatives > 0 end
+	controls.alternativesLabel = new("LabelControl"):LabelControl({"RIGHT",controls.alternatives,"LEFT"}, {-4, 0, 0, 16}, "^7Alternatives:")
+	controls.alternativesLabel.shown = controls.alternatives.shown
+	controls.openAlternative = new("ButtonControl"):ButtonControl({"LEFT",controls.alternatives,"RIGHT"}, {6, 0, 110, 20}, "Open this one", function()
+		local entry = controls.alternatives.list[controls.alternatives.selIndex]
+		if not entry or not entry.alt then return end
+		local skill = controls.skill.list[controls.skill.selIndex]
+		local asc = controls.ascend.list[controls.ascend.selIndex]
+		main:SetMode("BUILD", false, "Generated " .. skill.label .. " " .. asc.ascendName .. " (" .. entry.alt.archetype.label .. ")", entry.alt.xml)
+		state.status = "^7Opened the alternative: " .. entry.alt.archetype.label .. ". Not saved yet: use Save As to keep it."
+	end)
+	controls.openAlternative.shown = controls.alternatives.shown
+	controls.openAlternative.enabled = idle
 	controls.close = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {824, 464, 80, 20}, "Close", function()
 		main.onFrameFuncs["BuildGenerator"] = nil
 		main.onFrameFuncs["BuildGeneratorPanel"] = nil

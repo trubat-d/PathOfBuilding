@@ -67,14 +67,28 @@ def run_auto(case, pool, top):
     skill, asc, inv, mode, arch = case
     quick_cases = [[skill, asc, inv, "quick", a] for a in list_archetypes(case)]
     quick = [json.loads(l) for l in pool.map(run_case, quick_cases)]
-    ranked = sorted([q for q in quick if q.get("score") is not None], key=lambda q: -q["score"])
+    # ranked by predicted full score: quick score + learnt full-build gain of
+    # the archetype + a bonus for little-known ones (as the app:
+    # src/Modules/GeneratorLearning.lua, src/Data/GeneratorPriors.json)
+    import math
+    try:
+        priors = json.load(open(os.path.join(src, "Data", "GeneratorPriors.json")))
+    except Exception:
+        priors = {"globalUplift": 2.8, "upliftSpread": 0.8, "archetypes": {}}
+    def priority(q):
+        p = priors["archetypes"].get(q["archetype"], {"uplift": 0, "count": 0})
+        uplift = (p["uplift"] * p["count"] + priors["globalUplift"] * 2) / (p["count"] + 2)
+        return q["score"] + uplift + 0.35 * priors["upliftSpread"] / math.sqrt(p["count"] + 1)
+    ranked = sorted([q for q in quick if q.get("score") is not None], key=lambda q: (-priority(q), q["archetype"]))
+    for q in ranked:
+        q["priority"] = priority(q)
     # the best `top`, and up to `top`+2 when they start within 0.5 of the best;
     # archetypes whose quick builds came out the same only once (as the app)
     picked = []
     for q in ranked:
         if any(abs(p["score"] - q["score"]) < 1e-6 for p in picked):
             continue
-        if len(picked) < top or (len(picked) < top + 2 and q["score"] >= ranked[0]["score"] - 0.5):
+        if len(picked) < top or (len(picked) < top + 2 and q["priority"] >= ranked[0]["priority"] - 0.5):
             picked.append(q)
     full_cases = [[skill, asc, inv, "full", q["archetype"]] for q in picked]
     full = [json.loads(l) for l in pool.map(run_case, full_cases)]

@@ -1841,6 +1841,82 @@ function BuildGeneratorClass:FlaskEnchantMove()
 	if #kept > 0 then self:Note("Flask enchantments (Enkindling Orb): " .. table.concat(kept, "; ")) end
 end
 
+-- Hard requirements solved directly: when the finished build is below the
+-- resistance cap or short of attributes, each rare's crafted mod is tried
+-- against every bench craft of the same kind (prefix / suffix) that gives
+-- resistances or attributes; the best swap is kept while the build gets
+-- better. Cheaper than another round of rares, and exact.
+function BuildGeneratorClass:RequirementsMove(rounds)
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local rg = finder.rareGenerator
+	local quality = self.options.quality
+	if not rg or not quality then return 0 end
+	local total = 0
+	for _ = 1, rounds or 3 do
+		self:Recalculate()
+		local o = self.build.calcsTab.mainOutput
+		local missing = 0
+		for _, elem in ipairs({ "Fire", "Cold", "Lightning" }) do missing = missing + m_max(0, o["Missing" .. elem .. "Resist"] or 0) end
+		local short = false
+		for _, attr in ipairs({ "Str", "Dex", "Int" }) do
+			if (o["Req" .. attr] or 0) > (o[attr] or 0) then short = true end
+		end
+		if missing <= 0 and not short then break end
+		local before = self:FullScore()
+		local current = self:Score()
+		local best
+		for _, slot in ipairs(self.itemsTab.orderedSlots) do
+			local item = self.itemsTab.items[slot.selItemId]
+			if item and item.rarity == "RARE" and not slot.nodeId and item.type ~= "Jewel" and not (item.base and item.base.flask) then
+				local craftedLines = { }
+				for _, modLine in ipairs(item.explicitModLines or { }) do
+					if modLine.crafted then t_insert(craftedLines, modLine.line) end
+				end
+				if #craftedLines > 0 then
+					local candidates = rg:GetCraftCandidates(item, quality)
+					local kind
+					for _, c in ipairs(candidates) do
+						if c.lines[1] == craftedLines[1] then kind = c.type end
+					end
+					for _, c in ipairs(candidates) do
+						local text = table.concat(c.lines, " ")
+						if (not kind or c.type == kind) and c.lines[1] ~= craftedLines[1]
+							and (text:match("Resistance") or text:match("to Strength") or text:match("to Dexterity") or text:match("to Intelligence") or text:match("to all Attributes")) then
+							local raw = item:BuildRaw()
+							local copy = new("Item"):Item(raw)
+							for i = #copy.explicitModLines, 1, -1 do
+								if copy.explicitModLines[i].crafted then table.remove(copy.explicitModLines, i) end
+							end
+							for _, line in ipairs(c.lines) do t_insert(copy.explicitModLines, { line = line, crafted = true }) end
+							copy:BuildAndParseRaw()
+							local score = self:Score({ repSlotName = slot.slotName, repItem = copy })
+							if score > current + 0.002 and (not best or score > best.score + 1e-9) then
+								best = { slot = slot, item = copy, old = item, score = score, label = c.label, was = craftedLines[1] }
+							end
+						end
+					end
+				end
+			end
+		end
+		if not best then break end
+		local previous = best.slot.selItemId
+		local newItem = self:Equip(best.item, best.slot.slotName)
+		self.itemsTab:PopulateSlots()
+		local after = self:FullScore()
+		if after > before + 0.002 then
+			total = total + after - before
+			self:Note(string.format("Requirement fixed with a bench craft on %s: %s instead of %s, score %+.3f", best.slot.slotName, best.label, tostring(best.was), after - before))
+		else
+			best.slot:SetSelItemId(previous)
+			self.itemsTab:DeleteItem(newItem, true)
+			self.itemsTab:PopulateSlots()
+			self:Recalculate()
+			break
+		end
+	end
+	return total
+end
+
 -- Rares made again at the end, once the tree, jewels, flasks and gems are
 -- final (they were made for the build as it was then): every rare slot,
 -- influences and eldritch implicits included (the weapon bases and the
@@ -2659,7 +2735,7 @@ function BuildGeneratorClass:ChooseMetaUniques()
 				self:FitSockets()
 				local after = self:FullScore()
 				if after <= before + 0.003 then self:RestoreGroups(savedGroups) end
-				if after > before + 0.003 then
+				if after > before + self:PriceCost(item) + 0.003 then
 					local price = GetPriceSource():UniquePrice(item)
 					t_insert(kept, string.format("%s in %s (%d%% of players; %s)", item.title or item.name, bestSlot, math.floor(entry.share * 100 + 0.5), GetPriceSource().FormatPrice(price)))
 					self.costs = self.costs or { }
@@ -2720,6 +2796,76 @@ function BuildGeneratorClass:FitSockets()
 	end
 	if changed then self:Recalculate() end
 	return changed
+end
+
+-- The idea the build is built around, and its parts that carry it most
+function BuildGeneratorClass:Explain(final)
+	local archetype = self.options.archetype
+	if archetype then
+		self:Note(string.format("Built around: %s. %s", archetype.label, archetype.summary or ""))
+	end
+	local base = final or self.scorer:Evaluate(self.calcFunc, { })
+	local baseHit = self.scorer:MinMaxHit(base.output) or 1
+	local rows = { }
+	local function measure(label, override)
+		local r = self.scorer:Evaluate(self.calcFunc, override, { flasks = "ratio", ratio = self.ratio })
+		local hit = self.scorer:MinMaxHit(r.output) or 1
+		t_insert(rows, { label = label, loss = base.score - r.score, dps = base.dps > 0 and (1 - r.dps / base.dps) or 0, hit = 1 - hit / baseHit })
+	end
+	for _, slot in ipairs(self.itemsTab.orderedSlots) do
+		local item = self.itemsTab.items[slot.selItemId]
+		if item and (not slot.nodeId or self.build.spec.allocNodes[slot.nodeId]) and not slot.slotName:match("Swap") and (item.rarity == "UNIQUE" or item.rarity == "RELIC" or slot.nodeId) then
+			measure(string.format("%s (%s)", item.title or item.name, slot.slotName), { repItems = { [slot.slotName] = false } })
+		end
+	end
+	for _, node in ipairs(nodesById(self.build.spec.allocNodes)) do
+		if node.type == "Keystone" or (node.ascendancyName and node.type == "Notable") then
+			measure(node.dn, { removeNodes = { [node] = true } })
+		end
+	end
+	local main = self.mainGroup
+	if main then
+		for _, gem in ipairs(main.gemList) do
+			if gem.enabled ~= false and gem.gemData and gem.gemData.grantedEffect.support then
+				gem.enabled = false
+				self.build.skillsTab:ProcessSocketGroup(main)
+				self:Recalculate()
+				measure(gem.gemData.name .. " (support)", { })
+				gem.enabled = true
+				self.build.skillsTab:ProcessSocketGroup(main)
+			end
+		end
+		self:Recalculate()
+	end
+	table.sort(rows, function(a, b)
+		if a.loss ~= b.loss then return a.loss > b.loss end
+		return a.label < b.label
+	end)
+	local parts = { }
+	for i = 1, m_min(6, #rows) do
+		local r = rows[i]
+		if r.loss > 0.01 then
+			local what = { }
+			if r.dps > 0.005 then t_insert(what, string.format("%.0f%% of the damage", r.dps * 100)) end
+			if r.hit > 0.01 then t_insert(what, string.format("%.0f%% of the max hit", r.hit * 100)) end
+			t_insert(parts, #what > 0 and string.format("%s (%s)", r.label, table.concat(what, ", ")) or r.label)
+		end
+	end
+	if #parts > 0 then self:Note("What carries it: " .. table.concat(parts, "; ")) end
+end
+
+-- What buying an item costs in score: the budget is an investment, so an
+-- expensive item must gain more than a cheap one that does nearly as well
+-- (a quarter of the item limit costs 0.01, the full limit 0.04: about 1% and
+-- 4% damage). Nothing for items without a price or levels without a limit.
+function BuildGeneratorClass:PriceCost(item)
+	if not item or self.options.priceAware == false then return 0 end
+	local investment = self.options.investment or { }
+	local cap = investment.maxUnique
+	if not cap or cap <= 0 then return 0 end
+	local price = GetPriceSource():UniquePrice(item)
+	if not price then return 0 end
+	return 0.04 * m_min(1, price / cap)
 end
 
 -- Socket groups and the main link state, to undo a move
@@ -2848,8 +2994,9 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 					else
 						score = self:Score({ repSlotName = slotName, repItem = item })
 					end
-					if score > current + 0.01 then
-						t_insert(gains, { item = item, slot = slotName, gain = score - current, relocate = relocate })
+					-- (gain net of what the item costs: Price Cost)
+					if score > current + 0.01 + self:PriceCost(item) then
+						t_insert(gains, { item = item, slot = slotName, gain = score - current - self:PriceCost(item), relocate = relocate })
 					end
 				end
 			end
@@ -2883,7 +3030,7 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 			self:Recalculate()
 			local after = moved and self:FullScore() or before
 			if self.options.debugTiming then ConPrintf("[uniques] tried %s in %s%s: %.3f -> %.3f", entry.item.title or entry.item.name, entry.slot, entry.relocate and " (main link moved)" or "", before, after) end
-			if after > before + 0.005 then
+			if after > before + self:PriceCost(entry.item) + 0.005 then
 				usedSlots[entry.slot] = true
 				usedItems[title] = true
 				if entry.slot:match("^Weapon") then self.weaponFinalists = nil end
@@ -3110,7 +3257,7 @@ function BuildGeneratorClass:LearnFromTopBuilds(maxTries)
 			end
 			self:AutoConfigure()
 			local after = self:FullScore()
-			if after > before + 0.005 then
+			if after > before + self:PriceCost(c.item) + 0.005 then
 				if c.kind == "item" then usedSlots[c.slot] = true else supportsDone = true end
 				t_insert(kept, string.format("%s %+.2f", c.label, after - before))
 				if c.kind == "item" and (c.item.rarity == "UNIQUE" or c.item.rarity == "RELIC") then
@@ -3167,7 +3314,7 @@ function BuildGeneratorClass:PermanentFlaskMove()
 					if self.options.uniqueSweep ~= false then self:UniqueFlaskSweep() end
 					local after = self:FullScore()
 					if self.options.debugTiming then ConPrintf("[mageblood] %s in %s: %.3f -> %.3f", item.title or item.name, slotName, before, after) end
-					if after > before + 0.01 then
+					if after > before + self:PriceCost(item) + 0.01 then
 						kept = kept + 1
 						local price = GetPriceSource():UniquePrice(item)
 						self:Note(string.format("%s in %s with flasks made for it (+%.2f; %s)", item.title or item.name, slotName, after - before, GetPriceSource().FormatPrice(price)))
@@ -3248,7 +3395,7 @@ function BuildGeneratorClass:UniqueFlaskSweep(maxTries)
 			if self.itemsTab.activeItemSet[entry.slot] then self.itemsTab.activeItemSet[entry.slot].active = true end
 			self.itemsTab:PopulateSlots()
 			local after = self:FullScore()
-			if after > before + 0.005 then
+			if after > before + self:PriceCost(entry.item) + 0.005 then
 				usedSlots[entry.slot] = true
 				usedItems[title] = true
 				local price = GetPriceSource():UniquePrice(entry.item)
@@ -3620,6 +3767,8 @@ function BuildGeneratorClass:Run()
 		end
 	end
 
+	-- hard requirements (resistances, attributes) fixed with bench crafts
+	if opts.requirements ~= false then self:RequirementsMove() end
 	self:RemoveUnusedItems()
 	-- (last check: every gem setup fits its item's sockets)
 	if self:FitSockets() then self:Note("Gem setups packed again to fit the items' sockets") end
@@ -3665,6 +3814,9 @@ function BuildGeneratorClass:Run()
 			if ok and craft then self:Note(string.format("Craft %s (%s): %s", slot.slotName, item.baseName, craft.text)) end
 		end
 	end
+	-- what the build is built around and what carries it (each part taken
+	-- out alone: the score, damage and max hit it would lose)
+	if opts.explain ~= false then pcall(function() self:Explain(final) end) end
 	local _, checks = self.scorer:Checklist(output)
 	local okList, missingList = { }, { }
 	for _, entry in ipairs(checks) do t_insert(entry.ok and okList or missingList, entry.label) end

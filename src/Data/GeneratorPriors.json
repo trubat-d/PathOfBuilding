@@ -1,0 +1,19 @@
+{
+  "note": "How much a full build gains over its quick build, per archetype (score units), measured on the benchmark (bench/results, October 2026). The generator adds what it learns on this computer (GeneratorLearning.json in the user folder).",
+  "globalUplift": 2.83,
+  "upliftSpread": 0.82,
+  "archetypes": {
+    "MINES": { "uplift": 4.23, "count": 2 },
+    "PHYS_ELE": { "uplift": 3.59, "count": 2 },
+    "IMPALE": { "uplift": 3.25, "count": 2 },
+    "CI": { "uplift": 3.08, "count": 2 },
+    "RT": { "uplift": 3.01, "count": 1 },
+    "CRIT": { "uplift": 2.66, "count": 2 },
+    "AURAS": { "uplift": 2.65, "count": 1 },
+    "STANDARD": { "uplift": 2.65, "count": 1 },
+    "INT": { "uplift": 2.59, "count": 4 },
+    "LIFE": { "uplift": 2.56, "count": 4 },
+    "DEX": { "uplift": 2.23, "count": 4 },
+    "EO": { "uplift": 2.09, "count": 1 }
+  }
+}

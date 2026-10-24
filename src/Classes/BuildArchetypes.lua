@@ -249,6 +249,15 @@ function BuildArchetypesClass.ForSkill(gem, meta)
 			t_insert(list, copy)
 		end
 	end
+	-- ideas found in the game data (Classes/IdeaMiner): stats that uniques scale with
+	if BuildArchetypesClass.minedIdeas ~= false then
+		local ok, mined = pcall(function() return new("IdeaMiner"):IdeaMiner().Ideas(info) end)
+		if ok then
+			for _, idea in ipairs(mined) do t_insert(list, idea) end
+		else
+			ConPrintf("Idea miner failed: %s", tostring(mined))
+		end
+	end
 	return list
 end
 

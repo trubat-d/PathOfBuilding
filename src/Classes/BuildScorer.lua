@@ -19,6 +19,7 @@ local pairs = pairs
 local ipairs = ipairs
 local t_insert = table.insert
 local m_log = math.log
+local m_exp = math.exp
 local m_max = math.max
 local m_min = math.min
 local m_floor = math.floor
@@ -27,11 +28,11 @@ local m_floor = math.floor
 local BuildScorerClass = newClass("BuildScorer")
 
 BuildScorerClass.focusList = {
-	{ label = "Balanced (damage, tankiness, clear)", id = "BALANCED", dps = 1, ehp = 1, avoid = 0.8, clear = 0.4 },
-	{ label = "Damage first", id = "DPS", dps = 1, ehp = 0.35, avoid = 0.3, clear = 0.2 },
+	{ label = "Balanced (damage, tankiness, clear)", id = "BALANCED", dps = 1, ehp = 1, avoid = 0.8, clear = 0.4, hitTarget = 40000 },
+	{ label = "Damage first", id = "DPS", dps = 1, ehp = 0.35, avoid = 0.3, clear = 0.2, hitTarget = 15000 },
 	{ label = "Tankiness first", id = "TANK", dps = 0.35, ehp = 1, avoid = 1, clear = 0.2 },
 	{ label = "Damage, with a minimum max hit (every damage type)", id = "DPS_FLOOR", dps = 1, ehp = 0.15, avoid = 0.35, hitFloor = 10000, clear = 0.25 },
-	{ label = "Mapping (clear speed first)", id = "CLEAR", dps = 0.7, ehp = 0.6, avoid = 0.5, clear = 1 },
+	{ label = "Mapping (clear speed first)", id = "CLEAR", dps = 0.7, ehp = 0.6, avoid = 0.5, clear = 1, hitTarget = 25000 },
 }
 
 local elements = { "Fire", "Cold", "Lightning" }
@@ -420,11 +421,22 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 	if output then minHit, meanLogHit = self:MinMaxHit(output) end
 	local tank
 	local bossRatio = output and self:BossHitRatio(output)
+	-- defence layers have targets: past them each layer is worth less (a
+	-- third), so damage isn't traded for tankiness the build doesn't need
+	-- (targets: hitTarget, or 2.5x the focus's max hit floor; taking the
+	-- toughest boss hit twice over)
+	local hitTarget = self.hitTarget or self.focus.hitTarget or ((self.hitFloor or self.focus.hitFloor) and 2.5 * (self.hitFloor or self.focus.hitFloor))
+	local past = self.pastTarget or 0.35
+	local function layer(value, target)
+		if not target or value <= target then return m_log(value) end
+		return m_log(target) + past * m_log(value / target)
+	end
 	if minHit and bossRatio then
 		-- (boss hits: how many times over the build takes the worst pinnacle hit)
-		tank = 0.15 * m_log(m_max(ehp, 1)) + 0.35 * m_log(minHit) + 0.2 * meanLogHit + 0.3 * m_log(m_max(bossRatio, 0.01) * 10000)
+		tank = 0.15 * m_log(m_max(ehp, 1)) + 0.35 * layer(minHit, hitTarget) + 0.2 * layer(m_exp(meanLogHit), hitTarget and hitTarget * 2)
+			+ 0.3 * layer(m_max(bossRatio, 0.01) * 10000, 20000)
 	elseif minHit then
-		tank = 0.15 * m_log(m_max(ehp, 1)) + 0.55 * m_log(minHit) + 0.3 * meanLogHit
+		tank = 0.15 * m_log(m_max(ehp, 1)) + 0.55 * layer(minHit, hitTarget) + 0.3 * layer(m_exp(meanLogHit), hitTarget and hitTarget * 2)
 	else
 		tank = m_log(m_max(ehp, 1))
 	end
@@ -567,14 +579,39 @@ function BuildScorerClass:FlaskUptime(item, modDB)
 	if rate <= 0 then
 		return 0
 	end
-	-- (Enkindling enchantments: no charges while it is up, so it is up for its
-	-- duration, then down while it refills)
+	-- (Enkindling enchantments: no charges while it is up)
+	local noGainDuring = false
 	for _, modLine in ipairs(item.enchantModLines or { }) do
-		if modLine.line:lower():match("gains no charges during effect") then
-			return m_min(1, duration / (duration + chargesUsed / rate))
+		if modLine.line:lower():match("gains no charges during effect") then noGainDuring = true end
+	end
+	return self.SimulateFlask(duration, chargesUsed, fd.chargesMax or chargesUsed, rate, noGainDuring)
+end
+
+-- A minute of fighting, a tenth of a second at a time: the flask is used
+-- whenever it is down and has the charges, charges come in at the rate
+-- (none while it is up with Enkindling) and stop at the maximum. Returns the
+-- share of the time it is up. Unlike the average (duration x rate / charges
+-- used), this sees the charges lost at the maximum and the refill gaps.
+-- (the minute counted comes after two minutes of the same: the charges
+-- carried in from the start of a fight don't count, what it keeps up does)
+local fightSeconds, warmSeconds, step = 60, 120, 0.1
+function BuildScorerClass.SimulateFlask(duration, chargesUsed, chargesMax, rate, noGainDuring)
+	local charges, left, up = chargesMax, 0, 0
+	local warm, steps = warmSeconds / step, (warmSeconds + fightSeconds) / step
+	for i = 1, steps do
+		if left <= 0 and charges >= chargesUsed then
+			charges = charges - chargesUsed
+			left = duration
+		end
+		if left > 0 then
+			if i > warm then up = up + 1 end
+			left = left - step
+		end
+		if not (noGainDuring and left > 0) then
+			charges = m_min(chargesMax, charges + rate * step)
 		end
 	end
-	return m_min(1, duration * rate / chargesUsed)
+	return up / (steps - warm)
 end
 
 -- Estimated share of time a tincture is up (0 to 1): mana burn stacks build up

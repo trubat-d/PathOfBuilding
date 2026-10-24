@@ -197,9 +197,25 @@ end
 
 -- Spends units of investment on the best stat each time.
 -- Returns final score, { [lever id] = units }, final output
-function ScalingPlannerClass:Invest(override, units)
+-- (levers for what an idea stacks, beyond the usual ones)
+local lensLevers = {
+	BlockChance = { "+5% Chance to Block Attack Damage", "+5% Chance to Block Spell Damage" },
+	PowerChargesMax = { "+1 to Maximum Power Charges" },
+	FrenzyChargesMax = { "+1 to Maximum Frenzy Charges" },
+	EnduranceChargesMax = { "+1 to Maximum Endurance Charges" },
+	Evasion = { "+1000 to Evasion Rating" },
+	Armour = { "+1000 to Armour" },
+	EnergyShield = { "+150 to maximum Energy Shield" },
+	MaximumRage = { "+10 to Maximum Rage" },
+	FortificationStacks = { "+3 to maximum Fortification" },
+}
+function ScalingPlannerClass:Invest(override, units, archetype)
 	local spec = self.build.spec
 	local levers = self.analyzer:Levers()
+	local lens = archetype and archetype.lens
+	if lens and lensLevers[lens.stat] then
+		t_insert(levers, { id = "lens", max = 6, label = lens.label or lens.stat, kind = "damage", lines = lensLevers[lens.stat] })
+	end
 	local counts = { }
 	local addNodes = { }
 	for node in pairs(override.addNodes or { }) do addNodes[node] = true end
@@ -239,7 +255,7 @@ function ScalingPlannerClass:Run(archetypes, opts)
 		self.calcFunc = gen.calcFunc
 		local ok, err = pcall(function()
 			local override, labels = self:Commitments(archetype)
-			local score, counts, output, levers = self:Invest(override, opts.units or 20)
+			local score, counts, output, levers = self:Invest(override, opts.units or 20, archetype)
 			local parts = { }
 			for _, lever in ipairs(levers) do
 				if counts[lever.id] then t_insert(parts, string.format("%dx %s", counts[lever.id], lever.label)) end

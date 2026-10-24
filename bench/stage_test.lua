@@ -98,6 +98,13 @@ elseif step == "refine" then
 	-- (one allocation first, as the generator's tree has been allocated before refining)
 	gen:AllocateTree(true)
 	for _, n in ipairs({ 6, 10, 16, 6 }) do print("REFINE", n, gen:RefineTree(n)) end
+elseif step == "explain" then
+	gen:FullScore()
+	gen:Explain()
+elseif step == "requirements" then
+	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
+	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
+	print("GAIN", gen:RequirementsMove())
 elseif step == "flaskenchant" then
 	gen:FlaskEnchantMove()
 elseif step == "fitsockets" then

@@ -5,14 +5,21 @@ Every decision is made by [`BuildScorer`](../src/Classes/BuildScorer.lua) on PoB
 
 - **Damage**: the main skill's DPS (combined parts for skills like Kinetic Blast), reduced when the skill can't be paid for in a long fight.
 - **Tankiness**: mostly the maximum hit taken of the weakest damage type, then all damage types, a little EHP, and how many times over the build takes the toughest pinnacle (or uber) boss hit.
+- **Defence targets**: past its target (the max hit: 2.5x the focus's floor; the boss hit: taken twice over) each layer counts for a third, so damage isn't traded for tankiness the build doesn't need.
 - **Avoidance**: the share of incoming hit damage the build takes on average (melee, projectile, spell and spell projectile hits) after evasion, dodge, block and spell suppression, with its own weight in every focus. Top players build max block or 100% suppression and value it about as much as doubling their damage; inside EHP it was worth a few % damage.
 - **Focus**: the weights of damage and tankiness. "Damage, with a minimum max hit" (`DPS_FLOOR`) is damage first with a 10,000 max hit floor; below the floor every missing bit costs more than damage can pay back.
 - **Penalties**: elemental resistances below the cap, missing attributes, reservation over 100% (more the further over), self-damage over time bigger than regeneration, a defence checklist (freeze, shock, bleed, poison, stun...) and drawbacks PoB doesn't calculate ([`GeneratorRules`](../src/Modules/GeneratorRules.lua)).
 - **Passives PoB doesn't calculate**: cluster notables whose effect PoB can't read (Fan the Flames' ignite spread, Blast-Freeze, Remarkable's extra brands, Purposeful Harbinger...) get a value for the build ([`GeneratorRules`](../src/Modules/GeneratorRules.lua) `uncountedNodes`): ignite spread is worth a lot to an ignite build without Ignite Proliferation, nothing to a hit build.
 - **Smooth play**: only buffs that are always up count in full. Vaal skills and guard skills are switched off, buffs that stay where they are cast (Sigil of Power) aren't used, and a flask that comes and goes counts for less than its average uptime (none below half the time).
-- **Flasks**: their real uptime from charges gained and used (a flask that gains no charges while up, from an Enkindling enchantment, is up for its duration then refills); tinctures from their mana burn.
+- **Flasks**: their real uptime from a simulated fight (used whenever down and charged, charges lost at the maximum, none gained while up with an Enkindling enchantment); tinctures from their mana burn.
 
 The score is logarithmic in damage and in the max hit, so doubling the damage is worth the same at 1 million as at 100 million.
+
+#### Ideas, priorities and learning
+- **Ideas from the game data** ([`IdeaMiner`](../src/Classes/IdeaMiner.lua)): uniques whose lines scale with a stat ("per 1% Chance to Block", "per Power Charge", "per 500 Evasion Rating"...) make that stat an idea to stack, scanned like the written archetypes, with the stat lens and the planner's investment in that stat.
+- **Learnt priorities** ([`GeneratorLearning`](../src/Modules/GeneratorLearning.lua)): a quick build ranks archetypes by how they start, but a full build gains more over it for some (mines +4.2, physical weapons +3.6) than others (Dexterity stacking +2.2). Archetypes are fully built in the order of quick score + learnt gain + a bonus for little-tried ones (an upper confidence bound, as bandit algorithms use), from the benchmark (`Data/GeneratorPriors.json`) and every automatic generation on the computer (`GeneratorLearning.json` in the user folder).
+- **Alternatives**: the automatic mode keeps every idea's full build; those within 1 point of the best are listed and can be opened.
+- **Explanation**: each build says what it is built around and what carries it (each part taken out alone: the damage and max hit it would lose).
 
 #### Archetypes
 An archetype ([`BuildArchetypes`](../src/Classes/BuildArchetypes.lua)) is what the generator commits to before optimising everything else around it: keystones (crit, Elemental Overload, Resolute Technique, Chaos Inoculation, Avatar of Fire...), auras and supports (Pride + Brutality for impale, Hatred for physical weapons), uniques that scale with a stat (mana, intelligence, strength, dexterity, life) and playstyles (mines, traps, totems). The scan builds a quick version of every archetype that fits the skill; the automatic mode then builds the best three fully and keeps the best one.
@@ -35,7 +42,7 @@ A quick build ranks archetypes by how they start, so the scan also runs the chea
 11. Optional: unique / keystone ideas ([`SynergyFinder`](../src/Classes/SynergyFinder.lua)), packages the top players use together, the top players' gear and main link tried in the build, the passives most top players of the class take (read from their PoB codes) allocated as a set with the tree trimmed around them.
 12. Ascendancy and supports checked again (each support swapped against every other one), the tree rebuilt with shorter paths ([`TreeOptimizer`](../src/Classes/TreeOptimizer.lua)), then a short second round (aura stacking, supports, ascendancy) on the rebuilt tree.
 
-Every late move is kept only when the full score (with flask uptimes) is better.
+Every late move is kept only when the full score (with flask uptimes) is better. Bought items must gain more the more they cost (up to 0.04 at the investment level's item limit), and resistances or attributes still missing at the end are fixed by swapping a rare's bench craft.
 
 Items and gems follow what can be found at the investment level, not only prices: below High investment there are no exceptional gems (Enlighten, Empower, Enhance) and no scarce uniques (Split Personality, Watcher's Eye, Cinderswallow Urn, Forbidden jewels... `PriceSource.scarceUniques`). Gem setups always fit the items' real sockets: uniques with a fixed count (Crest of Desire's single socket) or abyssal sockets pack the setups again, and a main link that no longer fits moves to a 4-link. Items whose granted supports change what a gem does there (traps, totems, triggers: `behaviourSupports`, from `bench/unique_audit.lua`) get no utility setup.
 

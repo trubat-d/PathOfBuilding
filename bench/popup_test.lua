@@ -50,6 +50,8 @@ while not os.getenv("OURS") and os.time() - t0 < (tonumber(os.getenv("TIMEOUT") 
 end
 local build = main.modes["BUILD"]
 print("FINAL build " .. tostring(build and build.buildName) .. " dps " .. tostring(build and build.calcsTab.mainOutput and build.calcsTab.mainOutput.TotalDPS))
+for _, entry in ipairs(controls.alternatives and controls.alternatives.list or { }) do print("ALT " .. tostring(entry.label)) end
+for _, entry in ipairs(controls.archetype.list or { }) do print("ARCH " .. tostring(entry.label)) end
 
 -- COMPARE_CODE=<file with a PoB code>: then "Compare with top players" with
 -- that build as the only top player (statistics put in the cache: no downloads here)
