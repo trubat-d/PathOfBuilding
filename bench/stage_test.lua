@@ -18,6 +18,7 @@ for _, entry in ipairs(new("BuildScorer"):BuildScorer(build).focusList) do if en
 local gen = new("BuildGenerator"):BuildGenerator(build, { investment = investment, focus = focus, debugTiming = true, yieldEvery = 1e9 })
 gen.scorer = new("BuildScorer"):BuildScorer(build, { focus = focus, hitFloor = focus.hitFloor, chargesPerSecond = 1.5, bossTier = investment.awakenedGems and "uber" or "pinnacle" })
 gen.scorer.useChecklist = true
+gen.scorer.reservationSlope = tonumber(os.getenv("RES_SLOPE") or "")
 gen.costs = { }
 for _, g in ipairs(build.skillsTab.socketGroupList) do
 	if g == build.skillsTab.socketGroupList[build.mainSocketGroup] then gen.mainGroup = g end

@@ -2965,6 +2965,8 @@ function BuildGeneratorClass:Run()
 	-- ascendancy notables (and those other passives)
 	if opts.polishRound ~= false then
 		local gain = 0
+		-- (auras again: the finished tree and gear can pay for more of them)
+		if opts.auraStacking ~= false then self:AuraStackMove() end
 		if opts.finalSupports ~= false then gain = gain + self:FinalSupports() end
 		if opts.ascendancyRecheck ~= false then gain = gain + self:AscendancyRecheck() end
 		if gain > 0 then

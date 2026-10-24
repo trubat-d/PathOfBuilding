@@ -229,8 +229,12 @@ function BuildScorerClass:GetPenalties(output)
 	for _, pool in ipairs({ "Mana", "Life" }) do
 		local unreserved = output[pool .. "Unreserved"]
 		if unreserved and unreserved < 0 and not self.ignoreReservation then
-			total = total + 2
-			t_insert(penalties, { label = pool .. " reservation is over 100%", value = 2 })
+			-- (more the further over: passives with reservation efficiency, a
+			-- few at a time, then show what they are worth to aura stacking)
+			local over = -unreserved / m_max(output[pool] or 1, 1)
+			local p = 2 + (self.reservationSlope or 4) * m_min(1, over)
+			total = total + p
+			t_insert(penalties, { label = string.format("%s reservation is over 100%% (by %d%%)", pool, over * 100), value = p })
 		end
 	end
 	local sustain, limiting = self:SkillSustain(output)
