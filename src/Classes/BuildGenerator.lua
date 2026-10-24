@@ -1370,6 +1370,82 @@ function BuildGeneratorClass:ChooseBases()
 end
 
 -- Generated rares on every gear slot
+-- Rare items for every slot, the slots shared out between background
+-- threads when the app can run them (each worker loads the build and makes
+-- the rares for its slots with the same scorer; the main thread waits).
+-- The same report as BestItemFinder:RunRares; made in this thread when
+-- background threads aren't available (headless runs, inside a worker).
+function BuildGeneratorClass:RunRaresParallel(finder, options)
+	local pgClass = new("ParallelGenerator"):ParallelGenerator()
+	local slots = options.slots or finder:GetActiveSlots()
+	local usable = { }
+	for _, slotName in ipairs(slots) do
+		local slot = self.itemsTab.slots[slotName]
+		local current = slot and self.itemsTab.items[slot.selItemId]
+		if current and finder.rareGenerator:IsSupported(current) then t_insert(usable, slotName) end
+	end
+	-- (each worker starts its own Path of Building and loads the build: worth
+	-- it from three workers, i.e. six cores, or when asked for)
+	local workers = m_min(#usable, pgClass.MaxWorkers())
+	local minWorkers = self.options.parallelRares == true and 2 or 3
+	if self.options.parallelRares == false or workers < minWorkers or not coroutine.running() or not pgClass.Available() then
+		return finder:RunRares(options)
+	end
+	local dkjson = require "dkjson"
+	local plain = { }
+	for k, v in pairs(options) do
+		if type(v) ~= "function" and k ~= "slots" then plain[k] = v end
+	end
+	local sc = self.scorer
+	local scorerJob = {
+		focusId = sc.focus and sc.focus.id, chargesPerSecond = sc.chargesPerSecond, ehpFloor = sc.ehpFloor, hitFloor = sc.hitFloor,
+		bossTier = sc.bossTier, killsPerSecond = sc.killsPerSecond, flaskRealism = sc.flaskRealism,
+		scenarioId = self.options.scenario and self.options.scenario.id,
+		hitScale = sc.hitScale, resourceSustain = sc.resourceSustain, ignoreCosts = sc.ignoreCosts, ignoreAttributes = sc.ignoreAttributes,
+		ignoreReservation = sc.ignoreReservation, useChecklist = sc.useChecklist,
+	}
+	local xml = self.build:SaveDB("code")
+	-- weapons first (their seeded fills take longest), then round robin
+	t_sort(usable, function(a, b)
+		local wa, wb = a:match("^Weapon") and 0 or 1, b:match("^Weapon") and 0 or 1
+		if wa ~= wb then return wa < wb end
+		return a < b
+	end)
+	local jobs = { }
+	for i = 1, workers do
+		jobs[i] = { kind = "rares", build = xml, slots = { }, options = plain, ratio = self.ratio, scorer = scorerJob }
+	end
+	for i, slotName in ipairs(usable) do t_insert(jobs[(i - 1) % workers + 1].slots, slotName) end
+	local results, failed, done = { }, nil, false
+	local pg = pgClass
+	pg:Run(jobs, {
+		onDone = function(_, summary)
+			for slotName, r in pairs(summary.slots or { }) do results[slotName] = r end
+		end,
+		onError = function(_, err) failed = failed or tostring(err) end,
+		onAllDone = function() done = true end,
+	})
+	local savedStage = self.stage
+	self.stage = (self.stage or "") .. string.format(" (%d threads)", workers)
+	while not done do coroutine.yield() end
+	self.stage = savedStage
+	if failed then
+		ConPrintf("Parallel rares failed (%s): made in this thread", failed)
+		return finder:RunRares(options)
+	end
+	local report = { stat = finder.StatByName("FullDPS"), slots = { }, order = slots, options = options, rares = true }
+	for _, slotName in ipairs(slots) do
+		local r = results[slotName]
+		local slotReport = { results = { } }
+		if r and r.raw then
+			local item = new("Item"):Item(r.raw)
+			t_insert(slotReport.results, { slotName = slotName, item = item, power = r.power, delta = r.delta, generated = true })
+		end
+		report.slots[slotName] = slotReport
+	end
+	return report
+end
+
 function BuildGeneratorClass:MakeRares(withInfluences)
 	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
 	local scorer, ratio = self.scorer, self.ratio
@@ -1417,7 +1493,7 @@ function BuildGeneratorClass:MakeRares(withInfluences)
 	-- two passes: the second one adapts to what the first one did elsewhere
 	for pass = 1, (self.options.quick and 1 or 2) do
 		self:Recalculate()
-		local report = finder:RunRares(options)
+		local report = self:RunRaresParallel(finder, options)
 		local count = finder:EquipAll(report)
 		self:Tick()
 		if count == 0 then break end

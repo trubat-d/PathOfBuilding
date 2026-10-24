@@ -8,6 +8,8 @@
 -- JSON summary, so several generations use several processor cores.
 --
 -- Returns function(jobJson, userPath) -> resultJson, buildXml
+-- job.kind: nil (a generation), "compare" (a top player's build against
+-- ours) or "rares" (rare items for some gear slots of a build)
 -- job: { gemId, classId, ascendClassId, level, investmentId, focusId, hitFloor,
 --        scenarioId, configScenarioId, archetypeId, quick, synergies,
 --        allowAnoints, allowTattoos, timeless, meta, plan (true: also run the
@@ -49,23 +51,69 @@ return function(jobJson, userPath)
 		main.userPath = userPath
 		main.priceSource = nil
 	end
-	while main.uniqueDB.loading or main.rareDB.loading do runCallback("OnFrame") end
+	local dkjson = require "dkjson"
+	local job = dkjson.decode(jobJson)
+	local initClock = os.clock() - startClock
+	-- (rare items need neither database: no wait for them)
+	if job.kind ~= "rares" then
+		while main.uniqueDB.loading or main.rareDB.loading do runCallback("OnFrame") end
+	end
+	local dbClock = os.clock() - startClock
 	main:SetMode("BUILD", false, "Generated build")
 	runCallback("OnFrame")
 	local build = main.modes["BUILD"]
 
-	local dkjson = require "dkjson"
-	local job = dkjson.decode(jobJson)
+	local function load(xml, name)
+		main:SetMode("BUILD", false, name, xml)
+		runCallback("OnFrame")
+		return main.modes["BUILD"]
+	end
+	local function byId(list, id, key)
+		for _, entry in ipairs(list or { }) do
+			local value = key and entry[key] or entry
+			if value and value.id == id then return value end
+		end
+	end
+
+	-- rare items for some of a build's gear slots (a generation in the app
+	-- hands each worker a share of the slots: Classes/BuildGenerator
+	-- RunRaresParallel). The scorer is set up exactly as the generator's.
+	if job.kind == "rares" then
+		local b = load(job.build, "rares")
+		local statics = new("BuildScorer"):BuildScorer(b)
+		local sc = job.scorer or { }
+		local overlap
+		if sc.scenarioId then
+			overlap = new("HitOverlap"):HitOverlap(b, byId(new("HitOverlap"):HitOverlap(b).scenarioList, sc.scenarioId))
+		end
+		local scorer = new("BuildScorer"):BuildScorer(b, {
+			focus = byId(statics.focusList, sc.focusId) or statics.focusList[1], chargesPerSecond = sc.chargesPerSecond, overlap = overlap,
+			ehpFloor = sc.ehpFloor, hitFloor = sc.hitFloor, bossTier = sc.bossTier, killsPerSecond = sc.killsPerSecond, flaskRealism = sc.flaskRealism,
+		})
+		for _, key in ipairs({ "hitScale", "resourceSustain", "ignoreCosts", "ignoreAttributes", "ignoreReservation", "useChecklist" }) do
+			scorer[key] = sc[key]
+		end
+		local finder = new("BestItemFinder"):BestItemFinder(b.itemsTab)
+		local options = job.options or { }
+		local ratio = job.ratio
+		options.scoreFunc = function(output) return scorer:ScoreOutput(output, ratio) end
+		options.slots = job.slots
+		local report = finder:RunRares(options)
+		local out = { }
+		for _, slotName in ipairs(job.slots or { }) do
+			local r = report.slots[slotName]
+			local result = r and r.results and r.results[1]
+			if result and result.item and result.item.raw then
+				out[slotName] = { raw = result.item.raw, power = result.power, delta = result.delta }
+			end
+		end
+		return dkjson.encode({ slots = out, seconds = os.clock() - startClock, startup = initClock, databases = dbClock }), ""
+	end
 
 	-- comparison with a top player's build (Modules/BuildComparison):
 	-- their build scored and taken apart, then each part of it tried in ours
 	if job.kind == "compare" then
 		local BC = LoadModule("Modules/BuildComparison")
-		local function load(xml, name)
-			main:SetMode("BUILD", false, name, xml)
-			runCallback("OnFrame")
-			return main.modes["BUILD"]
-		end
 		local function top(rows, n, positive)
 			local list = { }
 			for _, r in ipairs(rows) do
@@ -89,12 +137,6 @@ return function(jobJson, userPath)
 		local transplant = top(BC.Transplant(ctx2, parts), job.rows or 8, true)
 		return dkjson.encode({ player = job.player, theirs = theirs, ablation = ablation, ours = ours, transplant = transplant,
 			seconds = os.clock() - startClock }), ""
-	end
-	local function byId(list, id, key)
-		for _, entry in ipairs(list or { }) do
-			local value = key and entry[key] or entry
-			if value and value.id == id then return value end
-		end
 	end
 	local scorerStatics = new("BuildScorer"):BuildScorer(build)
 	local options = {

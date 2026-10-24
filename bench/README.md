@@ -47,4 +47,7 @@ archetypes the players use (impale, Hatred, crit).
   it (`Modules/GeneratorWorker.lua`).
 * `popup_test.lua` (`SKILL=`, `ASC=`, `INVEST=`, `WORKERS=`): the Generate
   Build window's automatic mode headless, background threads replaced by
-  worker processes (`worker_proc.lua`).
+  worker processes (`worker_proc.lua`, set up by `fake_threads.lua`).
+* `rares_parallel_test.lua` (`OURS=`, `WORKERS=`, `PARALLEL=0`): rare items
+  for a saved build with the slots shared out between worker processes, as a
+  generation in the app does with 3+ workers; same items as one thread.
