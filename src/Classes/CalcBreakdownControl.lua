@@ -50,9 +50,11 @@ function CalcBreakdownClass:GetActor()
 	local env = self.calcsTab[self.envName or "calcsEnv"]
 	local actor = self.calcsTab.input.showMinion and env.minion or env.player
 	if self.forceActor then
-		actor = env[self.forceActor]
+		-- (the build can change under a hovered stat, e.g. while a build is being
+		-- generated: a minion stat whose minion is gone falls back to the player)
+		actor = env[self.forceActor] or env.player
 	end
-	return actor, env
+	return actor or env.player, env
 end
 ---@param displayData any
 ---@param pinned any

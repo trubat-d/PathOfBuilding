@@ -55,7 +55,8 @@ function BuildGeneratorClass.SkillList()
 	for gemId, gem in pairs(data.gems) do
 		local effect = gem.grantedEffect
 		if effect and not effect.support and gem.tags and gem.tags.grants_active_skill and not gem.vaalGem and not effect.unsupported
-			and not (gem.tags.aura or gem.tags.herald or gem.tags.guard or gem.tags.movement or gem.tags.travel or gem.tags.blink or gem.tags.warcry and not gem.tags.attack) then
+			-- (movement skills are utility, except channelled attacks like Cyclone)
+			and not (gem.tags.aura or gem.tags.herald or gem.tags.guard or ((gem.tags.movement or gem.tags.travel or gem.tags.blink) and not gem.tags.channelling) or gem.tags.warcry and not gem.tags.attack) then
 			t_insert(list, { label = gem.name, gemId = gemId })
 		end
 	end
@@ -1102,6 +1103,16 @@ end
 -- build is better. Catches points spent early that later choices made useless.
 function BuildGeneratorClass:OptimizeTree()
 	local total = 0
+	-- 1. re-choose and reconnect the targets with the fewest points
+	if self.options.treeSearch ~= false then
+		local ok, gain, swaps = pcall(function() return new("TreeOptimizer"):TreeOptimizer(self):Run() end)
+		if ok and gain and gain > 0.001 then
+			self:Note(string.format("Passive tree rebuilt with shorter paths%s: score %+.3f", (swaps or 0) > 0 and string.format(" and %d better target%s", swaps, swaps == 1 and "" or "s") or "", gain))
+		elseif not ok then
+			ConPrintf("Tree optimizer failed: %s", tostring(gain))
+		end
+	end
+	-- 2. free the least useful passives and let the allocator spend them again
 	for _, count in ipairs(self.options.treeRounds or { 6, 10, 16, 6 }) do
 		total = total + self:RefineTree(count)
 		self:Tick()
@@ -1401,6 +1412,60 @@ function BuildGeneratorClass:ChooseArchetypeJewels()
 	end
 end
 
+-- Pantheon gods and bandit choice, each kept if the build is better with it
+-- (Brine King's freeze protection, Arakaali, Lunaris... and Kill all's 2
+-- extra passive points against a bandit's stats)
+function BuildGeneratorClass:ChoosePantheonAndBandit()
+	local configTab = self.build.configTab
+	local input = configTab.input
+	local spec = self.build.spec
+	local chosen = { }
+	for _, var in ipairs({ "pantheonMajorGod", "pantheonMinorGod", "bandit" }) do
+		local option
+		for _, o in ipairs(configTab.varControls and configTab.varControls[var] and configTab.varControls[var].list or { }) do
+			option = option or { }
+			t_insert(option, o)
+		end
+		if not option then
+			-- (headless builds without config controls: the option definitions)
+			for _, o in ipairs(LoadModule("Modules/ConfigOptions")) do
+				if o.var == var then option = o.list end
+			end
+		end
+		if option then
+			local original = input[var]
+			local bestVal, bestScore, bestLabel
+			for _, entry in ipairs(option) do
+				input[var] = entry.val
+				configTab:BuildModList()
+				self:Recalculate()
+				local undo = var == "bandit" and spec:CreateUndoState()
+				if var == "bandit" then
+					-- the points it gives or takes are spent / trimmed first
+					self:TrimTree()
+					self:AllocateTree(true)
+				end
+				local score = self:FullScore()
+				if undo then
+					spec:RestoreUndoState(undo)
+				end
+				if not bestScore or score > bestScore + 0.0005 then bestVal, bestScore, bestLabel = entry.val, score, entry.label end
+			end
+			input[var] = bestVal or original
+			configTab:BuildModList()
+			self:Recalculate()
+			if var == "bandit" then
+				self:TrimTree()
+				self:AllocateTree(true)
+			end
+			if bestLabel and bestVal ~= "None" or var == "bandit" then t_insert(chosen, bestLabel) end
+		end
+	end
+	if #chosen > 0 then
+		self:Note("Pantheon and bandit: " .. table.concat(chosen, ", "))
+	end
+end
+
 -- Removes the items left over from the search (white bases, replaced rares):
 -- only what's equipped (or socketed in the tree) stays in the item list
 function BuildGeneratorClass:RemoveUnusedItems()
@@ -1639,7 +1704,8 @@ function BuildGeneratorClass:Run()
 	self.overlap = new("HitOverlap"):HitOverlap(self.build, opts.scenario)
 	local bossFight = not opts.configScenario or opts.configScenario.id == "BOSS"
 	opts.chargesPerSecond = opts.chargesPerSecond or (bossFight and 1.5 or 4)
-	self.scorer = new("BuildScorer"):BuildScorer(self.build, { focus = opts.focus, chargesPerSecond = opts.chargesPerSecond, overlap = self.overlap, ehpFloor = opts.ehpFloor, hitFloor = opts.hitFloor })
+	self.scorer = new("BuildScorer"):BuildScorer(self.build, { focus = opts.focus, chargesPerSecond = opts.chargesPerSecond, overlap = self.overlap, ehpFloor = opts.ehpFloor, hitFloor = opts.hitFloor,
+		bossTier = opts.investment and opts.investment.awakenedGems and "uber" or "pinnacle" })
 	if opts.archetype then
 		self:Note("Archetype: " .. opts.archetype.label)
 	end
@@ -1712,9 +1778,10 @@ function BuildGeneratorClass:Run()
 	if opts.allowAnoints ~= false then self:ChooseAnoint() end
 	if opts.allowTattoos ~= false then self:ChooseTattoos() end
 
-	stage(10, "Choosing flasks")
+	stage(10, "Choosing flasks, pantheon and bandit")
 	self:FullScore()
 	self:MakeFlasks()
+	self:ChoosePantheonAndBandit()
 
 	if opts.synergies ~= false then
 		stage(11, "Looking for unique items and synergies")
@@ -1730,6 +1797,20 @@ function BuildGeneratorClass:Run()
 	local final = self.scorer:Evaluate(self.calcFunc, { })
 	self.final = final
 	self.build.buildFlag = true
+	-- defence summary: boss hits and the checklist
+	local output = self.build.calcsTab.mainOutput
+	local bossRatio, bossName = self.scorer:BossHitRatio(output)
+	if bossRatio then
+		self:Note(string.format("Toughest %s boss hit (%s): taken %.1f times over (max hits: physical %s, fire %s, cold %s, lightning %s, chaos %s)",
+			self.scorer.bossTier == "uber" and "uber" or "pinnacle", bossName, bossRatio,
+			formatNumSep(tostring(output.PhysicalMaximumHitTaken or 0)), formatNumSep(tostring(output.FireMaximumHitTaken or 0)), formatNumSep(tostring(output.ColdMaximumHitTaken or 0)),
+			formatNumSep(tostring(output.LightningMaximumHitTaken or 0)), formatNumSep(tostring(output.ChaosMaximumHitTaken or 0))))
+	end
+	local _, checks = self.scorer:Checklist(output)
+	local okList, missingList = { }, { }
+	for _, entry in ipairs(checks) do t_insert(entry.ok and okList or missingList, entry.label) end
+	self:Note("Defence checklist: " .. (#okList > 0 and ("has " .. table.concat(okList, ", ")) or "nothing")
+		.. (#missingList > 0 and ("; missing " .. table.concat(missingList, ", ")) or ""))
 
 	-- Estimated cost of the bought parts (uniques, anoint, tattoos)
 	local total, unknown = 0, 0

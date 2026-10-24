@@ -60,6 +60,7 @@ function SynergyFinderClass:SynergyFinder(itemsTab, options)
 		overlap = self.overlap,
 		ehpFloor = self.options.ehpFloor,
 		hitFloor = self.options.hitFloor,
+		bossTier = self.options.investment and self.options.investment.awakenedGems and "uber" or "pinnacle",
 	})
 	self.flaskGenerator = new("FlaskGenerator"):FlaskGenerator(self.itemFinder.rareGenerator, self.scorer)
 	self.index = new("SynergyIndex"):SynergyIndex()

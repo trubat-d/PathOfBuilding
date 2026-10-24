@@ -1,0 +1,15 @@
+# skill | ascendancy | investment | mode | archetype (optional)
+Ball Lightning | Hierophant | HIGH | quick
+Tornado Shot | Deadeye | MID | quick
+Boneshatter | Juggernaut | MID | quick
+Righteous Fire | Chieftain | BUDGET | quick
+Shield Crush | Gladiator | MID | quick
+Lightning Arrow | Deadeye | HIGH | quick
+Vortex | Occultist | MID | quick
+Kinetic Blast | Hierophant | HIGH | quick
+Arc | Elementalist | BUDGET | quick
+Cyclone | Slayer | MID | quick
+Toxic Rain | Pathfinder | MID | quick
+Raise Zombie | Necromancer | MID | quick
+Ball Lightning | Hierophant | HIGH | quick | MANA
+Tornado Shot | Deadeye | MID | quick | CRIT

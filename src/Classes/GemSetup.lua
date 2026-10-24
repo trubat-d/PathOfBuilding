@@ -316,7 +316,7 @@ function GemSetupClass:ChooseAuras(maxBuffs)
 	for id, gem in pairs(data.gems) do
 		-- (attacks with an aura, like Smite, only give it while you use them)
 		-- (as are mines / traps with an aura: only while they are placed)
-		if gem.tags and (gem.tags.aura or gem.tags.herald or gem.tags.golem or gem.tags.banner) and not gem.tags.attack and not gem.tags.mine and not gem.tags.trap
+		if gem.tags and (gem.tags.aura or gem.tags.herald or gem.tags.golem or gem.tags.banner) and not gem.tags.attack and not gem.tags.mine and not gem.tags.trap and not gem.tags.totem
 			and gem.grantedEffect and not gem.grantedEffect.support and not gem.vaalGem and not gem.grantedEffect.unsupported then
 			t_insert(candidates, id)
 		end

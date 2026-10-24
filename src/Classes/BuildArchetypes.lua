@@ -136,7 +136,9 @@ BuildArchetypesClass.list = {
 		keystones = { "Mind Over Matter" },
 		supports = { "Archmage" },
 		uniques = { "Indigon", "Atziri's Foible", "Cane of Kulemak" },
-		uniqueLines = { "per %d+ [Mm]aximum Mana", "per %d+ Mana", "%d+%% increased maximum Mana", "Mana Spent Recently" },
+		-- (only damage that scales with the mana pool / mana spent: "increased maximum Mana"
+		-- alone is on too many unrelated uniques)
+		uniqueLines = { "per %d+ [Mm]aximum Mana", "per %d+ Mana", "Mana Spent Recently", "Damage per %d+ Mana" },
 		jewels = { "Healthy Mind" },
 		applies = function(info) return not info.minion end,
 	},

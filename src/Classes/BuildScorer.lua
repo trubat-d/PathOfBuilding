@@ -47,6 +47,8 @@ function BuildScorerClass:BuildScorer(build, options)
 	self.focus = options.focus or self.focusList[1]
 	self.ehpFloor = options.ehpFloor
 	self.hitFloor = options.hitFloor
+	-- "uber" or "pinnacle": which boss hits the build must survive
+	self.bossTier = options.bossTier or "pinnacle"
 	self.chargesPerSecond = options.chargesPerSecond or 4
 	self.flaskRealism = options.flaskRealism ~= false
 	self.overlap = options.overlap
@@ -234,6 +236,23 @@ function BuildScorerClass:GetPenalties(output)
 		total = total + p
 		t_insert(penalties, { label = string.format("Self-damage over time is %.0f/s more than regeneration (%.0f/s degen): the build can't keep it up", deficit, degen), value = p })
 	end
+	-- Ailments and stuns the build isn't protected against
+	local missingTotal, missingList = self:Checklist(output)
+	if missingTotal > 0 then
+		local names = { }
+		for _, entry in ipairs(missingList) do
+			if not entry.ok then t_insert(names, entry.avoid and string.format("%s (%d%%)", entry.label, entry.avoid) or entry.label) end
+		end
+		total = total + missingTotal
+		t_insert(penalties, { label = "Missing defences: " .. table.concat(names, ", "), value = missingTotal })
+	end
+	-- One-shot by a pinnacle boss hit
+	local bossRatio, bossName = self:BossHitRatio(output)
+	if bossRatio and bossRatio < 1 then
+		local p = 1.5 * m_log(1 / m_max(bossRatio, 0.01))
+		total = total + p
+		t_insert(penalties, { label = string.format("One-shot by %s%s (survives %d%% of the hit)", self.bossTier == "uber" and "Uber " or "", bossName, bossRatio * 100), value = p })
+	end
 	-- Not being able to pay for the main skill
 	local cost = output.ManaCost or 0
 	if cost > 0 and output.ManaUnreserved and cost > output.ManaUnreserved then
@@ -261,6 +280,78 @@ function BuildScorerClass:MinMaxHit(output)
 	return lowest, n > 0 and sum / n or nil
 end
 
+-- Pinnacle boss hits the build should survive (from PoB's boss skill presets;
+-- telegraphed one-shots meant to be dodged - Atziri Flameblast, Sirus Meteor,
+-- Maven's memory game - and damage over time are left out)
+local bossHits = { "Shaper Ball", "Shaper Slam", "Exarch Ball", "Eater Beam", "Maven Fireball" }
+
+-- How many times over the build survives the worst of those hits (1 = just
+-- survives), using its maximum hit per damage type, with the boss's
+-- penetration applied to resistances. Returns ratio, skill name.
+function BuildScorerClass:BossHitRatio(output)
+	if not (data.bossSkills and data.monsterDamageTable) then return nil end
+	local configTab = self.build.configTab
+	local level = configTab and configTab.enemyLevel or 84
+	if level < 68 then level = 84 end
+	local base = data.monsterDamageTable[m_min(level, #data.monsterDamageTable)]
+	local uber = self.bossTier == "uber"
+	local worst, worstName
+	for _, name in ipairs(bossHits) do
+		local boss = data.bossSkills[name]
+		if boss and boss.DamageMultipliers then
+			local mult = uber and boss.UberDamageMultiplier or 1
+			local pens = uber and boss.UberDamagePenetrations or boss.DamagePenetrations or { }
+			local sum = 0
+			for damageType, m in pairs(boss.DamageMultipliers) do
+				local damage = base * (m[1] + 70 * m[2]) * mult
+				local hit = output[damageType .. "MaximumHitTaken"]
+				if hit and hit == hit and hit > 0 then
+					local pen = tonumber(pens[damageType .. "Pen"] or "")
+					if pen and damageType ~= "Physical" then
+						local res = (output[damageType .. "Resist"] or 0) / 100
+						hit = hit * (1 - res) / m_max(0.01, 1 - (res - pen / 100))
+					end
+					sum = sum + damage / m_min(hit, maxEHP)
+				end
+			end
+			if sum > 0 and (not worst or 1 / sum < worst) then worst, worstName = 1 / sum, name end
+		end
+	end
+	return worst, worstName
+end
+
+-- Things every endgame build needs that hit pools don't show: being frozen,
+-- shocked, bled... Each missing one costs score (flask immunities count while
+-- the flask is up). Returns total, { { label, value, ok } }
+local checklist = {
+	{ key = "FreezeAvoidChance", label = "Freeze immunity", weight = 0.6 },
+	{ key = "ShockAvoidChance", label = "Shock avoidance", weight = 0.3 },
+	{ key = "BleedAvoidChance", label = "Bleed immunity", weight = 0.25 },
+	{ key = "IgniteAvoidChance", label = "Ignite avoidance", weight = 0.15 },
+	{ key = "ChillAvoidChance", label = "Chill avoidance", weight = 0.15 },
+	{ key = "PoisonAvoidChance", label = "Poison avoidance", weight = 0.1 },
+	{ key = "StunAvoidChance", label = "Stun avoidance", weight = 0.15 },
+}
+function BuildScorerClass:Checklist(output)
+	local total, list = 0, { }
+	for _, entry in ipairs(checklist) do
+		local avoid = output[entry.key]
+		if avoid then
+			local missing = 1 - m_min(100, m_max(0, avoid)) / 100
+			local value = entry.weight * missing
+			total = total + value
+			t_insert(list, { label = entry.label, value = value, ok = missing <= 0.001, avoid = avoid })
+		end
+	end
+	if output.CorruptedBloodImmunity == false then
+		total = total + 0.1
+		t_insert(list, { label = "Corrupted Blood immunity", value = 0.1, ok = false })
+	elseif output.CorruptedBloodImmunity then
+		t_insert(list, { label = "Corrupted Blood immunity", value = 0, ok = true })
+	end
+	return total, list
+end
+
 function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 	-- tankiness: mostly the maximum hit the build survives (the weakest damage
 	-- type first, then all of them), a little effective hit pool. EHP counts
@@ -269,7 +360,11 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 	local minHit, meanLogHit
 	if output then minHit, meanLogHit = self:MinMaxHit(output) end
 	local tank
-	if minHit then
+	local bossRatio = output and self:BossHitRatio(output)
+	if minHit and bossRatio then
+		-- (boss hits: how many times over the build takes the worst pinnacle hit)
+		tank = 0.15 * m_log(m_max(ehp, 1)) + 0.35 * m_log(minHit) + 0.2 * meanLogHit + 0.3 * m_log(m_max(bossRatio, 0.01) * 10000)
+	elseif minHit then
 		tank = 0.15 * m_log(m_max(ehp, 1)) + 0.55 * m_log(minHit) + 0.3 * meanLogHit
 	else
 		tank = m_log(m_max(ehp, 1))
