@@ -51,9 +51,27 @@ function ParallelGeneratorClass.Disable()
 	ParallelGeneratorClass.disabled = true
 end
 
--- Background threads available? (not in headless runs)
+-- Can several copies of the game data live in this process? Background
+-- threads share the process's memory, and a LuaJIT built without GC64 keeps
+-- every Lua state's objects in the same low 2 GB: the app's own data plus a
+-- worker's copy doesn't fit, and the app crashes (access violation) instead
+-- of reporting "not enough memory". Worker processes (bench/fake_threads.lua)
+-- have their own memory.
+function ParallelGeneratorClass.MemoryAllowsWorkers()
+	if ParallelGeneratorClass.processWorkers then return true end
+	local ok, ffi = pcall(require, "ffi")
+	if not ok or not ffi or not ffi.abi then return false end
+	local okAbi, gc64 = pcall(ffi.abi, "gc64")
+	return okAbi and gc64 == true
+end
+
+-- Background threads available? (not in headless runs, not without GC64)
 function ParallelGeneratorClass.Available()
 	if ParallelGeneratorClass.disabled then return false end
+	if not ParallelGeneratorClass.MemoryAllowsWorkers() then return false end
+	-- (opt-in: a generation with background threads crashed the app on a
+	-- player's PC; the Generate window's "Several cores" box turns them on)
+	if not ParallelGeneratorClass.processWorkers and not (main and main.generatorThreads) then return false end
 	if not (LaunchSubScript and launch and launch.RegisterSubScript and launch.subScripts) then return false end
 	if ParallelGeneratorClass.availableChecked == nil then
 		local ok, id = pcall(LaunchSubScript, "return true", "", "")

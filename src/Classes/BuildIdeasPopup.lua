@@ -393,6 +393,10 @@ function BuildIdeasPopupClass:OpenGenerator()
 	controls.timeless.enabled = idle
 	controls.synergies = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {600, 105, 18}, "Look for uniques & synergies (slower):", nil, "After everything else, run the build ideas search once and apply the best idea.", true)
 	controls.synergies.enabled = idle
+	controls.threads = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {800, 105, 18}, "Several cores:", function(state)
+		main.generatorThreads = state
+	end, "Experimental: background threads build several archetypes (and rare items) at once.\nEach thread holds its own copy of the game data (about 1 GB). Off by default:\nit crashed the app on one PC. Without it everything runs one after the other.", main.generatorThreads == true)
+	controls.threads.enabled = idle
 
 	-- Archetypes: the ways this skill can scale; "Scan" builds each one quickly to compare them
 	local archetypeLib = new("BuildArchetypes"):BuildArchetypes()
@@ -873,7 +877,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 	controls.compare = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {650, 464, 168, 20}, "Compare with top players", function()
 		local pg = new("ParallelGenerator"):ParallelGenerator()
 		if not pg.Available() then
-			state.status = "^7Comparing needs background threads, which aren't available here."
+			state.status = "^7Comparing needs background threads: tick \"Several cores\" (experimental) first."
 			return
 		end
 		local build = main.modes["BUILD"]

@@ -2,6 +2,9 @@
 -- processes (bench/worker_proc.lua), so the app's parallel code paths run
 -- headless. dofile it after HeadlessWrapper.lua, from the src folder.
 -- TMPDIR_TEST=<folder for the job files> (default /tmp)
+-- (separate processes: each has its own memory)
+new("ParallelGenerator"):ParallelGenerator()
+common.classes["ParallelGenerator"].processWorkers = true
 local tmp = os.getenv("TMPDIR_TEST") or "/tmp"
 local pending, counter = { }, 0
 function LaunchSubScript(script, funcs, subs, jobJson, userPath)
