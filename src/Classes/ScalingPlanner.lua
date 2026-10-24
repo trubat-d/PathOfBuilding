@@ -96,6 +96,33 @@ function ScalingPlannerClass:ApplySupports(archetype)
 			self.build.skillsTab:ProcessSocketGroup(group)
 		end
 	end
+	-- a trigger setup (Classes/TriggerSetups): the first source the weapons
+	-- allow that really triggers the spell, linked with its support (in the
+	-- link's last sockets; a separate link for Spellslinger's wand attack)
+	local sourceGroup
+	if archetype.trigger then
+		local ts = new("TriggerSetups"):TriggerSetups()
+		local setup = ts.setups[archetype.trigger]
+		local setupGems = new("GemSetup"):GemSetup(gen)
+		local supportId = setup and setup.support and ts.GemId(setup.support)
+		local function entry(id) return { level = data.gems[id].naturalMaxLevel or 20, quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = id } end
+		for _, name in ipairs(setup and setup.sources or { }) do
+			local sourceId = ts.GemId(name)
+			if sourceId and setupGems:CanUse(sourceId) then
+				while #group.gemList > (setup.linkSource == false and 5 or 4) do t_remove(group.gemList) end
+				if setup.linkSource == false then
+					sourceGroup = { label = "Trigger (planning)", enabled = true, slot = "Weapon 1", gemList = { entry(sourceId) } }
+					t_insert(self.build.skillsTab.socketGroupList, sourceGroup)
+					self.build.skillsTab:ProcessSocketGroup(sourceGroup)
+				else
+					t_insert(group.gemList, entry(sourceId))
+				end
+				if supportId then t_insert(group.gemList, entry(supportId)) end
+				self.build.skillsTab:ProcessSocketGroup(group)
+				break
+			end
+		end
+	end
 	-- the archetype's auras, in a group of their own
 	local auraGroup
 	if archetype.auras and #archetype.auras > 0 then
@@ -111,10 +138,8 @@ function ScalingPlannerClass:ApplySupports(archetype)
 		for i = #group.gemList, 1, -1 do group.gemList[i] = nil end
 		for i, g in ipairs(saved) do group.gemList[i] = g end
 		self.build.skillsTab:ProcessSocketGroup(group)
-		if auraGroup then
-			local list = self.build.skillsTab.socketGroupList
-			for i = #list, 1, -1 do if list[i] == auraGroup then t_remove(list, i) end end
-		end
+		local list = self.build.skillsTab.socketGroupList
+		for i = #list, 1, -1 do if (auraGroup and list[i] == auraGroup) or (sourceGroup and list[i] == sourceGroup) then t_remove(list, i) end end
 	end
 end
 

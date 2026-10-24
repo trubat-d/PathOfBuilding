@@ -360,7 +360,8 @@ end
 
 -- Weapon options for the main skill: { { weapon1 = baseName, weapon2 = baseName or nil } }
 function BuildGeneratorClass:WeaponOptions()
-	local effect = self.mainGem.grantedEffect
+	-- (a trigger setup's attack needs its weapon: Classes/TriggerSetups)
+	local effect = self.triggerSource and self.triggerSource.grantedEffect.weaponTypes and self.triggerSource.grantedEffect or self.mainGem.grantedEffect
 	local options = { }
 	local types = { }
 	if effect.weaponTypes then
@@ -504,6 +505,10 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 	-- Drop current supports, then add the best one at a time
 	for i = #group.gemList, 2, -1 do
 		t_remove(group.gemList, i)
+	end
+	-- (a trigger setup's gems stay linked first: its trigger skill and support)
+	if self.triggerFixed then
+		for i = #self.triggerFixed, 1, -1 do t_insert(forced, 1, self.triggerFixed[i]) end
 	end
 	local function addGem(gemId)
 		local gem = data.gems[gemId]
@@ -831,7 +836,8 @@ function BuildGeneratorClass:FillMainLinkMove()
 		local gd = g.gemId and data.gems[g.gemId]
 		if gd and gd.grantedEffect.support then supports = supports + 1 end
 	end
-	if supports >= 5 then return 0 end
+	-- (a trigger setup's trigger skill takes a socket of the link too)
+	if supports + (self.triggerFixed and 1 or 0) >= 5 then return 0 end
 	local spec = self.build.spec
 	self:AutoConfigure()
 	local before = self:FullScore()
@@ -2776,7 +2782,7 @@ function BuildGeneratorClass:CrossIdeasMove(rounds)
 	end
 	local moves = { }
 	for _, a in ipairs(archetypes.ForSkill(self.mainGem, self.options.meta)) do
-		if a.id ~= current and not a.playstyle then
+		if a.id ~= current and not a.playstyle and not a.trigger then
 			local move = { label = a.label, uniques = { }, share = 0, idea = a }
 			for _, item in ipairs(archetypes.UniqueCandidates(a)) do
 				if #move.uniques < 2 and finder:IsItemAllowed(item, filter) and not equipped(item.title or item.name) then
@@ -3549,7 +3555,7 @@ function BuildGeneratorClass:LearnFromTopBuilds(maxTries)
 			end
 			-- their main link (supports this budget can buy)
 			local group = self.mainGroup
-			if group and #parts.supports > 0 then
+			if group and #parts.supports > 0 and not self.triggerFixed then
 				local saved = { }
 				for k, g in ipairs(group.gemList) do saved[k] = g end
 				local list, names = { saved[1] }, { }
@@ -3958,6 +3964,10 @@ function BuildGeneratorClass:Run()
 	end
 	if opts.archetype then
 		self:Note("Archetype: " .. opts.archetype.label)
+	end
+	-- trigger archetypes: the spell linked with what triggers it (Classes/TriggerSetups)
+	if opts.archetype and opts.archetype.trigger then
+		new("TriggerSetups"):TriggerSetups().Apply(self, opts.archetype.trigger)
 	end
 	self:AutoConfigure()
 	self:FullScore()
