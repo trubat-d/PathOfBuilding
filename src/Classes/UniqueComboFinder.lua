@@ -1,0 +1,264 @@
+-- Path of Building
+--
+-- Class: Unique Combo Finder
+-- Two-piece unique combos, where neither piece is worth it alone:
+--   1. pair search: the most promising uniques of each gear slot (scored one
+--      at a time, slightly negative ones included) are scored again two at a
+--      time in different slots; pairs whose joint gain beats the sum of their
+--      gains alone (synergy) become packages;
+--   2. enablers and payoffs: some uniques grant a state (Elusive, Onslaught,
+--      Unholy Might, Arcane Surge, Phasing, Adrenaline...) and others pay off
+--      while in it ("while Elusive", "during Onslaught"...). PoB only counts a
+--      payoff when the configuration says the state is on, so such pairs look
+--      worthless one at a time; here the state is switched on when the pair
+--      has an enabler, and AutoConfig keeps it on for a build that has one
+--      (UniqueComboFinder.SelfBuffs).
+-- Packages go through BuildGenerator:EvaluatePackages: applied for real, the
+-- build adapted around them, the best kept if the build is better.
+--
+local ipairs = ipairs
+local pairs = pairs
+local t_insert = table.insert
+local t_sort = table.sort
+local m_min = math.min
+local m_max = math.max
+
+---@class UniqueComboFinder
+local UniqueComboFinderClass = newClass("UniqueComboFinder")
+
+-- States a build can give itself, the lines that grant them (enablers) and
+-- the lines that pay off while in them. Patterns match lower-cased lines.
+UniqueComboFinderClass.states = {
+	{ var = "buffElusive", label = "Elusive", enable = { "gain elusive", "you are elusive", "grants elusive" }, payoff = { "while elusive", "while you are elusive" } },
+	{ var = "buffOnslaught", label = "Onslaught", enable = { "gain onslaught", "you have onslaught", "grants onslaught" }, payoff = { "while you have onslaught", "during onslaught", "if you have onslaught" } },
+	{ var = "buffUnholyMight", label = "Unholy Might", enable = { "gain unholy might", "you have unholy might", "grants unholy might" }, payoff = { "while you have unholy might", "during unholy might" } },
+	{ var = "buffArcaneSurge", label = "Arcane Surge", enable = { "gain arcane surge", "grants arcane surge" }, payoff = { "while you have arcane surge", "arcane surge on you", "effect of arcane surge" } },
+	{ var = "buffPhasing", label = "Phasing", enable = { "gain phasing", "you have phasing", "grants phasing" }, payoff = { "while phasing", "while you have phasing" } },
+	{ var = "buffAdrenaline", label = "Adrenaline", enable = { "gain adrenaline" }, payoff = { "while you have adrenaline" } },
+	{ var = "buffChaoticMight", label = "Chaotic Might", enable = { "gain chaotic might", "grants chaotic might" }, payoff = { "while you have chaotic might" } },
+	{ var = "buffDivinity", label = "Divinity", enable = { "gain divinity" }, payoff = { "while you have divinity" } },
+	{ var = "conditionOnConsecratedGround", label = "Consecrated Ground", enable = { "create consecrated ground", "creates consecrated ground" }, payoff = { "while on consecrated ground", "on consecrated ground" } },
+}
+
+-- the chance a line gives a state, and whether it only comes from kills
+local function enablerChance(line)
+	local chance = tonumber(line:match("(%d+)%% chance")) or 100
+	return chance, line:find("on kill", 1, true) ~= nil
+end
+
+-- States the build keeps up from its own lines (for AutoConfig): { { var,
+-- on, reason } }. A state from kills only counts while mapping; a chance on
+-- hit is turned into uptime at the main skill's hit rate (4 second states).
+function UniqueComboFinderClass.SelfBuffs(lines, hitRate, boss)
+	local list = { }
+	for _, state in ipairs(UniqueComboFinderClass.states) do
+		local best, source = 0, nil
+		for _, line in ipairs(lines) do
+			for _, pattern in ipairs(state.enable) do
+				if line:find(pattern, 1, true) and not line:find("enemies", 1, true) and not line:find("allies", 1, true) then
+					local chance, onKill = enablerChance(line)
+					if not (onKill and boss) then
+						local p = m_min(1, chance / 100)
+						-- (a chance on hit or kill: up while it is renewed within 4 seconds)
+						local uptime = (p >= 1 or not (line:find("on hit", 1, true) or onKill or line:find("on critical", 1, true))) and 1
+							or (1 - (1 - p) ^ (m_max(0.5, hitRate or 1) * 4))
+						if uptime > best then best, source = uptime, line end
+					end
+				end
+			end
+		end
+		if source and best >= (boss and 0.8 or 0.6) then
+			t_insert(list, { var = state.var, on = true, reason = string.format("%s from \"%s\" (up %.0f%% of the time)", state.label, source, best * 100) })
+		end
+	end
+	return list
+end
+
+-- gen: the BuildGenerator (Score, options, itemsTab, lockedSlots)
+function UniqueComboFinderClass:UniqueComboFinder(gen)
+	self.gen = gen
+	self.build = gen.build
+	self.itemsTab = gen.itemsTab
+	return self
+end
+
+local function lowerLines(item)
+	local list = { }
+	for _, modLine in ipairs(item.explicitModLines or { }) do
+		local current = not modLine.variantList or (item.variant and modLine.variantList[item.variant])
+		if current and modLine.line then t_insert(list, modLine.line:lower()) end
+	end
+	return list
+end
+
+-- Which states an item enables / pays off: { [state] = true }, { [state] = true }
+local function itemStates(item)
+	local enables, pays = { }, { }
+	for _, line in ipairs(lowerLines(item)) do
+		for _, state in ipairs(UniqueComboFinderClass.states) do
+			for _, pattern in ipairs(state.enable) do
+				if line:find(pattern, 1, true) and not line:find("enemies", 1, true) and not line:find("allies", 1, true) then enables[state] = true end
+			end
+			for _, pattern in ipairs(state.payoff) do
+				if line:find(pattern, 1, true) then pays[state] = true end
+			end
+		end
+	end
+	return enables, pays
+end
+
+-- Candidate packages: { { label, uniques = { a, b }, share = 0, reason } }, best first
+-- opts: perSlot (singles kept per slot, default 15), maxPairs (pair
+-- calculations, default 400), keep (packages returned, default 4)
+function UniqueComboFinderClass:Find(opts)
+	opts = opts or { }
+	local gen = self.gen
+	local itemsTab = self.itemsTab
+	local finder = new("BestItemFinder"):BestItemFinder(itemsTab)
+	local filter = { obtainableOnly = true, levelOnly = true, investment = gen.options.investment }
+	local prices = GetPriceSource()
+	local locked = gen.lockedSlots or { }
+	-- gear slots only, weapons left out (a pair would have to agree with the
+	-- weapon setup: the weapon stages handle them)
+	local slots = { }
+	for _, slotName in ipairs(finder:GetActiveSlots()) do
+		if not slotName:match("^Weapon") and not locked[slotName] then t_insert(slots, slotName) end
+	end
+	local equippedTitles = { }
+	for _, slot in pairs(itemsTab.slots) do
+		local item = itemsTab.items[slot.selItemId]
+		if item and item.title then equippedTitles[item.title] = true end
+	end
+	local candidates = { }
+	for _, item in pairs(main.uniqueDB.list) do
+		local title = item.title or item.name
+		if item.type ~= "Jewel" and item.type ~= "Flask" and item.type ~= "Tincture" and not equippedTitles[title]
+			and prices.Available(gen.options.investment, title) and finder:IsItemAllowed(item, filter) then
+			t_insert(candidates, item)
+		end
+	end
+	t_sort(candidates, function(a, b) return (a.title or a.name) < (b.title or b.name) end)
+	gen:Recalculate()
+	local current = gen:Score()
+	-- 1. every candidate alone, in each slot it fits
+	local singles = { }   -- list of { item, slot, gain, enables, pays }
+	local bySlot = { }
+	for _, slotName in ipairs(slots) do bySlot[slotName] = { } end
+	for _, item in ipairs(candidates) do
+		local enables, pays = itemStates(item)
+		for _, slotName in ipairs(slots) do
+			if itemsTab:IsItemValidForSlot(item, slotName) then
+				local gain = gen:Score({ repSlotName = slotName, repItem = item }) - current
+				local entry = { item = item, slot = slotName, gain = gain, enables = enables, pays = pays }
+				t_insert(bySlot[slotName], entry)
+			end
+		end
+	end
+	local perSlot = opts.perSlot or 15
+	local pool = { }
+	for _, slotName in ipairs(slots) do
+		local list = bySlot[slotName]
+		t_sort(list, function(a, b)
+			if math.abs(a.gain - b.gain) > 1e-9 then return a.gain > b.gain end
+			return (a.item.title or a.item.name) < (b.item.title or b.item.name)
+		end)
+		local kept = 0
+		for _, e in ipairs(list) do
+			-- (the best few, slightly worse ones too, and every enabler / payoff
+			-- that isn't far off: a payoff looks worthless until its state is on)
+			local special = next(e.enables) or next(e.pays)
+			if (kept < perSlot and e.gain > -0.3) or (special and e.gain > -0.6) then
+				t_insert(pool, e)
+				kept = kept + 1
+			end
+		end
+	end
+	-- 2. pairs in different slots (two rings count as different slots)
+	local pairsList = { }
+	local function stateVars(a, b)
+		local vars = { }
+		for state in pairs(a.enables) do if b.pays[state] or a.pays[state] then vars[state.var] = true end end
+		for state in pairs(b.enables) do if a.pays[state] or b.pays[state] then vars[state.var] = true end end
+		return vars
+	end
+	local input = self.build.configTab.input
+	local function scoreWith(vars, override)
+		-- the states the pair enables switched on for its score
+		local saved, any = { }, false
+		for var in pairs(vars) do
+			saved[var] = input[var]
+			if not input[var] then input[var] = true; any = true end
+		end
+		if any then self.build.configTab:BuildModList() end
+		local score = gen:Score(override)
+		if any then
+			for var, v in pairs(saved) do input[var] = v end
+			self.build.configTab:BuildModList()
+		end
+		return score
+	end
+	-- pairs worth a calculation: two strong ones, or an enabler with a payoff
+	local candidatesPairs = { }
+	for i = 1, #pool do
+		for j = i + 1, #pool do
+			local a, b = pool[i], pool[j]
+			if a.slot ~= b.slot and a.item ~= b.item and (a.item.title or a.item.name) ~= (b.item.title or b.item.name) then
+				local vars = stateVars(a, b)
+				local linked = next(vars) ~= nil
+				local priority = (linked and 1 or 0) + a.gain + b.gain
+				t_insert(candidatesPairs, { a = a, b = b, vars = vars, linked = linked, priority = priority })
+			end
+		end
+	end
+	t_sort(candidatesPairs, function(x, y)
+		if x.linked ~= y.linked then return x.linked end
+		if math.abs(x.priority - y.priority) > 1e-9 then return x.priority > y.priority end
+		local xa, ya = (x.a.item.title or "") .. (x.b.item.title or ""), (y.a.item.title or "") .. (y.b.item.title or "")
+		if xa ~= ya then return xa < ya end
+		return x.a.slot .. x.b.slot < y.a.slot .. y.b.slot
+	end)
+	local maxPairs = opts.maxPairs or 400
+	if gen.options.debugTiming then
+		local linked = 0
+		for _, p in ipairs(candidatesPairs) do if p.linked then linked = linked + 1 end end
+		ConPrintf("[combos] %d candidates, %d in the pool, %d pairs (%d enabler + payoff)", #candidates, #pool, #candidatesPairs, linked)
+		for i = 1, m_min(8, #candidatesPairs) do
+			local p = candidatesPairs[i]
+			if p.linked then ConPrintf("  linked: %s (%s) + %s (%s)", p.a.item.title, p.a.slot, p.b.item.title, p.b.slot) end
+		end
+	end
+	for n, p in ipairs(candidatesPairs) do
+		if n > maxPairs then break end
+		local joint = scoreWith(p.vars, { repItems = { [p.a.slot] = p.a.item, [p.b.slot] = p.b.item } }) - current
+		local synergy = joint - p.a.gain - p.b.gain
+		if joint > 0.01 and synergy > 0.01 and joint > m_max(p.a.gain, p.b.gain) + 0.01 then
+			t_insert(pairsList, { a = p.a, b = p.b, joint = joint, synergy = synergy, linked = p.linked, vars = p.vars })
+		end
+		if n % 20 == 0 then gen:Tick() end
+	end
+	t_sort(pairsList, function(x, y)
+		if math.abs(x.joint - y.joint) > 1e-9 then return x.joint > y.joint end
+		return (x.a.item.title or "") .. (x.b.item.title or "") < (y.a.item.title or "") .. (y.b.item.title or "")
+	end)
+	-- 3. the best few as packages (each unique once)
+	local packages, used = { }, { }
+	for _, p in ipairs(pairsList) do
+		if #packages >= (opts.keep or 4) then break end
+		local ta, tb = p.a.item.title or p.a.item.name, p.b.item.title or p.b.item.name
+		if not used[ta] and not used[tb] then
+			used[ta], used[tb] = true, true
+			local states = { }
+			for _, state in ipairs(UniqueComboFinderClass.states) do
+				if p.vars[state.var] then t_insert(states, state.label) end
+			end
+			t_insert(packages, {
+				label = string.format("%s + %s", ta, tb),
+				uniques = { p.a.item, p.b.item }, share = 0,
+				reason = string.format("together %+.2f, alone %+.2f and %+.2f%s", p.joint, p.a.gain, p.b.gain,
+					#states > 0 and (" (" .. table.concat(states, ", ") .. " from one, paid off by the other)") or ""),
+			})
+		end
+	end
+	self.pairsTried = m_min(#candidatesPairs, maxPairs)
+	return packages
+end

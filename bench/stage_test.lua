@@ -113,6 +113,8 @@ elseif step == "snapdebug" then
 	local branches = gen:TreeBranches()
 	print("BRANCHES", #branches)
 	for i = 1, math.min(5, #branches) do print("BR", #branches[i].nodes, branches[i].perPoint, branches[i].nodes[1].dn) end
+elseif step == "combos" then
+	gen:UniqueCombosMove(1)
 elseif step == "cross" then
 	gen:CrossIdeasMove(1)
 elseif step == "explain" then

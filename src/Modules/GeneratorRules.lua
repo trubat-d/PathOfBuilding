@@ -63,6 +63,8 @@ rules.uniques = {
 	["The Flawed Refuge"] = { excluded = true, reason = "you take all elemental damage from blocked hits" },
 	["Corrupted Energy"] = { excluded = true, reason = "physical damage bypasses energy shield with 5 corrupted items" },
 	["Haunting Memories"] = { excluded = true, reason = "suppressed spell damage bypasses energy shield" },
+	-- (found by the unique combo search: PoB reads each of its timed effects as always on)
+	["Bound Fate"] = { excluded = true, reason = "every 5 seconds one random effect, half of them drawbacks; PoB counts the good ones as permanent" },
 	-- build checks
 	["Midnight Bargain"] = { check = function(output) return not output.ChaosInoculation end, reason = "can't be used with Chaos Inoculation" },
 	["Replica Midnight Bargain"] = { check = function(output) return not output.ChaosInoculation end, reason = "can't be used with Chaos Inoculation" },
