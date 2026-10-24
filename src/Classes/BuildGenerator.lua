@@ -724,8 +724,16 @@ function BuildGeneratorClass:AuraStackMove()
 	self.scorer.ignoreReservation = false
 	if ok and auraCount() > beforeAuras then
 		self:AutoConfigure()
+		local function debugState(label)
+			if not self.options.debugTiming then return end
+			self:Recalculate()
+			local o = self.build.calcsTab.mainOutput
+			ConPrintf("[auras] %s: %d auras, mana %s unreserved %s, life %s unreserved %s, score %.3f", label, auraCount(), tostring(o.Mana), tostring(o.ManaUnreserved), tostring(o.Life), tostring(o.LifeUnreserved), (self:Score()))
+		end
+		debugState("chosen")
 		self:RefineTree(16)
 		self:RefineTree(10)
+		debugState("tree re-spent")
 		-- auras the tree still can't pay for: drop the least useful one at a time
 		for _ = 1, 4 do
 			self:Recalculate()
@@ -2593,6 +2601,136 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 	return #kept
 end
 
+-- What the strongest players of the skill wear and link (poe.ninja top
+-- builds, when they're loaded): each of their gear items and their main
+-- link tried in this build, the best few kept when the full score agrees.
+-- Their uniques must fit the budget; their rares (often mirror-tier) only
+-- at the No limit level. Runs once the build is finished, so it only takes
+-- what beats what the generator found on its own.
+function BuildGeneratorClass:LearnFromTopBuilds(maxTries)
+	local details = self.options.meta and self.options.meta.details
+	local tops = details and details.topBuilds
+	if not tops or #tops == 0 or not self.mainGem then return 0 end
+	local BC = LoadModule("Modules/BuildComparison")
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local investment = self.options.investment or { }
+	local filter = { obtainableOnly = true, levelOnly = true, investment = investment }
+	self:Recalculate()
+	local current = self:Score()
+	local candidates = { }
+	for i = 1, m_min(3, #tops) do
+		local ok, parts = pcall(function()
+			local entry = new("CompareEntry"):CompareEntry(BC.DecodeCode(tops[i].code), "top player")
+			BC.SelectMainSkill(entry, self.mainGem.name)
+			return BC.ReadParts(entry)
+		end)
+		if not ok then ConPrintf("Top build %d could not be read: %s", i, tostring(parts)) end
+		if ok and parts then
+			local who = tostring(tops[i].name or ("player " .. i))
+			local slotNames = { }
+			for slotName in pairs(parts.items) do t_insert(slotNames, slotName) end
+			t_sort(slotNames)
+			for _, slotName in ipairs(slotNames) do
+				local entry = parts.items[slotName]
+				local slot = self.itemsTab.slots[slotName]
+				if slot and not slotName:match("^Flask") and not (self.lockedSlots and self.lockedSlots[slotName]) then
+					local item = new("Item"):Item(entry.raw)
+					item:NormaliseQuality()
+					item:BuildModList()
+					local unique = item.rarity == "UNIQUE" or item.rarity == "RELIC"
+					local allowed = (unique and finder:IsItemAllowed(item, filter)) or (not unique and investment.elevated)
+					if allowed and self.itemsTab:IsItemValidForSlot(item, slotName) then
+						local score = self:Score({ repSlotName = slotName, repItem = item })
+						if self.options.debugTiming then ConPrintf("[top] %s %s: %+.3f", slotName, tostring(entry.name), score - current) end
+						if score > current + 0.01 then
+							t_insert(candidates, { kind = "item", slot = slotName, item = item, gain = score - current,
+								label = string.format("%s's %s (%s)", who, entry.name or item.name, slotName) })
+						end
+					end
+				end
+			end
+			-- their main link (supports this budget can buy)
+			local group = self.mainGroup
+			if group and #parts.supports > 0 then
+				local saved = { }
+				for k, g in ipairs(group.gemList) do saved[k] = g end
+				local list, names = { saved[1] }, { }
+				for _, sup in ipairs(parts.supports) do
+					local gemId
+					for id, gem in pairs(data.gems) do if gem.name == sup.name and gem.grantedEffect and gem.grantedEffect.support then gemId = id end end
+					local gem = gemId and data.gems[gemId]
+					if gem and (investment.awakenedGems ~= false or not gem.tags.awakened) and #list - 1 < (self.mainLinkLimit or 5) then
+						t_insert(list, { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId })
+						t_insert(names, gem.name)
+					end
+				end
+				group.gemList = list
+				self.build.skillsTab:ProcessSocketGroup(group)
+				local score = self:Score()
+				group.gemList = saved
+				self.build.skillsTab:ProcessSocketGroup(group)
+				if score > current + 0.01 then
+					t_insert(candidates, { kind = "supports", list = list, gain = score - current, label = string.format("%s's main link (%s)", who, table.concat(names, ", ")) })
+				end
+			end
+		end
+	end
+	t_sort(candidates, function(a, b)
+		local qa, qb = m_floor(a.gain * 1e9 + 0.5), m_floor(b.gain * 1e9 + 0.5)
+		if qa ~= qb then return qa > qb end
+		return a.label < b.label
+	end)
+	local kept, usedSlots, supportsDone = { }, { }, false
+	local tries = 0
+	for _, c in ipairs(candidates) do
+		if tries >= (maxTries or 4) then break end
+		if (c.kind == "item" and not usedSlots[c.slot]) or (c.kind == "supports" and not supportsDone) then
+			tries = tries + 1
+			local before = self:FullScore()
+			local undo
+			if c.kind == "item" then
+				local slot = self.itemsTab.slots[c.slot]
+				local previous = slot.selItemId
+				local newItem = finder:Equip(c.item, c.slot, true)
+				self.itemsTab:PopulateSlots()
+				undo = function()
+					slot:SetSelItemId(previous)
+					self.itemsTab:DeleteItem(newItem, true)
+					self.itemsTab:PopulateSlots()
+				end
+			else
+				local group = self.mainGroup
+				local saved = { }
+				for k, g in ipairs(group.gemList) do saved[k] = g end
+				group.gemList = c.list
+				self.build.skillsTab:ProcessSocketGroup(group)
+				undo = function()
+					group.gemList = saved
+					self.build.skillsTab:ProcessSocketGroup(group)
+				end
+			end
+			self:AutoConfigure()
+			local after = self:FullScore()
+			if after > before + 0.005 then
+				if c.kind == "item" then usedSlots[c.slot] = true else supportsDone = true end
+				t_insert(kept, string.format("%s %+.2f", c.label, after - before))
+				if c.kind == "item" and (c.item.rarity == "UNIQUE" or c.item.rarity == "RELIC") then
+					self.costs = self.costs or { }
+					t_insert(self.costs, GetPriceSource():UniquePrice(c.item) or false)
+				end
+			else
+				undo()
+				self:AutoConfigure()
+				self:Recalculate()
+			end
+		end
+	end
+	if #kept > 0 then
+		self:Note("Taken from the top players of the skill (poe.ninja): " .. table.concat(kept, "; "))
+	end
+	return #kept
+end
+
 -- Unique flasks (Dying Sun, Bottled Faith, Cinderswallow Urn...) against the
 -- generated magic ones: each affordable unique flask in each flask slot,
 -- screened with the quick score, the best few checked with flask uptimes
@@ -2952,6 +3090,11 @@ function BuildGeneratorClass:Run()
 	if opts.jointMoves ~= false then
 		self.stage = "Trying packages from top players"
 		self:JointMoves(opts.jointMoveRounds or 2)
+	end
+	if opts.learnFromTop ~= false then
+		self.stage = "Trying the top players' gear and links"
+		local ok, err = pcall(function() self:LearnFromTopBuilds() end)
+		if not ok then ConPrintf("Learning from top builds failed: %s", tostring(err)) end
 	end
 	self.stage = "Optimizing the passive tree"
 	if opts.ascendancyRecheck ~= false then self:AscendancyRecheck() end

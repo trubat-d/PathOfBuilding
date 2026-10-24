@@ -41,7 +41,7 @@ archetypes the players use (impale, Hatred, crit).
 
 * `profile_gen.lua "<Skill>" "<Ascendancy>" <investment> <quick|full>` (`ARCH=`): time per
   generator method and calculator runs.
-* `stage_test.lua` (`OURS=`, `STEP=flasks|uniquejewels|uniquesweep|uniqueflasks|aurastack|metajewels|watcher|fillmain|finalrares|ascendancy|supports|refine|rares`):
+* `stage_test.lua` (`OURS=`, `STEP=flasks|uniquejewels|uniquesweep|uniqueflasks|aurastack|metajewels|watcher|learn|fillmain|finalrares|ascendancy|supports|refine|rares`):
   one generator step on a saved build (`CRAFTS=0`: rares without bench crafts).
 * `worker_test.lua '<job json>'`: a generation the way a background thread runs
   it (`Modules/GeneratorWorker.lua`).

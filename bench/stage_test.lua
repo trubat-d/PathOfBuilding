@@ -45,6 +45,12 @@ elseif step == "uniquesweep" then
 	print("KEPT", gen:UniqueSweep())
 elseif step == "uniqueflasks" then
 	print("KEPT", gen:UniqueFlaskSweep())
+elseif step == "learn" then
+	-- META_DETAILS=<json with topBuilds = { { name, code } }>
+	local mf = assert(io.open(os.getenv("META_DETAILS")))
+	gen.options.meta = { details = require("dkjson").decode(mf:read("*a")) }
+	mf:close()
+	print("KEPT", gen:LearnFromTopBuilds())
 elseif step == "watcher" then
 	-- the build's Watcher's Eye taken out, then searched again
 	for _, slot in ipairs(build.itemsTab.orderedSlots) do
