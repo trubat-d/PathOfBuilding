@@ -1127,6 +1127,11 @@ function SynergyFinderClass:TimelessIdea()
 			assumptions = { "Only one Historic jewel can be used. The jewel's name decides the keystone, the seed decides the other passives." },
 			timeless = { finder = finder, result = result },
 		}
+		-- a timeless jewel with a chosen seed (and conqueror) is a high-end purchase
+		if not (self.options.investment and self.options.investment.awakenedGems) then
+			idea.title = "(High investment) " .. idea.title
+			t_insert(idea.assumptions, "Timeless jewels with a specific seed and conqueror are counted as High investment: they usually cost far more than the base price")
+		end
 		if points > 0 then
 			t_insert(idea.explanation, string.format("Uses %d more passive point%s: remove the same number elsewhere", points, points == 1 and "" or "s"))
 		end

@@ -1205,6 +1205,12 @@ function BuildGeneratorClass:ChooseTimelessJewel()
 	local result = finder:Run({ })
 	if not result or result.gain <= 0.01 then return end
 	local described = finder:Describe(result)
+	-- a chosen seed and conqueror costs far more than the base price: below
+	-- High investment the jewel is only noted as an upgrade
+	if not investment.awakenedGems then
+		self:Note(string.format("Possible upgrade (High investment): timeless jewel %s, about %+.0f%% score before re-spending passives", result.label, result.gain * 100))
+		return
+	end
 	local undo = spec:CreateUndoState()
 	local slot = self.itemsTab.slots["Jewel " .. result.socket.node.id]
 	local previous = slot and slot.selItemId

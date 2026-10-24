@@ -355,7 +355,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 	controls.anoints.enabled = idle
 	controls.tattoos = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {190, 105, 18}, "Tattoos:", nil, "Tattoo allocated attribute passives (and keystones / masteries) within the investment level.", true)
 	controls.tattoos.enabled = idle
-	controls.timeless = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {330, 105, 18}, "Timeless jewel:", nil, "Socket the best timeless jewel (type, seed, conqueror keystone) from Budget investment,\nthen re-spend some passive points for the passives it transformed.", true)
+	controls.timeless = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {330, 105, 18}, "Timeless jewel:", nil, "Socket the best timeless jewel (type, seed, conqueror keystone) from High investment,\nthen re-spend some passive points for the passives it transformed. Below High it's noted as an upgrade.", true)
 	controls.timeless.enabled = idle
 	controls.synergies = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {600, 105, 18}, "Look for uniques & synergies (slower):", nil, "After everything else, run the build ideas search once and apply the best idea.", true)
 	controls.synergies.enabled = idle
