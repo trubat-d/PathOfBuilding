@@ -312,7 +312,10 @@ function GemSetupClass:ChooseCurses()
 	-- defend - Enfeeble, Temporal Chains, Warlord's Mark - come with more
 	-- curse slots)
 	local defensive = { ["Enfeeble"] = true, ["Temporal Chains"] = true, ["Warlord's Mark"] = true }
-	local damageCurse = false
+	-- (a build made for something else than damage - a custom mix with
+	-- little damage weight - takes the defensive curses first just as well)
+	local focusDps = self.gen.scorer and self.gen.scorer.focus and self.gen.scorer.focus.dps or 1
+	local damageCurse = focusDps < 0.3
 	local current = self:Score()
 	local used = { }
 	for _ = 1, math.max(1, math.min(3, self:CurseLimit())) do

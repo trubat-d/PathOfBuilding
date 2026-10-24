@@ -158,7 +158,9 @@ BuildScorerClass.goalList = {
 function BuildScorerClass.CustomFocus(weights)
 	weights = weights or { }
 	local parts = { }
-	local focus = { id = "CUSTOM", dps = m_max(0.1, weights.dps or 1), ehp = weights.ehp or 0.5, avoid = weights.avoid or 0.3,
+	-- (damage can be 0: a build made only to survive and move; a trace of it
+	-- is kept so equal builds are still told apart by their damage)
+	local focus = { id = "CUSTOM", dps = m_max(0.001, weights.dps or 1), ehp = weights.ehp or 0.5, avoid = weights.avoid or 0.3,
 		clear = weights.clear or 0.2, hitTarget = 30000, extra = { } }
 	for _, goal in ipairs(BuildScorerClass.goalList) do
 		local w = weights.goals and weights.goals[goal.id]

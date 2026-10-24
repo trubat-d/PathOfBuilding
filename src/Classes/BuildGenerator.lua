@@ -564,7 +564,10 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 				end
 			end
 		end
-		if not best or bestScore <= current then
+		-- (a build that doesn't value damage - a custom mix with damage 0 - only
+		-- links supports that serve its other goals: life leech, speed...)
+		local minGain = (self.scorer and self.scorer.focus and self.scorer.focus.dps or 1) < 0.05 and 0.003 or 0
+		if not best or bestScore <= current + minGain then
 			break
 		end
 		local gem = data.gems[best]
@@ -1843,6 +1846,14 @@ end
 function BuildGeneratorClass:FlaskEnchantMove()
 	local enchants = data.enchantments and data.enchantments["UtilityFlask"] and data.enchantments["UtilityFlask"]["ENKINDLING"]
 	if not enchants then return end
+	-- (Enkindling: the flask gains no charges while it's active - it can't be
+	-- kept up, unless Mageblood keeps the magic utility flasks on for good)
+	local permanent = false
+	for _, slot in pairs(self.itemsTab.slots) do
+		local item = self.itemsTab.items[slot.selItemId]
+		if item and item.title == "Mageblood" then permanent = true end
+	end
+	if not permanent then return end
 	local kept = { }
 	for _, slotName in ipairs({ "Flask 1", "Flask 2", "Flask 3", "Flask 4", "Flask 5" }) do
 		local slot = self.itemsTab.slots[slotName]
@@ -4812,6 +4823,8 @@ function BuildGeneratorClass:Run()
 	self:RemoveUnusedItems()
 	-- (last check: every gem setup fits its item's sockets)
 	if self:FitSockets() then self:Note("Gem setups packed again to fit the items' sockets") end
+	-- (no impossible rare in the finished build: Eldritch implicits stay off influenced items)
+	self:SanitizeRares()
 	self:AutoConfigure()
 	self:Recalculate()
 	if self.skillProfileNote then self:Note("Main skill as used in a fight: " .. self.skillProfileNote) end
