@@ -366,7 +366,8 @@ function BuildMetaSourceClass.AggregateCharacters(skillName, characters)
 				local name = gem.name or ""
 				if name == skillName then
 					hasSkill = true
-				else
+				elseif name:match(" Support$") then
+					-- (only supports: other active gems in the link are separate setups)
 					t_insert(names, (name:gsub(" Support$", "")))
 				end
 			end

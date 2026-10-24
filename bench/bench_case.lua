@@ -32,7 +32,15 @@ if archetypeId then
 	assert(archetype, "archetype not found: " .. archetypeId)
 end
 
+-- optional: top player details (poe.ninja) saved as JSON, for offline tests
+local meta
+if os.getenv("META_DETAILS") then
+	local f = assert(io.open(os.getenv("META_DETAILS")))
+	meta = { items = { }, keystones = { }, anoints = { }, supports = { }, total = 0, details = dkjson.decode(f:read("*a")) }
+	f:close()
+end
 local gen = new("BuildGenerator"):BuildGenerator(build, {
+	meta = meta,
 	gemId = gemId, classId = asc.classId, ascendClassId = asc.ascendClassId, level = 92,
 	investment = investment, focus = new("BuildScorer"):BuildScorer(build).focusList[1],
 	quick = mode == "quick", synergies = false, archetype = archetype, yieldEvery = 1e9,
@@ -71,7 +79,7 @@ else
 	local gems = { }
 	for i, g in ipairs(gen.mainGroup.gemList) do if i > 1 and g.gemId then table.insert(gems, data.gems[g.gemId].name) end end
 	result.supports = gems
-	result.checklist = res.checklist
+	result.log = res.log
 end
 result.seconds = math.floor(os.clock() - t0)
 print("BENCH " .. dkjson.encode(result))

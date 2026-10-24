@@ -180,9 +180,32 @@ function BuildIdeasPopupClass:OpenIdeas(build)
 	controls.level.enabled = idle
 
 	-- Details of the selected idea
+	-- Upgrade plan: the ideas that cost something, best score gain per divine first
+	local function upgradePlan(ideas)
+		local priced = { }
+		for _, idea in ipairs(ideas or { }) do
+			if idea.totalCost and idea.totalCost >= 0.05 and (idea.gain or 0) > 0 then t_insert(priced, idea) end
+		end
+		table.sort(priced, function(a, b) return a.gain / a.totalCost > b.gain / b.totalCost end)
+		local lines = { }
+		if #priced > 0 then
+			t_insert(lines, "^7Upgrade order (most score per divine first):")
+			local spent = 0
+			for i = 1, math.min(6, #priced) do
+				local idea = priced[i]
+				spent = spent + idea.totalCost
+				t_insert(lines, string.format("^7  %d. %s: %s, damage %+.0f%%, hit pool %+.0f%% (total so far %s)", i, idea.title,
+					GetPriceSource().FormatPrice(idea.totalCost), idea.dpsPct, idea.ehpPct, GetPriceSource().FormatPrice(spent)))
+			end
+		end
+		return lines
+	end
 	local function showDetails(idea)
 		state.selected = idea
 		local list = { }
+		if not idea and state.result then
+			for _, line in ipairs(upgradePlan(state.result.ideas)) do addLines(list, line, 16) end
+		end
 		if idea then
 			addLines(list, "^7" .. idea.title, 18)
 			addLines(list, string.format("^7Damage %+.1f%%   Effective hit pool %+.1f%%   Passive points: %d", idea.dpsPct, idea.ehpPct, idea.points or 0), 16)
@@ -253,10 +276,8 @@ function BuildIdeasPopupClass:OpenIdeas(build)
 			controls.ideas.list = result.ideas
 			controls.ideas.defaultText = "^7No idea improved this build with these settings."
 			state.status = string.format("^7%d ideas from %d combinations tested. Click one for details, double-click or \"Apply\" to use it.", #result.ideas, result.tested)
-			if result.ideas[1] then
-				controls.ideas:SelectIndex(1)
-				showDetails(result.ideas[1])
-			end
+			-- (nothing selected first: the details show the upgrade order)
+			showDetails(nil)
 		end, function(err)
 			state.running = false
 			state.status = "^1Search failed: " .. tostring(err)
@@ -459,9 +480,10 @@ function BuildIdeasPopupClass:OpenGenerator()
 		"^7  6. supports again; curse, aura, guard and movement setups linked like real builds",
 		"^7  7. tree again for the gear, ascendancy and bloodline (shared points)",
 		"^7  8. uniques players of the skill use (poe.ninja), rare / timeless / Forbidden / Watcher's Eye / cluster jewels,",
-		"^7      anoint and tattoos   9. utility flasks (realistic uptime)   10. optionally, the best unique / keystone idea",
-		"^7Scored on your PC with PoB's calculator: damage the build can pay for, hit pool plus recovery (regen, leech,",
-		"^7recoup; self-damage like Righteous Fire must be out-regenerated) and clear speed (explosions, area, movement).",
+		"^7      anoint and tattoos   9. utility flasks, pantheon and bandit   10. optionally, the best unique / keystone idea",
+		"^7  11. packages the top players use together (adapted before judging)   12. passive tree rebuilt with shortest paths",
+		"^7Scored on your PC with PoB's calculator: damage the build can pay for; mostly the max hit it survives (weakest",
+		"^7damage type, pinnacle / uber boss hits), little EHP; recovery; a defence checklist (freeze, shock, bleed...).",
 	})
 
 	local function makeOptions()

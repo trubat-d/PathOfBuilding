@@ -49,6 +49,22 @@ function BuildGeneratorClass.GemFamily(gem)
 	return gem.grantedEffect and gem.grantedEffect.plusVersionOf or gem.grantedEffectId
 end
 
+-- Part of a multi-part skill used for scoring (index), or nil for the first
+local realisticParts = {
+	"All Bolts in Range", "Combined Average Projectiles", "Maximum Sustainable", "Average waves hitting configured size enemy",
+	"Average explosions hitting", "Average Balls Hitting", "Total Weighted", "Average DPS", "Blade Hits Per Sec", "Maximum Stages",
+	"2 Overlapping Waves", "Both Waves", "Both slashes", "Half Bolts Hitting", "Average # traps (good placement)", "Max Pulse per Brand",
+}
+function BuildGeneratorClass.RealisticSkillPart(effect)
+	if not effect or not effect.parts or #effect.parts < 2 then return nil end
+	for _, wanted in ipairs(realisticParts) do
+		for index, part in ipairs(effect.parts) do
+			if part.name and part.name:find(wanted, 1, true) then return index end
+		end
+	end
+	return nil
+end
+
 -- Lists the active skill gems that can be the main skill of a generated build
 function BuildGeneratorClass.SkillList()
 	local list = { }
@@ -199,6 +215,14 @@ function BuildGeneratorClass:Setup()
 	local group = { label = "Main skill (generated)", enabled = true, slot = "Body Armour", gemList = {
 		{ level = gem.naturalMaxLevel or 20, quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = opts.gemId },
 	} }
+	-- skills with several parts: the part that matches sustained use on a boss
+	-- (e.g. Ball Lightning "All Bolts in Range", Tornado Shot "Combined Average
+	-- Projectiles"); PoB's first part is often a single hit
+	local part = self.RealisticSkillPart(gem.grantedEffect)
+	if part then
+		group.gemList[1].skillPart = part
+		group.gemList[1].skillPartCalcs = part
+	end
 	t_insert(build.skillsTab.socketGroupList, group)
 	build.skillsTab:ProcessSocketGroup(group)
 	build.mainSocketGroup = #build.skillsTab.socketGroupList
@@ -1475,6 +1499,151 @@ function BuildGeneratorClass:ChooseArchetypeJewels()
 	end
 end
 
+-- Joint moves: packages the top players of the skill use together (unique
+-- pairs, popular uniques, keystones). Greedy steps miss them because each
+-- piece alone often looks worse; here each package is applied for real and
+-- the build adapts (passives re-spent, supports re-checked, configuration)
+-- before it is judged. The best package is kept if the adapted build is better.
+function BuildGeneratorClass:JointMoves(rounds)
+	local details = self.options.meta and self.options.meta.details
+	if not details or (details.count or 0) < 3 then return end
+	local n = details.count
+	local byTitle = { }
+	for _, item in pairs(main.uniqueDB.list) do
+		byTitle[item.title or item.name] = byTitle[item.title or item.name] or item
+	end
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local filter = { obtainableOnly = true, levelOnly = true, investment = self.options.investment }
+	local function gearUnique(name)
+		local item = byTitle[name]
+		if item and item.type ~= "Jewel" and item.type ~= "Flask" and finder:IsItemAllowed(item, filter) then return item end
+	end
+	local function equipped(title)
+		for _, slot in pairs(self.itemsTab.slots) do
+			local item = self.itemsTab.items[slot.selItemId]
+			if item and item.title == title then return true end
+		end
+		return false
+	end
+	-- 1. candidate packages
+	local moves = { }
+	for i, pair in ipairs(details.uniquePairs or { }) do
+		if i > 15 then break end
+		local a, b = gearUnique(pair.a), gearUnique(pair.b)
+		if a and b and (pair.lift or 0) >= 1.5 and not equipped(pair.a) and not equipped(pair.b) then
+			t_insert(moves, { label = pair.a .. " + " .. pair.b, uniques = { a, b }, share = pair.count / n })
+		end
+	end
+	for name, count in pairs(details.uniques or { }) do
+		local item = gearUnique(name)
+		if item and count / n >= 0.2 and not equipped(name) then
+			t_insert(moves, { label = name, uniques = { item }, share = count / n })
+		end
+	end
+	local archetypes = new("BuildArchetypes"):BuildArchetypes()
+	for name, count in pairs(details.keystones or { }) do
+		local node = archetypes.NodeByName(self.build.spec, name)
+		if node and not node.alloc and node.path and count / n >= 0.25 and not (self.forbiddenNodes and self.forbiddenNodes[node.id]) then
+			t_insert(moves, { label = name, keystone = node, share = count / n })
+		end
+	end
+	if #moves == 0 then return end
+	local slots = finder:GetActiveSlots()
+	for _ = 1, rounds or 1 do
+		self:Recalculate()
+		local base = self:FullScore()
+		local current = self:Score()
+		-- 2. quick screening with overrides (no adaptation yet)
+		for _, move in ipairs(moves) do
+			local override = { repItems = { }, addNodes = { } }
+			move.placement = { }
+			for _, item in ipairs(move.uniques or { }) do
+				local bestSlot, bestScore
+				for _, slotName in ipairs(slots) do
+					if override.repItems[slotName] == nil and not (self.lockedSlots and self.lockedSlots[slotName]) and self.itemsTab:IsItemValidForSlot(item, slotName) then
+						override.repItems[slotName] = item
+						local score = self:Score(override)
+						override.repItems[slotName] = nil
+						if not bestScore or score > bestScore then bestSlot, bestScore = slotName, score end
+					end
+				end
+				if bestSlot then
+					override.repItems[bestSlot] = item
+					t_insert(move.placement, { item = item, slot = bestSlot })
+				end
+			end
+			if move.keystone and move.keystone.path then
+				for _, node in ipairs(move.keystone.path) do override.addNodes[node] = true end
+			end
+			move.quick = (#move.placement == #(move.uniques or { })) and self:Score(override) or -math.huge
+		end
+		t_sort(moves, function(a, b) return a.quick > b.quick end)
+		-- 3. the most promising, applied for real and adapted
+		local spec = self.build.spec
+		local function apply(move)
+			local state = { tree = spec:CreateUndoState(), items = { }, gems = { }, input = { } }
+			for name, slot in pairs(self.itemsTab.slots) do state.items[name] = slot.selItemId end
+			for i, g in ipairs(self.mainGroup.gemList) do state.gems[i] = g end
+			for k, v in pairs(self.build.configTab.input) do state.input[k] = v end
+			state.newItems = { }
+			for _, p in ipairs(move.placement) do
+				t_insert(state.newItems, self:Equip(p.item, p.slot))
+			end
+			self.itemsTab:PopulateSlots()
+			if move.keystone and not move.keystone.alloc and move.keystone.path then spec:AllocNode(move.keystone) end
+			self:Recalculate()
+			self:TrimTree()
+			self:ChooseSupports(5)
+			self:RefineTree(8)
+			self:AutoConfigure()
+			return state
+		end
+		local function revert(state)
+			for name, id in pairs(state.items) do
+				local slot = self.itemsTab.slots[name]
+				if slot and slot.selItemId ~= id then slot:SetSelItemId(id) end
+			end
+			for _, item in ipairs(state.newItems) do self.itemsTab:DeleteItem(item, true) end
+			for i = #self.mainGroup.gemList, 1, -1 do self.mainGroup.gemList[i] = nil end
+			for i, g in ipairs(state.gems) do self.mainGroup.gemList[i] = g end
+			self.build.skillsTab:ProcessSocketGroup(self.mainGroup)
+			local input = self.build.configTab.input
+			for k in pairs(input) do input[k] = nil end
+			for k, v in pairs(state.input) do input[k] = v end
+			self.build.configTab:BuildModList()
+			spec:RestoreUndoState(state.tree)
+			spec:BuildAllDependsAndPaths()
+			self.itemsTab:PopulateSlots()
+			self:Recalculate()
+		end
+		local savedLog = #self.log
+		local best, bestScore
+		for i = 1, math.min(self.options.jointMoveTries or 5, #moves) do
+			local move = moves[i]
+			if move.quick > current - 0.4 then
+				local state = apply(move)
+				local score = self:FullScore()
+				revert(state)
+				for j = #self.log, savedLog + 1, -1 do t_remove(self.log, j) end
+				if score > base + 0.01 and (not bestScore or score > bestScore) then best, bestScore = move, score end
+			end
+			self:Tick()
+		end
+		if not best then break end
+		apply(best)
+		local after = self:FullScore()
+		self:Note(string.format("Package from top players (%d%% of them): %s, with passives and supports adapted: score %+.3f",
+			math.floor(best.share * 100 + 0.5), best.label, after - base))
+		for _, p in ipairs(best.placement) do
+			local price = GetPriceSource():UniquePrice(p.item)
+			self.costs = self.costs or { }
+			t_insert(self.costs, price or false)
+			if self.lockedSlots then self.lockedSlots[p.slot] = nil end
+		end
+		for i = #moves, 1, -1 do if moves[i] == best then t_remove(moves, i) end end
+	end
+end
+
 -- Pantheon gods and bandit choice, each kept if the build is better with it
 -- (Brine King's freeze protection, Arakaali, Lunaris... and Kill all's 2
 -- extra passive points against a bandit's stats)
@@ -1857,6 +2026,10 @@ function BuildGeneratorClass:Run()
 		stage(11, "Looking for unique items and synergies")
 		self:ApplySynergies(opts.synergyRounds or 1)
 	end
+	if opts.jointMoves ~= false then
+		self.stage = "Trying packages from top players"
+		self:JointMoves(opts.jointMoveRounds or 2)
+	end
 	self.stage = "Optimizing the passive tree"
 	self:PairAilments()
 	self:OptimizeTree()
@@ -1892,6 +2065,15 @@ function BuildGeneratorClass:Run()
 		self:Note(string.format("Top %d players of this skill (poe.ninja, median): max hit physical %s, fire %s, cold %s, lightning %s, chaos %s, EHP %s",
 			details.count, formatNumSep(tostring(mh.Physical or 0)), formatNumSep(tostring(mh.Fire or 0)), formatNumSep(tostring(mh.Cold or 0)),
 			formatNumSep(tostring(mh.Lightning or 0)), formatNumSep(tostring(mh.Chaos or 0)), formatNumSep(tostring(details.ehp or 0))))
+	end
+	-- how each generated rare can be made
+	local advisor = new("CraftAdvisor"):CraftAdvisor()
+	for _, slot in ipairs(self.itemsTab.orderedSlots) do
+		local item = self.itemsTab.items[slot.selItemId]
+		if item and item.rarity == "RARE" and item.title and item.title:match("^Best Rare") and not slot.slotName:match("^Jewel") then
+			local ok, craft = pcall(function() return advisor:Describe(item) end)
+			if ok and craft then self:Note(string.format("Craft %s (%s): %s", slot.slotName, item.baseName, craft.text)) end
+		end
 	end
 	local _, checks = self.scorer:Checklist(output)
 	local okList, missingList = { }, { }
