@@ -1,0 +1,5 @@
+# full generations (slower): skill | ascendancy | investment | mode | archetype
+Ball Lightning | Hierophant | HIGH | full
+Shield Crush | Gladiator | MID | full
+Tornado Shot | Deadeye | MID | full
+Righteous Fire | Chieftain | BUDGET | full

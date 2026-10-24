@@ -217,7 +217,7 @@ function TreeOptimizerClass:Candidates(limit)
 	local list = { }
 	for _, node in pairs(spec.nodes) do
 		if not node.alloc and node.path and #node.path <= 10 and not node.ascendancyName and not isSubgraph(node)
-			and (node.type == "Notable" or node.type == "Keystone") then
+			and (node.type == "Notable" or node.type == "Keystone") and not (gen.forbiddenNodes and gen.forbiddenNodes[node.id]) then
 			local pathSet = { }
 			for _, n in ipairs(node.path) do pathSet[n] = true end
 			local gain = gen:Score({ addNodes = pathSet }) - current

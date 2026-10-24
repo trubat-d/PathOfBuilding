@@ -424,9 +424,59 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 			end
 		end
 	end
+	self:TryTopPlayerSupports(supports, forced, maxSupports)
 	local names = { }
 	for i = 2, #group.gemList do t_insert(names, data.gems[group.gemList[i].gemId].name) end
 	self:Note("Supports: " .. table.concat(names, ", "))
+end
+
+-- The exact main links the top players of the skill use (poe.ninja character
+-- builds), tried as whole sets: kept if one beats the current link
+function BuildGeneratorClass:TryTopPlayerSupports(supports, forced, maxSupports)
+	local details = self.options.meta and self.options.meta.details
+	if not details or not details.supportSets or #details.supportSets == 0 then return end
+	local group = self.mainGroup
+	local byName = { }
+	for _, gemId in ipairs(supports) do byName[data.gems[gemId].name] = gemId end
+	self.build.skillsTab:ProcessSocketGroup(group)
+	local current = self:Score()
+	local saved = { }
+	for i = 2, #group.gemList do saved[i - 1] = group.gemList[i] end
+	local best, bestScore, bestCount
+	for i = 1, math.min(3, #details.supportSets) do
+		local set = details.supportSets[i]
+		local ids, ok = { }, true
+		for _, name in ipairs(set.gems) do
+			local id = byName[name]
+			if id then t_insert(ids, id) end
+		end
+		for _, f in ipairs(forced or { }) do
+			local found = false
+			for _, id in ipairs(ids) do if id == f then found = true end end
+			if not found then ok = false end
+		end
+		if ok and #ids >= 2 then
+			for j = #group.gemList, 2, -1 do t_remove(group.gemList, j) end
+			for j = 1, math.min(maxSupports, #ids) do
+				local gem = data.gems[ids[j]]
+				t_insert(group.gemList, { level = gem.naturalMaxLevel or 20, quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = ids[j] })
+			end
+			self.build.skillsTab:ProcessSocketGroup(group)
+			local score = self:Score()
+			if not bestScore or score > bestScore then best, bestScore, bestCount = ids, score, set.count end
+		end
+	end
+	for j = #group.gemList, 2, -1 do t_remove(group.gemList, j) end
+	if best and bestScore > current + 0.002 then
+		for j = 1, math.min(maxSupports, #best) do
+			local gem = data.gems[best[j]]
+			t_insert(group.gemList, { level = gem.naturalMaxLevel or 20, quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = best[j] })
+		end
+		self:Note(string.format("Supports: the exact link %d of the top %d %s players use (poe.ninja) beats the others", bestCount, details.count, self.mainGem.name))
+	else
+		for _, g in ipairs(saved) do t_insert(group.gemList, g) end
+	end
+	self.build.skillsTab:ProcessSocketGroup(group)
 end
 
 -- Curse, aura, guard and movement setups linked like real builds, packed into gear sockets
@@ -467,7 +517,8 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly)
 		local list = { }
 		for _, node in pairs(spec.nodes) do
 			if not node.alloc and node.path and node.type ~= "ClassStart" and node.type ~= "AscendClassStart"
-				and node.type ~= "Socket" and not node.isProxy and not node.expansionJewel then
+				and node.type ~= "Socket" and not node.isProxy and not node.expansionJewel
+				and not (self.forbiddenNodes and self.forbiddenNodes[node.id]) then
 				if ascendancy then
 					-- the ascendancy, and the bloodline if one is chosen (they share the points);
 					-- multiple choice options (e.g. a bloodline's "Price" notables) are picked directly
@@ -590,12 +641,24 @@ end
 -- never removed by trimming or tree adjustments
 function BuildGeneratorClass:AllocateArchetypeKeystones()
 	local archetype = self.options.archetype
-	if not archetype or not archetype.keystones or #archetype.keystones == 0 then return end
+	if not archetype then return end
 	local spec = self.build.spec
 	local archetypes = new("BuildArchetypes"):BuildArchetypes()
 	self.protectedNodes = self.protectedNodes or { }
 	local changed = false
-	for _, name in ipairs(archetype.keystones) do
+	-- keystones that work against the archetype are never taken
+	self.forbiddenNodes = self.forbiddenNodes or { }
+	for _, name in ipairs(archetype.excludeKeystones or { }) do
+		local node = archetypes.NodeByName(spec, name)
+		if node then
+			self.forbiddenNodes[node.id] = true
+			if node.alloc then
+				spec:DeallocNode(node)
+				changed = true
+			end
+		end
+	end
+	for _, name in ipairs(archetype.keystones or { }) do
 		local node = archetypes.NodeByName(spec, name)
 		if node then
 			self.protectedNodes[node.id] = true
@@ -1678,6 +1741,7 @@ end
 function BuildGeneratorClass:Run()
 	local opts = self.options
 	self.lastYield = GetTime()
+	self.startClock = os.clock()
 	self.overlap = nil
 	self.costs = { }
 	self.stageCount = 11
@@ -1686,7 +1750,7 @@ function BuildGeneratorClass:Run()
 		collectgarbage("collect")
 		if opts.debugTiming and self.scorer then
 			local _, r = self:FullScore()
-			ConPrintf("[stage] before %d: score %.3f dps %.0f ehp %.0f lua %.0f MB", index, r.score, r.dps, r.ehp, collectgarbage("count") / 1024)
+			ConPrintf("[stage] before %d: score %.3f dps %.0f ehp %.0f lua %.0f MB t=%.0fs", index, r.score, r.dps, r.ehp, collectgarbage("count") / 1024, os.clock() - (self.startClock or 0))
 		end
 		self.stageIndex, self.stage = index, label
 		self:Tick()
@@ -1744,6 +1808,12 @@ function BuildGeneratorClass:Run()
 		local final = self.scorer:Evaluate(self.calcFunc, { })
 		self.final = final
 		self.build.buildFlag = true
+		local analyzer = new("ScalingAnalyzer"):ScalingAnalyzer(self.build, self.scorer, self.calcFunc)
+		local okScale, scaling = pcall(function() return analyzer:Run() end)
+		if okScale and scaling then
+			local summary = analyzer.Summary(scaling, 3)
+			if summary.damage then self:Note(summary.damage) end
+		end
 		local total = 0
 		for _, price in ipairs(self.costs) do total = total + (price or 0) end
 		return { log = self.log, final = final, cost = total, ideas = { }, configChanges = self.configChanges or { }, assumptions = { } }
@@ -1805,6 +1875,23 @@ function BuildGeneratorClass:Run()
 			self.scorer.bossTier == "uber" and "uber" or "pinnacle", bossName, bossRatio,
 			formatNumSep(tostring(output.PhysicalMaximumHitTaken or 0)), formatNumSep(tostring(output.FireMaximumHitTaken or 0)), formatNumSep(tostring(output.ColdMaximumHitTaken or 0)),
 			formatNumSep(tostring(output.LightningMaximumHitTaken or 0)), formatNumSep(tostring(output.ChaosMaximumHitTaken or 0))))
+	end
+	-- what scales the build next (same small amount of each stat, measured)
+	local analyzer = new("ScalingAnalyzer"):ScalingAnalyzer(self.build, self.scorer, self.calcFunc)
+	local okScale, scaling = pcall(function() return analyzer:Run() end)
+	if okScale and scaling then
+		self.scaling = scaling
+		local summary = analyzer.Summary(scaling)
+		for _, key in ipairs({ "damage", "saturated", "defence" }) do
+			if summary[key] then self:Note(summary[key]) end
+		end
+	end
+	local details = self.options.meta and self.options.meta.details
+	if details and details.count > 0 and details.maxHit then
+		local mh = details.maxHit
+		self:Note(string.format("Top %d players of this skill (poe.ninja, median): max hit physical %s, fire %s, cold %s, lightning %s, chaos %s, EHP %s",
+			details.count, formatNumSep(tostring(mh.Physical or 0)), formatNumSep(tostring(mh.Fire or 0)), formatNumSep(tostring(mh.Cold or 0)),
+			formatNumSep(tostring(mh.Lightning or 0)), formatNumSep(tostring(mh.Chaos or 0)), formatNumSep(tostring(details.ehp or 0))))
 	end
 	local _, checks = self.scorer:Checklist(output)
 	local okList, missingList = { }, { }

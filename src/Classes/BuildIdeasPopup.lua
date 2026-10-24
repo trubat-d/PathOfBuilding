@@ -11,6 +11,7 @@
 local ipairs = ipairs
 local pairs = pairs
 local t_insert = table.insert
+local t_remove = table.remove
 local m_min = math.min
 local m_floor = math.floor
 
@@ -69,6 +70,17 @@ local function runInBackground(key, popup, fn, onDone, onError)
 			onDone(res)
 		end
 	end
+end
+
+-- poe.ninja statistics for a skill, then the builds of its top players
+-- (cached; both skipped after a timeout). done(entry or nil)
+local function loadMeta(skillName, done, status)
+	local source = GetBuildMetaSource()
+	source:Load(skillName, function(entry)
+		if not entry or not entry.players or #entry.players == 0 then return done(entry) end
+		if status then status("^7Downloading the builds of the top " .. skillName .. " players (poe.ninja)...") end
+		source:LoadPlayerDetails(skillName, 20, function(full) done(full or entry) end)
+	end)
 end
 
 local function focusDropList()
@@ -266,7 +278,7 @@ function BuildIdeasPopupClass:OpenIdeas(build)
 			startSearch(entry, skillName)
 		end
 		main.onFrameFuncs["BuildIdeasMetaWait"] = function()
-			if GetTime() - t0 > 20000 then go(nil) end
+			if GetTime() - t0 > 60000 then go(nil) end
 		end
 		GetBuildMetaSource():Load(skillName, function(entry) go(entry) end)
 	end)
@@ -373,13 +385,18 @@ function BuildIdeasPopupClass:OpenGenerator()
 			end
 			if scan and scan.error then
 				label = label .. "   ^1(failed)"
+			elseif scan and scan.estimated then
+				label = string.format("%s   ^xC0C0C0(estimated) DPS %s, max hit %s", a.label, formatNumSep(string.format("%.0f", scan.dps or 0)), formatNumSep(string.format("%.0f", scan.minHit or 0)))
 			elseif scan then
-				label = string.format("%s   ^x88CC88DPS %s, EHP %s, score %.2f", a.label, formatNumSep(string.format("%.0f", scan.dps)), formatNumSep(string.format("%.0f", scan.ehp)), scan.score)
+				label = string.format("%s   ^x88CC88built: DPS %s, max hit %s, score %.2f", a.label, formatNumSep(string.format("%.0f", scan.dps or 0)), formatNumSep(string.format("%.0f", scan.minHit or 0)), scan.score)
 			end
 			t_insert(list, { label = label, archetype = a, scan = scan })
 		end
 		if results then
+			-- built archetypes first (by score), then the estimated ones
 			table.sort(list, function(x, y)
+				local bx, by = x.scan and x.scan.built and 1 or 0, y.scan and y.scan.built and 1 or 0
+				if bx ~= by then return bx > by end
 				local sx, sy = x.scan and x.scan.score or -math.huge, y.scan and y.scan.score or -math.huge
 				return sx > sy
 			end)
@@ -422,9 +439,9 @@ function BuildIdeasPopupClass:OpenGenerator()
 	controls.scan.enabled = idle
 	controls.scan.tooltipFunc = function(tooltip)
 		tooltip:Clear()
-		tooltip:AddLine(16, "^7Builds a quick first version of every archetype that fits the skill (about a minute each):")
-		tooltip:AddLine(16, "^7support gems, passive tree, ascendancy, rares and the archetype's keystones / uniques.")
-		tooltip:AddLine(16, "^7The archetype list is then sorted by result; pick one and click Generate for the full build.")
+		tooltip:AddLine(16, "^7Builds one quick version of the skill, then plans every archetype on top of it (its keystones,")
+		tooltip:AddLine(16, "^7supports, uniques, then the stats that scale it best), a few seconds each. The 3 most promising")
+		tooltip:AddLine(16, "^7get their own quick build. Pick one in the list and click Generate for the full build.")
 	end
 
 	controls.log = new("TextListControl"):TextListControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 192, 888, 262}, nil, { })
@@ -549,9 +566,9 @@ function BuildIdeasPopupClass:OpenGenerator()
 			startGeneration()
 		end
 		main.onFrameFuncs["BuildMetaWait"] = function()
-			if GetTime() - t0 > 20000 then go(nil) end
+			if GetTime() - t0 > 60000 then go(nil) end
 		end
-		GetBuildMetaSource():Load(skill.label, function(entry) go(entry) end)
+		loadMeta(skill.label, function(entry) go(entry) end, function(text) state.status = text end)
 	end)
 	-- Archetype scan: a quick build per archetype, each in its own new build
 	state.startScan = function()
@@ -569,12 +586,20 @@ function BuildIdeasPopupClass:OpenGenerator()
 		local skill = controls.skill.list[controls.skill.selIndex]
 		local asc = controls.ascend.list[controls.ascend.selIndex]
 		local list = { }
+		local standard
 		for _, entry in ipairs(archetypeList()) do
-			if entry.archetype then t_insert(list, entry.archetype) end
+			if entry.archetype then
+				t_insert(list, entry.archetype)
+				if entry.archetype.id == "STANDARD" then standard = entry.archetype end
+			end
 		end
+		standard = standard or list[1]
+		-- Step 1: a quick build of the skill, then every archetype planned on top
+		-- of it (seconds each); step 2: quick builds of the most promising ones
 		local results = { }
+		local queue = { standard }
+		local built = 0
 		state.running = true
-		local index = 0
 		local meta
 		local t0 = GetTime()
 		local function finish()
@@ -588,7 +613,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 					for _, l in ipairs(entry.scan.notes) do t_insert(lines, "^xC0C0C0      " .. l) end
 				end
 			end
-			t_insert(lines, "^xC0C0C0Quick builds: no bloodline, jewels, flasks or synergies yet, rares in one pass; the full build adds them.")
+			t_insert(lines, "^xC0C0C0Built: quick builds (no bloodline, jewels, flasks or synergies yet; the full build adds them). Estimated: planned on top of")
+			t_insert(lines, "^xC0C0C0the first quick build with 20 units of investment spent on the best stats; not comparable with built scores.")
 			setLog(lines)
 			state.status = string.format("^7Scan finished in %d s.", m_floor((GetTime() - t0) / 1000))
 			-- Automatic: go on with the full build of the best archetype
@@ -597,11 +623,12 @@ function BuildIdeasPopupClass:OpenGenerator()
 			if after then after() end
 		end
 		local function nextOne()
-			index = index + 1
-			local archetype = list[index]
 			if not state.running then return end
+			local archetype = t_remove(queue, 1)
 			if not archetype then return finish() end
-			state.status = string.format("^7Archetype %d of %d: %s...", index, #list, archetype.label)
+			built = built + 1
+			local total = built + #queue
+			state.status = string.format("^7Building %d of %d: %s...", built, total, archetype.label)
 			main:SetMode("BUILD", false, "Archetype scan: " .. archetype.label)
 			local waited = false
 			main.onFrameFuncs["BuildGenerator"] = function()
@@ -613,13 +640,24 @@ function BuildIdeasPopupClass:OpenGenerator()
 				options.synergies = false
 				options.meta = meta
 				local generator = new("BuildGenerator"):BuildGenerator(build, options)
+				local planning = archetype == standard
 				options.onProgress = function(stage)
-					state.status = string.format("^7Archetype %d of %d (%s): %s...", index, #list, archetype.label, stage)
+					state.status = string.format("^7Building %d of %d (%s): %s...", built, total, archetype.label, stage)
 				end
-				runInBackground("BuildGenerator", popup, function() return generator:Run() end, function(result)
+				runInBackground("BuildGenerator", popup, function()
+					local result = generator:Run()
+					local plan
+					if planning then
+						state.status = "^7Planning every archetype on top of the first build..."
+						generator.stage = "Planning archetypes"
+						plan = new("ScalingPlanner"):ScalingPlanner(generator):Run(list, { units = 20 })
+					end
+					return { result = result, plan = plan, minHit = (generator.scorer:MinMaxHit(build.calcsTab.mainOutput)) }
+				end, function(r)
+					local result = r.result
 					local notes = { }
 					for _, l in ipairs(result.log) do
-						if l:match("^Archetype uniques") or l:match("^Supports") or l:match("^Armour type") then t_insert(notes, l) end
+						if l:match("^Archetype uniques") or l:match("^Supports") or l:match("^Armour type") or l:match("^Damage scales best") then t_insert(notes, l) end
 					end
 					local keystones = { }
 					for _, node in pairs(build.spec.allocNodes) do
@@ -627,7 +665,26 @@ function BuildIdeasPopupClass:OpenGenerator()
 					end
 					table.sort(keystones)
 					if #keystones > 0 then t_insert(notes, "Keystones: " .. table.concat(keystones, ", ")) end
-					results[archetype.id] = { score = result.final.score, dps = result.final.dps, ehp = result.final.ehp, notes = notes, log = notes }
+					results[archetype.id] = { score = result.final.score, dps = result.final.dps, ehp = result.final.ehp, minHit = r.minHit, notes = notes, log = notes, built = true }
+					if r.plan then
+						-- estimates for the others; the best few get a quick build
+						local promising = 0
+						for _, p in ipairs(r.plan) do
+							local id = p.archetype.id
+							if not p.error and id ~= archetype.id then
+								local planNotes = { }
+								if #p.commitments > 0 then t_insert(planNotes, "Commits to: " .. table.concat(p.commitments, ", ")) end
+								if p.plan ~= "" then t_insert(planNotes, "Best investment: " .. p.plan) end
+								results[id] = { score = p.score, dps = p.dps, minHit = p.minHit, notes = planNotes, log = planNotes, estimated = true }
+								if promising < (state.scanBuilds or 3) then
+									promising = promising + 1
+									for _, a in ipairs(list) do if a.id == id then t_insert(queue, a) end end
+								end
+							elseif p.archetype.id == archetype.id and not p.error then
+								t_insert(notes, "Best investment: " .. p.plan)
+							end
+						end
+					end
 					build.modFlag = false
 					nextOne()
 				end, function(err)
@@ -647,9 +704,9 @@ function BuildIdeasPopupClass:OpenGenerator()
 			nextOne()
 		end
 		main.onFrameFuncs["BuildMetaWait"] = function()
-			if GetTime() - t0 > 20000 then go(nil) end
+			if GetTime() - t0 > 60000 then go(nil) end
 		end
-		GetBuildMetaSource():Load(skill.label, function(entry) go(entry) end)
+		loadMeta(skill.label, function(entry) go(entry) end, function(text) state.status = text end)
 	end
 
 	controls.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {128, 164, 0, 16}, function() return state.status end)

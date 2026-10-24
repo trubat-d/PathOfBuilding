@@ -80,7 +80,7 @@ function BuildMetaSourceClass.ParseSearch(body)
 		if f[1] == 1 and f[2] == 2 then result = f[3] break end
 	end
 	if not result then error("no search result") end
-	local out = { total = 0, dims = { }, dictHash = { } }
+	local out = { total = 0, dims = { }, dictHash = { }, columns = { } }
 	for _, f in ipairs(decodeFields(result)) do
 		if f[1] == 1 and f[2] == 0 then
 			out.total = f[3]
@@ -99,6 +99,14 @@ function BuildMetaSourceClass.ParseSearch(body)
 				end
 			end
 			if id then out.dims[id] = { dict = dict, entries = entries } end
+		elseif f[1] == 12 and f[2] == 2 then
+			-- table column: name, then one string per character row
+			local name, values = nil, { }
+			for _, g in ipairs(decodeFields(f[3])) do
+				if g[1] == 1 and g[2] == 2 and not name then name = g[3]
+				elseif g[1] == 7 and g[2] == 2 then t_insert(values, g[3]) end
+			end
+			if name then out.columns[name] = values end
 		elseif f[1] == 6 and f[2] == 2 then
 			local name, hash
 			for _, g in ipairs(decodeFields(f[3])) do
@@ -170,7 +178,8 @@ end
 -- Cached statistics for a skill, if fresh
 function BuildMetaSourceClass:Get(skillName)
 	local entry = self.cache[skillName]
-	if entry and entry.time and os.time() - entry.time < cacheHours * 3600 then
+	-- (entries cached by older versions have no player list: downloaded again)
+	if entry and entry.time and os.time() - entry.time < cacheHours * 3600 and (entry.players or (entry.total or 0) == 0) then
 		return entry
 	end
 end
@@ -199,6 +208,10 @@ local downloadScript = [[
 
 local function fromHex(hex)
 	return (hex:gsub("%x%x", function(h) return string.char(tonumber(h, 16)) end))
+end
+
+local function urlEncode(text)
+	return (tostring(text):gsub("[^%w%-_%.~]", function(c) return string.format("%%%02X", c:byte()) end))
 end
 
 local userAgent = "Path of Building (build ideas; local, personal use)"
@@ -277,8 +290,20 @@ function BuildMetaSourceClass:Load(skillName, callback)
 					for id in pairs(search.dims) do
 						if id:match("^supportgems%-") then supportDim = id end
 					end
+					-- the characters listed (name, account, damage / EHP text)
+					local players = { }
+					local names, accounts = search.columns.name or { }, search.columns.account or { }
+					local dpsColumn, ehpColumn
+					for name, values in pairs(search.columns) do
+						if name:match("^dps%-.*%.total$") then dpsColumn = values end
+						if name == "ehp__str" then ehpColumn = values end
+					end
+					for i = 1, math.min(#names, #accounts) do
+						t_insert(players, { name = names[i], account = accounts[i], dps = dpsColumn and dpsColumn[i], ehp = ehpColumn and ehpColumn[i] })
+					end
 					local entry = {
 						time = os.time(), league = snapshot.name, total = search.total,
+						players = players, snapshot = { version = snapshot.version, url = snapshot.url },
 						items = topShares(search, "items", names.item, 60),
 						keystones = topShares(search, "keypassives", names.keypassive, 25),
 						anoints = topShares(search, "anointed", names.anointed, 10),
@@ -301,4 +326,143 @@ function BuildMetaSourceClass:Load(skillName, callback)
 			nextDict(1)
 		end)
 	end)
+end
+
+------------------------------------------------------------------------------
+-- Top players' builds: gem links, uniques, keystones, pantheon, max hits
+------------------------------------------------------------------------------
+
+local function median(list)
+	if #list == 0 then return nil end
+	t_sort(list)
+	return list[math.floor((#list + 1) / 2)]
+end
+
+-- Parses "4.9M" / "61k" into numbers
+local function parseShort(text)
+	if not text then return nil end
+	local n, unit = text:match("^([%d%.]+)%s*([kKmMbB]?)")
+	n = tonumber(n)
+	if not n then return nil end
+	local mult = ({ k = 1e3, K = 1e3, m = 1e6, M = 1e6, b = 1e9, B = 1e9 })[unit] or 1
+	return n * mult
+end
+BuildMetaSourceClass.ParseShort = parseShort
+
+-- Aggregates character JSONs (poe.ninja character endpoint) for a skill
+function BuildMetaSourceClass.AggregateCharacters(skillName, characters)
+	local details = { count = 0, supportSets = { }, supports = { }, uniques = { }, uniquePairs = { }, keystones = { },
+		pantheonMajor = { }, pantheonMinor = { }, bandit = { }, auras = { }, utility = { }, maxHit = { }, ehp = nil }
+	local setCount, setGems = { }, { }
+	local hits = { Physical = { }, Fire = { }, Cold = { }, Lightning = { }, Chaos = { } }
+	local ehps = { }
+	local function add(map, key) if key and key ~= "" then map[key] = (map[key] or 0) + 1 end end
+	for _, char in ipairs(characters) do
+		details.count = details.count + 1
+		-- main link: the group with the skill; other groups: utility setups
+		for _, group in ipairs(char.skills or { }) do
+			local names, hasSkill = { }, false
+			for _, gem in ipairs(group.allGems or group.gems or { }) do
+				local name = gem.name or ""
+				if name == skillName then
+					hasSkill = true
+				else
+					t_insert(names, (name:gsub(" Support$", "")))
+				end
+			end
+			if hasSkill then
+				t_sort(names)
+				local key = table.concat(names, "|")
+				setCount[key] = (setCount[key] or 0) + 1
+				setGems[key] = names
+				for _, n in ipairs(names) do add(details.supports, n) end
+			else
+				local list = { }
+				for _, gem in ipairs(group.allGems or group.gems or { }) do t_insert(list, ((gem.name or ""):gsub(" Support$", ""))) end
+				if #list > 0 then add(details.utility, table.concat(list, " + ")) end
+				for _, n in ipairs(list) do add(details.auras, n) end
+			end
+		end
+		-- uniques (gear, jewels, flasks) and pairs of them
+		local uniques = { }
+		for _, listName in ipairs({ "items", "jewels", "flasks" }) do
+			for _, it in ipairs(char[listName] or { }) do
+				local d = it.itemData or { }
+				if d.frameType == 3 and d.name and d.name ~= "" then
+					local name = d.name:gsub("^Foulborn ", "")
+					if not uniques[name] then
+						uniques[name] = true
+						add(details.uniques, name)
+					end
+				end
+			end
+		end
+		local ulist = { }
+		for name in pairs(uniques) do t_insert(ulist, name) end
+		t_sort(ulist)
+		for i = 1, #ulist do
+			for j = i + 1, #ulist do add(details.uniquePairs, ulist[i] .. "|" .. ulist[j]) end
+		end
+		for _, k in ipairs(char.keyStones or { }) do add(details.keystones, k.name) end
+		add(details.pantheonMajor, char.pantheonMajor)
+		add(details.pantheonMinor, char.pantheonMinor)
+		add(details.bandit, char.banditChoice)
+		local def = char.defensiveStats or { }
+		for damageType, list in pairs(hits) do
+			local v = def[damageType:lower() .. "MaximumHitTaken"]
+			if v then t_insert(list, v) end
+		end
+		if def.effectiveHealthPool then t_insert(ehps, def.effectiveHealthPool) end
+	end
+	-- most common exact support sets
+	for key, count in pairs(setCount) do t_insert(details.supportSets, { gems = setGems[key], count = count }) end
+	t_sort(details.supportSets, function(a, b) return a.count > b.count end)
+	for damageType, list in pairs(hits) do details.maxHit[damageType] = median(list) end
+	details.ehp = median(ehps)
+	-- unique pairs used together more than chance (lift)
+	local pairsList = { }
+	local n = math.max(1, details.count)
+	for key, count in pairs(details.uniquePairs) do
+		local a, b = key:match("^(.-)|(.+)$")
+		local pa, pb = (details.uniques[a] or 0) / n, (details.uniques[b] or 0) / n
+		if count >= 2 and pa > 0 and pb > 0 then
+			t_insert(pairsList, { a = a, b = b, count = count, lift = (count / n) / (pa * pb) })
+		end
+	end
+	t_sort(pairsList, function(x, y) return x.count * x.lift > y.count * y.lift end)
+	details.uniquePairs = pairsList
+	return details
+end
+
+-- Downloads the builds of the top players of a skill (after Load) and adds
+-- entry.details. callback(entry or nil, error)
+function BuildMetaSourceClass:LoadPlayerDetails(skillName, maxPlayers, callback)
+	local entry = self.cache[skillName]
+	if not entry or not entry.players or not entry.snapshot then return callback(entry, "no player list") end
+	if entry.details and entry.detailsTime and os.time() - entry.detailsTime < cacheHours * 3600 then return callback(entry) end
+	local players = { }
+	for i = 1, math.min(maxPlayers or 20, #entry.players) do t_insert(players, entry.players[i]) end
+	local characters = { }
+	local function finish()
+		if #characters > 0 then
+			entry.details = self.AggregateCharacters(skillName, characters)
+			entry.detailsTime = os.time()
+			self:SaveCache()
+		end
+		callback(entry)
+	end
+	local function nextPlayer(i)
+		local p = players[i]
+		if not p then return finish() end
+		local url = apiBase .. "builds/" .. entry.snapshot.version .. "/character?account=" .. urlEncode(p.account)
+			.. "&name=" .. urlEncode(p.name) .. "&overview=" .. entry.snapshot.url .. "&type=exp"
+		self:Download(url, function(body)
+			if body then
+				local ok, char = pcall(dkjson.decode, body)
+				if ok and type(char) == "table" then t_insert(characters, char) end
+			end
+			nextPlayer(i + 1)
+		end)
+	end
+	nextPlayer(1)
 end

@@ -110,12 +110,14 @@ BuildArchetypesClass.list = {
 		id = "CRIT", label = "Critical strikes",
 		summary = "Crit chance and multiplier supports linked; tree and gear follow.",
 		supports = { "Increased Critical Strikes", "Increased Critical Damage" },
+		excludeKeystones = { "Elemental Overload", "Resolute Technique" },
 		applies = function(info) return info.hits and not info.minion end,
 	},
 	{
 		id = "EO", label = "Non-crit: Elemental Overload",
 		summary = "Elemental Overload: 40% more elemental damage after a crit, no crit multiplier needed.",
 		keystones = { "Elemental Overload" },
+		excludeKeystones = { "Resolute Technique" },
 		applies = function(info) return info.hits and info.elemental and not info.minion end,
 	},
 	{
@@ -169,6 +171,7 @@ BuildArchetypesClass.list = {
 		id = "FIRE_CONV", label = "Conversion to fire (Avatar of Fire)",
 		summary = "Avatar of Fire converts physical, lightning and cold damage to fire: scale fire only.",
 		keystones = { "Avatar of Fire" },
+		excludeKeystones = { "Roiling Tempest" },
 		applies = function(info) return info.hits and (info.physical or info.tags.lightning or info.tags.cold) and not info.minion end,
 	},
 	{
