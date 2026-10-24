@@ -3449,6 +3449,126 @@ function BuildGeneratorClass:RelocateMainLink()
 	return true
 end
 
+-- Pearl of Tsoatha (a ring): "Skills Socketed in your Helmet / Gloves /
+-- Boots are Supported by level 20 <two supports>". Top players link the main
+-- skill in that 4-link and the ring gives the other two supports - a 6-link
+-- without the body armour, which is then free for a unique or a better rare.
+-- Tried in each of those slots: the main skill moved there with its best 3
+-- supports, the ring's two supports chosen one after the other by value, the
+-- utility setups placed again; kept if the build is better.
+function BuildGeneratorClass:PearlMove()
+	local pearl
+	for _, item in pairs(main.uniqueDB.list) do if item.title == "Pearl of Tsoatha" then pearl = item break end end
+	local group = self.mainGroup
+	if not pearl or not group then return 0 end
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	if not finder:IsItemAllowed(pearl, { obtainableOnly = true, levelOnly = true, investment = self.options.investment }) then return 0 end
+	local index = { }
+	for i, name in ipairs(pearl.variantList or { }) do index[name] = i end
+	local function pearlItem(slotName, first, second)
+		local copy = new("Item"):Item(pearl:BuildRaw())
+		copy.variant = index[slotName .. " / " .. first]
+		copy.variantAlt = second and index[slotName .. " / " .. second] or copy.variant
+		copy:BuildAndParseRaw()
+		return copy
+	end
+	local supportNames = { }
+	for _, entry in ipairs(require("Data.PearlSupports")) do t_insert(supportNames, (entry.baseItemName:gsub(" Support$", ""))) end
+	local setup = new("GemSetup"):GemSetup(self)
+	local before = self:FullScore()
+	local snap = self:Snapshot()
+	-- the ring to give up: the one whose loss costs least
+	self:Recalculate()
+	local ringSlot, ringLoss
+	for _, r in ipairs({ "Ring 1", "Ring 2" }) do
+		local loss = self:Score() - self:Score({ repItems = { [r] = false } })
+		if not ringLoss or loss < ringLoss then ringSlot, ringLoss = r, loss end
+	end
+	local best
+	local logLength = #self.log
+	local shortlist
+	for _, slotName in ipairs({ "Helmet", "Gloves", "Boots" }) do
+		if not (self.lockedSlots and self.lockedSlots[slotName]) and setup:SlotSockets(slotName) >= 4 and index[slotName .. " / " .. supportNames[1]] then
+			self:Restore(snap)
+			for i = #self.log, logLength + 1, -1 do self.log[i] = nil end
+			group = self.mainGroup
+			-- 1. the main skill in this slot's 4-link, its 3 best supports
+			local list = self.build.skillsTab.socketGroupList
+			for i = #list, 1, -1 do
+				if list[i] ~= group and list[i].slot == slotName then t_remove(list, i) end
+			end
+			for i, g in ipairs(list) do if g == group then self.build.mainSocketGroup = i end end
+			group.slot = slotName
+			self.mainLinkLimit = 3
+			self:Recalculate()
+			self:ChooseSupports(5)
+			-- 2. the ring's two supports, one after the other
+			-- (every support for the first slot tried; the best 8 of it for the others)
+			local chosen = { }
+			local scored = { }
+			for k = 1, 2 do
+				local bestName, bestScore
+				for _, name in ipairs(shortlist or supportNames) do
+					if not chosen[1] or chosen[1] ~= name then
+						local item = pearlItem(slotName, chosen[1] or name, chosen[1] and name or nil)
+						local score = self:Score({ repSlotName = ringSlot, repItem = item })
+						if k == 1 then t_insert(scored, { name = name, score = score }) end
+						if not bestScore or score > bestScore + 1e-9 then bestName, bestScore = name, score end
+					end
+				end
+				chosen[k] = bestName
+				self:Tick()
+			end
+			if not shortlist then
+				t_sort(scored, function(a, b) return a.score > b.score end)
+				shortlist = { }
+				for i = 1, m_min(8, #scored) do shortlist[i] = scored[i].name end
+			end
+			local item = pearlItem(slotName, chosen[1], chosen[2])
+			self:Equip(item, ringSlot)
+			self.itemsTab:PopulateSlots()
+			self:Recalculate()
+			-- 3. the utility setups placed again around it
+			self:ChooseUtilityGems()
+			local score = self:FullScore()
+			if self.options.debugTiming then ConPrintf("[pearl] %s: %s + %s, %.3f (before %.3f)", slotName, chosen[1], chosen[2], score, before) end
+			if not best or score > best.score then best = { slot = slotName, supports = chosen, score = score } end
+		end
+	end
+	self:Restore(snap)
+	for i = #self.log, logLength + 1, -1 do self.log[i] = nil end
+	if not best or best.score <= before + 0.01 then return 0 end
+	-- the best one again, for real
+	group = self.mainGroup
+	local list = self.build.skillsTab.socketGroupList
+	for i = #list, 1, -1 do
+		if list[i] ~= group and list[i].slot == best.slot then t_remove(list, i) end
+	end
+	for i, g in ipairs(list) do if g == group then self.build.mainSocketGroup = i end end
+	group.slot = best.slot
+	self.mainLinkLimit = 3
+	self:Recalculate()
+	self:ChooseSupports(5)
+	self:Equip(pearlItem(best.slot, best.supports[1], best.supports[2]), ringSlot)
+	self.itemsTab:PopulateSlots()
+	self:Recalculate()
+	self:ChooseUtilityGems()
+	local after = self:FullScore()
+	if after <= before + 0.005 then
+		self:Restore(snap)
+		for i = #self.log, logLength + 1, -1 do self.log[i] = nil end
+		return 0
+	end
+	self.lockedSlots = self.lockedSlots or { }
+	self.lockedSlots[ringSlot] = true
+	local price = GetPriceSource():UniquePrice(pearl)
+	self.costs = self.costs or { }
+	t_insert(self.costs, price or false)
+	self:Note(string.format("Pearl of Tsoatha in %s (%s): main skill linked in the %s, the ring adds %s and %s (a 6-link without the body armour), score %+.3f",
+		ringSlot, GetPriceSource().FormatPrice(price), best.slot, best.supports[1], best.supports[2], after - before))
+	return after - before
+end
+
 -- Every affordable unique in every gear slot, without poe.ninja: the game's
 -- whole unique list is screened with the quick score (one calculation each),
 -- the best few are equipped for real and kept when the full score agrees.
@@ -4377,6 +4497,11 @@ function BuildGeneratorClass:Run()
 		end
 	end
 
+	-- Pearl of Tsoatha: the main skill's 6-link moved off the body armour
+	if opts.pearl ~= false then
+		local ok, err = pcall(function() self:PearlMove() end)
+		if not ok then ConPrintf("Pearl move failed: %s", tostring(err)) end
+	end
 	-- the finished build partly rebuilt, again and again (large neighbourhood search)
 	if (opts.repairRounds or 8) > 0 then
 		self:Move(6, 6, "Rebuilding parts of the build to improve it")

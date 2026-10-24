@@ -137,6 +137,9 @@ elseif step == "anoint" then
 elseif step == "script" then
 	_G.gen = gen
 	dofile(os.getenv("SCRIPT"))
+elseif step == "pearl" then
+	print("GAIN", gen:PearlMove())
+	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
 elseif step == "prune" then
 	print("REMOVED", gen:PruneUselessGems())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
