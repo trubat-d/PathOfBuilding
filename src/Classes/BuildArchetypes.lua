@@ -210,6 +210,19 @@ BuildArchetypesClass.list = {
 		applies = function(info) return not info.minion end,
 	},
 	{
+		-- (an attack scaled by spell damage: Crown of Eyes turns spell damage
+		-- increases into attack ones at 150%, Iron Will turns strength into spell
+		-- damage; rares then roll spell damage, cheaper than attack damage mods)
+		id = "SPELL_ATTACK", label = "Strength into spell damage for an attack (Iron Will, Crown of Eyes)",
+		lens = { stat = "Str", base = 100, label = "Strength" },
+		summary = "Crown of Eyes applies spell damage increases to attacks at 150%, and Iron Will turns strength into spell damage: stack strength (and strength scaling mods) for a strength attack.",
+		uniques = { "Crown of Eyes" },
+		uniqueLines = { "per %d* ?Strength", "%d+%% increased Strength" },
+		keystones = { "Iron Will" },
+		jewels = { "Split Personality" }, jewelStat = "Strength",
+		applies = function(info) return info.attack and not info.minion end,
+	},
+	{
 		-- (heralds whose buffs add the skill's own damage type, kept up all the
 		-- time; damage per herald and reservation from the tree and uniques)
 		id = "HERALDS", label = "Herald stacking (The Coming Calamity, Alpha's Howl, damage per herald)",
