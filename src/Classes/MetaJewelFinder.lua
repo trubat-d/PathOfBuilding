@@ -210,26 +210,59 @@ function MetaJewelFinderClass:WatchersEye(baseScore, modCount)
 	if #options == 0 then return nil end
 	local none = 1
 	for i, n in ipairs(db.variantList) do if n == "None" then none = i end end
-	local chosen = { }
-	local bestScore
-	for slotIndex = 1, (modCount or 2) do
-		local pick, pickScore
-		for _, option in ipairs(options) do
-			local used = false
-			for _, c in ipairs(chosen) do if c.index == option.index then used = true end end
-			if not used then
-				local idx = { none, none, none }
-				for i, c in ipairs(chosen) do idx[i] = c.index end
-				idx[slotIndex] = option.index
-				local item = variantItem(db, idx[1], idx[2], idx[3])
-				local score = self:TryJewels({ { node = sockets[1].node, item = item } })
-				if not pickScore or score > pickScore then pick, pickScore = option, score end
+	-- mods that only pay off together (Pride: impale chance + impale
+	-- additional hits) lose one at a time: single mods are screened, then
+	-- every pair of the best ones, then a third mod on the best pairs; the
+	-- best few combinations are scored in full
+	local quick = self.ctx.quickScore ~= nil and not self.ctx.noQuick
+	local function try(list, full)
+		local idx = { none, none, none }
+		for i, c in ipairs(list) do idx[i] = c.index end
+		local item = variantItem(db, idx[1], idx[2], idx[3])
+		return self:TryJewels({ { node = sockets[1].node, item = item } }, false, quick and not full)
+	end
+	local combos = { }
+	local singles = { }
+	for _, option in ipairs(options) do
+		t_insert(singles, { list = { option }, score = try({ option }) })
+	end
+	t_sort(singles, function(a, b)
+		if a.score ~= b.score then return a.score > b.score end
+		return a.list[1].index < b.list[1].index
+	end)
+	for _, c in ipairs(singles) do t_insert(combos, c) end
+	local maxMods = modCount or 2
+	if maxMods >= 2 then
+		local top = math.min(#singles, 6)
+		local pairsList = { }
+		for i = 1, top do
+			for j = i + 1, top do
+				local list = { singles[i].list[1], singles[j].list[1] }
+				t_insert(pairsList, { list = list, score = try(list) })
 			end
 		end
-		if not pick or (bestScore and pickScore <= bestScore) then break end
-		t_insert(chosen, pick)
-		bestScore = pickScore
+		t_sort(pairsList, function(a, b) return a.score > b.score end)
+		for _, c in ipairs(pairsList) do t_insert(combos, c) end
+		if maxMods >= 3 then
+			for p = 1, math.min(3, #pairsList) do
+				for k = 1, math.min(#singles, 8) do
+					local third = singles[k].list[1]
+					local pair = pairsList[p].list
+					if third ~= pair[1] and third ~= pair[2] then
+						local list = { pair[1], pair[2], third }
+						t_insert(combos, { list = list, score = try(list) })
+					end
+				end
+			end
+		end
 	end
+	t_sort(combos, function(a, b) return a.score > b.score end)
+	local chosen, bestScore
+	for i = 1, quick and math.min(3, #combos) or #combos do
+		local score = quick and try(combos[i].list, true) or combos[i].score
+		if not bestScore or score > bestScore + 1e-9 then chosen, bestScore = combos[i].list, score end
+	end
+	chosen = chosen or { }
 	if not chosen[1] then return nil end
 	local idx = { none, none, none }
 	local names = { }

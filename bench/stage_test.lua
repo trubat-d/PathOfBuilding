@@ -44,6 +44,24 @@ elseif step == "uniquesweep" then
 	print("KEPT", gen:UniqueSweep())
 elseif step == "uniqueflasks" then
 	print("KEPT", gen:UniqueFlaskSweep())
+elseif step == "watcher" then
+	-- the build's Watcher's Eye taken out, then searched again
+	for _, slot in ipairs(build.itemsTab.orderedSlots) do
+		local item = build.itemsTab.items[slot.selItemId]
+		if item and item.title == "Watcher's Eye" then
+			print("REMOVED", table.concat((function() local t = { } for _, l in ipairs(item.explicitModLines) do t[#t + 1] = l.line end return t end)(), " | "))
+			slot:SetSelItemId(0)
+		end
+	end
+	build.itemsTab:PopulateSlots()
+	local base = gen:FullScore()
+	print(string.format("WITHOUT %.3f", base))
+	local finder = new("MetaJewelFinder"):MetaJewelFinder({ build = build, fullScore = function() return (gen:FullScore()) end,
+		quickScore = function() gen:Recalculate() return (gen:Score()) end,
+		equip = function(item, slotName) return gen:Equip(item, slotName) end })
+	local result = finder:WatchersEye(base, 3)
+	print("RESULT", result and result.label, result and result.gain)
+	if result then finder:Apply(result) end
 elseif step == "metajewels" then
 	gen:ChooseMetaJewels()
 elseif step == "fillmain" or step == "finalrares" then
