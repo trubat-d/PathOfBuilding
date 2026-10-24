@@ -317,7 +317,7 @@ function BuildGeneratorClass:Setup()
 	local gem = data.gems[opts.gemId]
 	self.mainGem = gem
 	local group = { label = "Main skill (generated)", enabled = true, slot = "Body Armour", gemList = {
-		{ level = self:GemLevel(gem, true), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = opts.gemId },
+		{ level = self:GemLevel(gem, true), quality = (self.options.investment or { }).corruptedSupports and 23 or 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = opts.gemId },
 	} }
 	-- skills with several parts: the part that matches sustained use on a boss
 	-- (e.g. Ball Lightning "All Bolts in Range", Tornado Shot "Combined Average
@@ -1609,7 +1609,7 @@ function BuildGeneratorClass:RunRaresParallel(finder, options)
 		hitScale = sc.hitScale, resourceSustain = sc.resourceSustain, ignoreCosts = sc.ignoreCosts, ignoreAttributes = sc.ignoreAttributes,
 		ignoreReservation = sc.ignoreReservation, useChecklist = sc.useChecklist,
 		-- (the generator's own settings: the threads must score as it does)
-		lens = sc.lens, avoidanceWeight = sc.avoidanceWeight, pastTarget = sc.pastTarget, fightWeight = sc.fightWeight,
+		lens = sc.lens, lens2 = sc.lens2, avoidanceWeight = sc.avoidanceWeight, pastTarget = sc.pastTarget, fightWeight = sc.fightWeight,
 		smoothBuffs = sc.smoothBuffs, reservationSlope = sc.reservationSlope, focusEhp = sc.focus and sc.focus.ehp,
 		clearBoost = sc.clearBoost, clearBuffs = sc.clearBuffs,
 	}
@@ -3108,6 +3108,56 @@ function BuildGeneratorClass:ConditionEnablerMove(rounds)
 	return total
 end
 
+-- Corrupted implicits (Endgame and Mirror budgets: a Vaal Orb on a copy of
+-- the item): "+1 to Level of Socketed Gems" on the main skill's item, "+2 to
+-- Level of Socketed Projectile Gems", "+1 to Maximum Frenzy Charges" on
+-- boots... Each gear item not already corrupted gets the corrupted implicit
+-- that helps most, if any helps enough.
+function BuildGeneratorClass:CorruptionMove()
+	local investment = self.options.investment or { }
+	if not investment.corruptedSupports then return 0 end
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local total = 0
+	local notes = { }
+	for _, slotName in ipairs(finder:GetActiveSlots()) do
+		local slot = self.itemsTab.slots[slotName]
+		local item = slot and self.itemsTab.items[slot.selItemId]
+		if item and not item.corrupted and (item.rarity == "RARE" or item.rarity == "UNIQUE") and item.base and item.base.tags
+			and not slotName:match("^Flask") and not slotName:match("^Jewel") then
+			self:Recalculate()
+			local current = self:Score()
+			local best
+			for modId, mod in pairs(data.itemMods.Corrupted or { }) do
+				if modId:match("^V2") and mod[1] then
+					local weight = 0
+					for i, key in ipairs(mod.weightKey or { }) do
+						if item.base.tags[key] then weight = mod.weightVal[i] or 0 break end
+					end
+					if weight > 0 then
+						local copy = new("Item"):Item(item:BuildRaw())
+						copy.implicitModLines = { }
+						for _, line in ipairs(mod) do t_insert(copy.implicitModLines, { line = itemLib.applyRange(line, 1, 1, 1), modTags = mod.modTags or { } }) end
+						copy.corrupted = true
+						copy:BuildAndParseRaw()
+						local score = self:Score({ repSlotName = slotName, repItem = copy })
+						if score > current + 0.02 and (not best or score > best.score) then best = { item = copy, score = score, text = table.concat(mod, ", ") } end
+					end
+				end
+			end
+			if best then
+				self:Equip(best.item, slotName)
+				self.itemsTab:PopulateSlots()
+				total = total + best.score - current
+				t_insert(notes, string.format("%s: %s (%+.3f)", slotName, itemLib.applyRange(best.text, 1, 1, 1), best.score - current))
+			end
+			self:Tick()
+		end
+	end
+	self:Recalculate()
+	if #notes > 0 then self:Note("Corrupted implicits (a Vaal Orb on a spare copy: it can also brick it): " .. table.concat(notes, "; ")) end
+	return total
+end
+
 -- Two-piece unique combos (Classes/UniqueComboFinder): pairs that gain more
 -- together than apart, and uniques granting a state (Elusive, Onslaught...)
 -- with the ones paying off in it; tried as packages with the build adapted
@@ -4505,6 +4555,11 @@ function BuildGeneratorClass:Run()
 		end
 		self:Note(string.format("Commitment: %s is valued on its own while the build is made (gear, passives, jewels follow it)", opts.archetype.lens.label or opts.archetype.lens.stat))
 	end
+	-- (a hybrid's second stacked stat)
+	if opts.archetype and opts.archetype.lens2 and opts.statLens ~= false then
+		self.scorer.lens2 = opts.archetype.lens2
+		self:Note(string.format("Commitment: %s too", opts.archetype.lens2.label or opts.archetype.lens2.stat))
+	end
 	-- (A/B options: weight of avoidance in tankiness, weight of tankiness)
 	self.scorer.avoidanceWeight = opts.avoidanceWeight
 	self.scorer.pastTarget = opts.pastTarget
@@ -4570,6 +4625,7 @@ function BuildGeneratorClass:Run()
 		if self.skillProfileNote then self:Note("Main skill as used in a fight: " .. self.skillProfileNote) end
 		-- (the archetype's stat lens left out: archetypes compared as they are)
 		self.scorer.lens = nil
+	self.scorer.lens2 = nil
 		local final = self.scorer:Evaluate(self.calcFunc, { })
 		self.final = final
 		self.build.buildFlag = true
@@ -4731,6 +4787,11 @@ function BuildGeneratorClass:Run()
 		local ok, err = pcall(function() self:PearlMove() end)
 		if not ok then ConPrintf("Pearl move failed: %s", tostring(err)) end
 	end
+	-- corrupted implicits (Endgame / Mirror)
+	if opts.corruption ~= false then
+		local ok, err = pcall(function() self:CorruptionMove() end)
+		if not ok then ConPrintf("Corruption move failed: %s", tostring(err)) end
+	end
 	-- the finished build partly rebuilt, again and again (large neighbourhood search)
 	if (opts.repairRounds or 8) > 0 then
 		self:Move(6, 6, "Rebuilding parts of the build to improve it")
@@ -4756,6 +4817,7 @@ function BuildGeneratorClass:Run()
 	if self.skillProfileNote then self:Note("Main skill as used in a fight: " .. self.skillProfileNote) end
 	-- (the archetype's stat lens left out: archetypes compared as they are)
 	self.scorer.lens = nil
+	self.scorer.lens2 = nil
 	local final = self.scorer:Evaluate(self.calcFunc, { })
 	self.final = final
 	self.build.buildFlag = true

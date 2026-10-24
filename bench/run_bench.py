@@ -91,6 +91,10 @@ def run_auto(case, pool, top):
         if len(picked) < top or (len(picked) < top + 2 and q["priority"] >= ranked[0]["priority"] - 0.5):
             picked.append(q)
     full_cases = [[skill, asc, inv, "full", q["archetype"]] for q in picked]
+    # (and the best two together, as the app's "Hybrids" option; bench_case
+    # skips pairs that can't be combined)
+    if len(ranked) >= 2 and os.environ.get("HYBRIDS", "1") == "1":
+        full_cases.append([skill, asc, inv, "full", ranked[0]["archetype"] + "+" + ranked[1]["archetype"]])
     full = [json.loads(l) for l in pool.map(run_case, full_cases)]
     best = max([f for f in full if f.get("score") is not None], key=lambda f: f["score"], default=None)
     lines = [json.dumps(dict(q, scan=True)) for q in quick] + [json.dumps(f) for f in full if f is not best]

@@ -683,6 +683,9 @@ function BuildIdeasPopupClass:OpenGenerator()
 		tooltip:AddLine(16, "^7Excluded: " .. (#c.excluded > 0 and table.concat(c.excluded, ", ") or "none"))
 	end
 	controls.archetype.enabled = idle
+	controls.hybrids = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {886, 105, 18}, "Hybrids:", nil,
+		"Automatic mode: also build the two best archetypes together (e.g. strength stacking + impale),\nwhen they can be combined.", true)
+	controls.hybrids.enabled = idle
 	controls.archetype.tooltipFunc = function(tooltip)
 		tooltip:Clear()
 		local entry = controls.archetype.list[controls.archetype.selIndex]
@@ -1157,6 +1160,11 @@ function BuildIdeasPopupClass:OpenGenerator()
 				t_insert(scores, r.quick)
 				state.quickScores[r.archetype.id] = r.quick
 			end
+		end
+		-- (and the best two together, when they can be combined: a hybrid)
+		if ranked[1] and ranked[2] and controls.hybrids.state then
+			local hybrid = archetypeLib.Hybrid(ranked[1].archetype, ranked[2].archetype)
+			if hybrid then t_insert(candidates, hybrid) end
 		end
 		if #candidates < 2 then return false end
 		return state.fullParallel(candidates, tonumber(controls.tries.list[controls.tries.selIndex]) or 1)

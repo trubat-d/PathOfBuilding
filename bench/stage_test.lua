@@ -164,6 +164,9 @@ elseif step == "conditions" then
 	end
 	print("KEPT", gen:ConditionEnablerMove(2))
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
+elseif step == "corrupt" then
+	print("GAIN", gen:CorruptionMove())
+	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
 elseif step == "prune" then
 	print("REMOVED", gen:PruneUselessGems())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end

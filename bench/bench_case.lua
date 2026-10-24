@@ -33,8 +33,12 @@ if archetypeId == "LIST" then
 	os.exit(0)
 end
 if archetypeId then
-	for _, a in ipairs(new("BuildArchetypes"):BuildArchetypes().ForSkill(data.gems[gemId], nil)) do
-		if a.id == archetypeId then archetype = a end
+	-- ("A+B": the two together)
+	archetype = new("BuildArchetypes"):BuildArchetypes().ById(data.gems[gemId], archetypeId, nil)
+	if not archetype and archetypeId:find("+", 1, true) then
+		-- (two archetypes that can't go together)
+		print("BENCH " .. dkjson.encode({ skill = skillName, ascendancy = ascName, investment = investmentId, mode = mode, archetype = archetypeId, error = "archetypes can't be combined" }))
+		os.exit(0)
 	end
 	assert(archetype, "archetype not found: " .. archetypeId)
 end

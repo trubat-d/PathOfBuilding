@@ -114,7 +114,7 @@ function IdeaMinerClass.Ideas(info, opts)
 	-- into it (two steps: stack A, A becomes B, B becomes damage)
 	if opts.dataDrivers ~= false then
 		for _, d in ipairs(IdeaMinerClass.DataDrivers()) do
-			if #d.payoffs >= (opts.minUniques or 2) and (not d.attackOnly or info.attack) then
+			if #d.payoffs >= (opts.minUniques or 2) and (not d.attackOnly or info.attack) and (not d.spellOnly or info.spell) then
 				local titles = { }
 				for _, t in ipairs(d.payoffs) do t_insert(titles, t) end
 				for _, t in ipairs(d.converters) do t_insert(titles, t) end
@@ -135,7 +135,68 @@ function IdeaMinerClass.Ideas(info, opts)
 			end
 		end
 	end
+	-- conversion / "gain as extra" towards one element (IdeaMiner.Conversions):
+	-- the uniques adding it, that element's aura and penetration
+	if opts.conversions ~= false then
+		for _, c in ipairs(IdeaMinerClass.Conversions()) do
+			local fromOk = false
+			for src in pairs(c.sources) do
+				if src == "Physical" and (info.physical or info.attack) then fromOk = true end
+				if src == "Elemental" and info.elemental then fromOk = true end
+				if (src == "Fire" or src == "Cold" or src == "Lightning") and info.tags and info.tags[src:lower()] then fromOk = true end
+			end
+			if fromOk and #c.titles >= 2 then
+				local shown = { }
+				for i = 1, math.min(4, #c.titles) do shown[i] = c.titles[i] end
+				t_insert(list, {
+					id = "MINED_TO_" .. c.element:upper(),
+					label = string.format("Damage turned into %s (found: %s%s)", c.element:lower(), table.concat(shown, ", "), #c.titles > 4 and "..." or ""),
+					summary = string.format("Uniques converting or adding damage as %s, the %s aura and %s penetration: one element scaled on top of the skill's own damage.", c.element:lower(), c.element:lower(), c.element:lower()),
+					uniques = c.titles,
+					auras = c.aura and { c.aura } or nil,
+					supports = c.support and { c.support } or nil,
+					mined = true,
+					maxUniques = 3,
+					setTolerance = 0.1,
+					applies = function() return true end,
+				})
+			end
+		end
+	end
 	return list
+end
+
+local conversions
+-- { { element, titles, sources = { [src] = true }, aura, support } }
+function IdeaMinerClass.Conversions()
+	if conversions then return conversions end
+	conversions = { }
+	local byElement = { }
+	for _, item in pairs(main.uniqueDB.list) do
+		local title = item.title or item.name
+		for _, modLine in ipairs(item.explicitModLines or { }) do
+			local current = not modLine.variantList or (item.variant and modLine.variantList[item.variant])
+			for _, mod in ipairs(current and modLine.modList or { }) do
+				local src, dst = mod.name:match("^(%a-)DamageConvertTo(%a+)$")
+				if not src then src, dst = mod.name:match("^(%a-)DamageGainAs(%a+)$") end
+				if src and dst and dst ~= "Random" then
+					byElement[dst] = byElement[dst] or { titles = { }, sources = { } }
+					byElement[dst].titles[title] = true
+					byElement[dst].sources[src] = true
+				end
+			end
+		end
+	end
+	local auras = { Fire = "Anger", Cold = "Hatred", Lightning = "Wrath", Chaos = "Malevolence" }
+	local supports = { Fire = "Fire Penetration", Cold = "Cold Penetration", Lightning = "Lightning Penetration", Chaos = "Void Manipulation" }
+	for element, e in pairs(byElement) do
+		local titles = { }
+		for t in pairs(e.titles) do t_insert(titles, t) end
+		t_sort(titles)
+		t_insert(conversions, { element = element, titles = titles, sources = e.sources, aura = auras[element], support = supports[element] })
+	end
+	t_sort(conversions, function(a, b) return a.element < b.element end)
+	return conversions
 end
 
 -- Stats the hand-written ideas (and the drivers above) already cover
@@ -205,7 +266,9 @@ function IdeaMinerClass.DataDrivers()
 			for t in pairs(conv) do t_insert(convList, t) end
 			t_sort(convList)
 			local label = key:gsub("^Multiplier:", ""):gsub("(%l)(%u)", "%1 %2")
-			t_insert(dataDrivers, { key = key, label = label, payoffs = list, converters = convList, lens = lensStats[key] and { stat = lensStats[key].stat, base = lensStats[key].base, label = label } or nil })
+			t_insert(dataDrivers, { key = key, label = label, payoffs = list, converters = convList, lens = lensStats[key] and { stat = lensStats[key].stat, base = lensStats[key].base, label = label } or nil,
+				-- (accuracy only matters to attacks, intensity to spells)
+				attackOnly = key == "Accuracy" or nil, spellOnly = key == "Multiplier:Intensity" or nil })
 		end
 	end
 	t_sort(dataDrivers, function(a, b) return #a.payoffs > #b.payoffs or (#a.payoffs == #b.payoffs and a.key < b.key) end)

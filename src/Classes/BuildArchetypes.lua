@@ -314,6 +314,57 @@ function BuildArchetypesClass.ForSkill(gem, meta)
 	return list
 end
 
+-- Two archetypes together ("A+B"): keystones, uniques, auras, supports and
+-- jewels of both, the first one's stat lens and the second's as a second
+-- lens. nil when they can't go together (a keystone one excludes, both
+-- with a play style or trigger setup).
+function BuildArchetypesClass.Hybrid(a, b)
+	if not a or not b or a.id == b.id then return nil end
+	if (a.playstyle and b.playstyle) or a.trigger or b.trigger then return nil end
+	local function excludes(x, y)
+		for _, k in ipairs(x.excludeKeystones or { }) do
+			for _, k2 in ipairs(y.keystones or { }) do if k == k2 then return true end end
+		end
+		return false
+	end
+	if excludes(a, b) or excludes(b, a) then return nil end
+	local function union(x, y)
+		if not x and not y then return nil end
+		local out, seen = { }, { }
+		for _, list in ipairs({ x or { }, y or { } }) do
+			for _, v in ipairs(list) do if not seen[v] then seen[v] = true t_insert(out, v) end end
+		end
+		return out
+	end
+	local h = {
+		id = a.id .. "+" .. b.id,
+		label = string.format("Hybrid: %s + %s", a.label:gsub(" %(found.*%)$", ""), b.label:gsub(" %(found.*%)$", "")),
+		summary = (a.summary or "") .. " Together with: " .. (b.summary or ""),
+		keystones = union(a.keystones, b.keystones), excludeKeystones = union(a.excludeKeystones, b.excludeKeystones),
+		uniques = union(a.uniques, b.uniques), uniqueLines = union(a.uniqueLines, b.uniqueLines),
+		auras = union(a.auras, b.auras), supports = union(a.supports, b.supports),
+		jewels = union(a.jewels, b.jewels), jewelStat = a.jewelStat or b.jewelStat,
+		lens = a.lens or b.lens, lens2 = a.lens and b.lens or nil,
+		maxAuras = (a.maxAuras or b.maxAuras) and math.max(a.maxAuras or 4, b.maxAuras or 4) or nil,
+		maxUniques = math.max(a.maxUniques or 3, b.maxUniques or 3),
+		setTolerance = a.setTolerance or b.setTolerance,
+		playstyle = a.playstyle or b.playstyle,
+		hybrid = true, parts = { a.id, b.id },
+		applies = function() return true end,
+	}
+	return h
+end
+
+-- An archetype by id among those that fit a skill ("A+B": their hybrid)
+function BuildArchetypesClass.ById(gem, id, meta)
+	if not id then return nil end
+	local list = BuildArchetypesClass.ForSkill(gem, meta)
+	local function find(x) for _, a in ipairs(list) do if a.id == x then return a end end end
+	local a, b = id:match("^(.-)%+(.+)$")
+	if a then return BuildArchetypesClass.Hybrid(find(a), find(b)) end
+	return find(id)
+end
+
 -- Unique items (not jewels or flasks) an archetype tries: its named uniques,
 -- plus those with a mod line matching its patterns (current variant)
 function BuildArchetypesClass.UniqueCandidates(archetype)

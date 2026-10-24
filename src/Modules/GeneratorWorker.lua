@@ -131,7 +131,7 @@ return function(jobJson, userPath, scriptBase)
 			ehpFloor = sc.ehpFloor, hitFloor = sc.hitFloor, bossTier = sc.bossTier, killsPerSecond = sc.killsPerSecond, flaskRealism = sc.flaskRealism,
 		})
 		for _, key in ipairs({ "hitScale", "resourceSustain", "ignoreCosts", "ignoreAttributes", "ignoreReservation", "useChecklist",
-			"lens", "avoidanceWeight", "pastTarget", "fightWeight", "smoothBuffs", "reservationSlope", "clearBoost", "clearBuffs" }) do
+			"lens", "lens2", "avoidanceWeight", "pastTarget", "fightWeight", "smoothBuffs", "reservationSlope", "clearBoost", "clearBuffs" }) do
 			scorer[key] = sc[key]
 		end
 		if sc.focusEhp and scorer.focus and scorer.focus.ehp ~= sc.focusEhp then
@@ -199,7 +199,7 @@ return function(jobJson, userPath, scriptBase)
 	local archetypes = new("BuildArchetypes"):BuildArchetypes()
 	local archetypeList = archetypes.ForSkill(data.gems[job.gemId], job.meta)
 	if job.archetypeId then
-		options.archetype = byId(archetypeList, job.archetypeId)
+		options.archetype = byId(archetypeList, job.archetypeId) or archetypes.ById(data.gems[job.gemId], job.archetypeId, job.meta)
 	end
 	local lastStage
 	options.yieldEvery = 1000
