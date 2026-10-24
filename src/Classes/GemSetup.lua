@@ -57,23 +57,38 @@ function GemSetupClass:Score()
 	return (self.gen:Score())
 end
 
--- Number of gem sockets of the item in a slot (abyssal sockets don't count)
-function GemSetupClass:SlotSockets(slotName)
-	local itemsTab = self.build.itemsTab
-	local slot = itemsTab.slots[slotName]
-	local item = slot and itemsTab.items[slot.selItemId]
+-- Gem sockets an item can have: its fixed count for uniques that have one
+-- ("Has 1 Socket": Crest of Desire, "Has no Sockets": Kaom's Heart), else the
+-- base's limit; abyssal sockets take the place of gem sockets
+function GemSetupClass.ItemGemSockets(item)
 	if not item or not item.base then return 0 end
+	local fixed, abyssal = nil, 0
 	for _, modLine in ipairs(item.explicitModLines or { }) do
-		if modLine.line == "Has no Sockets" then return 0 end
+		if not item.CheckModLineVariant or item:CheckModLineVariant(modLine) then
+			local line = modLine.line or ""
+			if line == "Has no Sockets" then return 0 end
+			local n = line:match("^Has (%d+) Sockets?$")
+			if n then fixed = tonumber(n) end
+			local a = line:match("^Has (%d+) Abyssal Sockets?$")
+			if a then abyssal = abyssal + tonumber(a) end
+		end
 	end
+	if fixed then return fixed end
 	local count = 0
 	for _, socket in ipairs(item.sockets or { }) do
 		if socket.color ~= "A" then count = count + 1 end
 	end
 	if count == 0 or item.rarity ~= "UNIQUE" then
-		count = item.base.socketLimit or 0
+		count = (item.base.socketLimit or 0) - abyssal
 	end
-	return count
+	return math.max(0, count)
+end
+
+-- Number of gem sockets of the item in a slot (abyssal sockets don't count)
+function GemSetupClass:SlotSockets(slotName)
+	local itemsTab = self.build.itemsTab
+	local slot = itemsTab.slots[slotName]
+	return GemSetupClass.ItemGemSockets(slot and itemsTab.items[slot.selItemId])
 end
 
 function GemSetupClass:AddGroup(label, gems, slot)
@@ -190,7 +205,13 @@ function GemSetupClass:SlotGrantsSupport(slotName, pattern)
 	local item = slot and itemsTab.items[slot.selItemId]
 	for _, list in ipairs({ item and item.explicitModLines or { }, item and item.implicitModLines or { } }) do
 		for _, line in ipairs(list) do
-			if line.line and line.line:match("Socketed Gems are Supported by Level %d+ " .. pattern) then return true end
+			-- ("Socketed Gems are supported by...", "Socketed Slam Gems / Spells are
+			-- Supported by level...": any case, any kind of socketed gem)
+			local text = line.line and line.line:lower()
+			if text and (not item.CheckModLineVariant or item:CheckModLineVariant(line))
+				and (text:match("^socketed .-supported by level %d+ " .. pattern:lower()) or (pattern == "Snipe" and text:match("^socketed .-triggered by snipe"))) then
+				return true
+			end
 		end
 	end
 	return false
@@ -244,19 +265,31 @@ function GemSetupClass:CurseOptions(curseId)
 	local gem = data.gems[curseId]
 	local options = { }
 	local tags = gem.tags or { }
+	-- PoB counts a curse in full however it is applied, so each way carries what
+	-- it costs in play (only for the choice; the build's numbers stay PoB's):
+	--   uptime: share of a fight the curse is on the target
+	--   actionCost: time taken from the main skill to keep it up (as score)
+	-- Without these the free-looking Arcanist Brand won every time.
+	local brandBuild = self.gen.mainGem and self.gen.mainGem.tags and self.gen.mainGem.tags.brand
 	if tags.mark then
-		t_insert(options, { label = gem.name .. " on Mark On Hit", gems = { curseId, gemId("Mark On Hit") } })
+		-- (marks: applied by the attack's own hits; by hand for spells)
+		t_insert(options, { label = gem.name .. " on Mark On Hit", gems = { curseId, gemId("Mark On Hit") }, actionCost = self:MainIsAttack() and 0 or 0.04 })
+		t_insert(options, { label = gem.name .. " cast by hand", gems = { curseId }, actionCost = 0.05 })
 	else
-		-- Hextouch on a movement skill that hits (one the weapons allow)
+		-- Hextouch on a movement skill that hits (one the weapons allow): only
+		-- cursed when the movement skill hits the target
 		local carrier
 		for _, name in ipairs(self:MainIsAttack() and { "Shield Charge", "Leap Slam", "Whirling Blades", "Frostblink" } or { "Frostblink" }) do
 			if not carrier and self:CanUse(gemId(name)) then carrier = gemId(name) end
 		end
 		if carrier then
-			t_insert(options, { label = gem.name .. " on Hextouch (" .. data.gems[carrier].name .. ")", gems = { carrier, gemId("Hextouch"), curseId }, movement = true })
+			t_insert(options, { label = gem.name .. " on Hextouch (" .. data.gems[carrier].name .. ")", gems = { carrier, gemId("Hextouch"), curseId }, movement = true, uptime = 0.7 })
 		end
-		t_insert(options, { label = gem.name .. " on Arcanist Brand", gems = { gemId("Arcanist Brand"), curseId } })
+		-- (a brand cast every few seconds; free for a brand build's own casting)
+		t_insert(options, { label = gem.name .. " on Arcanist Brand", gems = { gemId("Arcanist Brand"), curseId }, actionCost = brandBuild and 0.01 or 0.035 })
+		-- (an aura: always on, paid in reservation, which the score sees)
 		t_insert(options, { label = gem.name .. " on Blasphemy", gems = { curseId, gemId("Blasphemy") } })
+		t_insert(options, { label = gem.name .. " cast by hand", gems = { curseId }, actionCost = 0.06 })
 	end
 	return options
 end
@@ -278,7 +311,7 @@ function GemSetupClass:ChooseCurses()
 	local current = self:Score()
 	local used = { }
 	for _ = 1, math.max(1, math.min(3, self:CurseLimit())) do
-		local best, bestScore
+		local best, bestScore, bestRaw
 		-- an Arcanist Brand already placed can carry another curse in a free linked socket
 		local brandGroup
 		local free = self:FreeSockets()
@@ -295,16 +328,19 @@ function GemSetupClass:ChooseCurses()
 					if valid and self:SlotFor(#option.gems) then
 						local gems = { }
 						for _, gid in ipairs(option.gems) do t_insert(gems, gemEntry(gid)) end
-						local score = self:TryGroup(gems)
+						local raw = self:TryGroup(gems)
+						local dpsWeight = self.gen.scorer and self.gen.scorer.focus and self.gen.scorer.focus.dps or 1
+						local score = current + (raw - current) * (option.uptime or 1) - (option.actionCost or 0) * dpsWeight
+						if os.getenv("DEBUG_CURSES") then ConPrintf("[curse] %-50s raw %+.3f adjusted %+.3f", option.label, raw - current, score - current) end
 						if not bestScore or score > bestScore + 1e-9 then
-							best, bestScore = { id = id, option = option, gems = gems }, score
+							best, bestScore, bestRaw = { id = id, option = option, gems = gems }, score, raw
 						end
 					end
 				end
 				if brandGroup and not data.gems[id].tags.mark then
 					local score = self:TryInGroup(brandGroup, gemEntry(id))
 					if not bestScore or score > bestScore + 1e-9 then
-						best, bestScore = { id = id, option = { label = data.gems[id].name .. " on the same Arcanist Brand" }, into = brandGroup }, score
+						best, bestScore, bestRaw = { id = id, option = { label = data.gems[id].name .. " on the same Arcanist Brand" }, into = brandGroup }, score, score
 					end
 				end
 				self.gen:Tick()
@@ -319,7 +355,7 @@ function GemSetupClass:ChooseCurses()
 		end
 		used[best.id] = true
 		if best.option.movement then self.hasMovement = true end
-		current = bestScore
+		current = bestRaw
 		self.gen:Note("Curse setup: " .. best.option.label)
 	end
 end

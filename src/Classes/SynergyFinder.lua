@@ -1235,7 +1235,7 @@ function SynergyFinderClass:MetaJewelIdeas(investment)
 	local prices = GetPriceSource()
 	local base = self.base
 	local results = { finder:ForbiddenPair(base.score) }
-	if investment.exceptionalGems ~= false then
+	if prices.Available(investment, "Watcher's Eye") then
 		t_insert(results, finder:WatchersEye(base.score, investment.awakenedGems and 3 or 2))
 	end
 	for _, result in ipairs(results) do

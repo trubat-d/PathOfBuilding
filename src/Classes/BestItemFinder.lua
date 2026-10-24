@@ -92,6 +92,9 @@ function BestItemFinderClass:IsItemAllowed(item, opts)
 	end
 	if opts.investment then
 		local prices = GetPriceSource()
+		if not prices.Available(opts.investment, item.title or item.name) then
+			return false
+		end
 		if not prices:Allows(opts.investment, "unique", prices:UniquePrice(item)) then
 			return false
 		end

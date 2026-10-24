@@ -8,6 +8,7 @@ Every decision is made by [`BuildScorer`](../src/Classes/BuildScorer.lua) on PoB
 - **Avoidance**: the share of incoming hit damage the build takes on average (melee, projectile, spell and spell projectile hits) after evasion, dodge, block and spell suppression, with its own weight in every focus. Top players build max block or 100% suppression and value it about as much as doubling their damage; inside EHP it was worth a few % damage.
 - **Focus**: the weights of damage and tankiness. "Damage, with a minimum max hit" (`DPS_FLOOR`) is damage first with a 10,000 max hit floor; below the floor every missing bit costs more than damage can pay back.
 - **Penalties**: elemental resistances below the cap, missing attributes, reservation over 100% (more the further over), self-damage over time bigger than regeneration, a defence checklist (freeze, shock, bleed, poison, stun...) and drawbacks PoB doesn't calculate ([`GeneratorRules`](../src/Modules/GeneratorRules.lua)).
+- **Passives PoB doesn't calculate**: cluster notables whose effect PoB can't read (Fan the Flames' ignite spread, Blast-Freeze, Remarkable's extra brands, Purposeful Harbinger...) get a value for the build ([`GeneratorRules`](../src/Modules/GeneratorRules.lua) `uncountedNodes`): ignite spread is worth a lot to an ignite build without Ignite Proliferation, nothing to a hit build.
 - **Flasks**: their real uptime from charges gained and used (a flask that gains no charges while up, from an Enkindling enchantment, is up for its duration then refills); tinctures from their mana burn.
 
 The score is logarithmic in damage and in the max hit, so doubling the damage is worth the same at 1 million as at 100 million.
@@ -32,6 +33,10 @@ A quick build ranks archetypes by how they start, so the scan also runs the chea
 12. Ascendancy and supports checked again (each support swapped against every other one), the tree rebuilt with shorter paths ([`TreeOptimizer`](../src/Classes/TreeOptimizer.lua)), then a short second round (aura stacking, supports, ascendancy) on the rebuilt tree.
 
 Every late move is kept only when the full score (with flask uptimes) is better.
+
+Items and gems follow what can be found at the investment level, not only prices: below High investment there are no exceptional gems (Enlighten, Empower, Enhance) and no scarce uniques (Split Personality, Watcher's Eye, Cinderswallow Urn, Forbidden jewels... `PriceSource.scarceUniques`). Gem setups always fit the items' real sockets: uniques with a fixed count (Crest of Desire's single socket) or abyssal sockets pack the setups again, and a main link that no longer fits moves to a 4-link. Items whose granted supports change what a gem does there (traps, totems, triggers: `behaviourSupports`, from `bench/unique_audit.lua`) get no utility setup.
+
+Curses are tried on every way to apply them, each with what it costs in play (PoB counts a curse in full however it is applied): Arcanist Brand and casting by hand take time from the main skill, Hextouch on a movement skill only curses what it hits, Blasphemy reserves mana, a mark on Mark On Hit is free for attacks.
 
 #### Several tries
 "Tries" generates the same build several times with small differences: from the second try on, the early choices (supports, passives per point, ascendancy, weapon finalists) see each option's gain through a fixed ±15% factor of its own, which sends the search down other paths; the real scores still decide, and the best try is kept. With background threads the tries run at once.

@@ -27,11 +27,11 @@ local exchangeTypes = { "Tattoo", "Oil" }
 -- Investment levels: max price per item in divines (nil = no limit)
 PriceSourceClass.levels = {
 	{ id = "LEAGUE_START", label = "League start (items up to 1 divine)", maxUnique = 1, maxAnoint = 1, maxTattoo = 0.1, influences = 0, eldritchTier = 1, quality = 3, unknownAllowed = false,
-		enlighten = nil, exceptionalGems = false, awakenedGems = false, timeless = false },
+		enlighten = nil, exceptionalGems = false, awakenedGems = false, timeless = false, scarce = false },
 	{ id = "BUDGET", label = "Budget (items up to 5 divines)", maxUnique = 5, maxAnoint = 3, maxTattoo = 0.5, influences = 0, eldritchTier = 3, quality = 2, unknownAllowed = false,
-		enlighten = { name = "Enlighten", level = 2 }, exceptionalGems = false, awakenedGems = false, timeless = true },
+		enlighten = nil, exceptionalGems = false, awakenedGems = false, timeless = true, scarce = false },
 	{ id = "MID", label = "Mid investment (items up to 30 divines)", maxUnique = 30, maxAnoint = 10, maxTattoo = 2, influences = 1, maxInfluenced = 2, eldritchTier = 4, quality = 2, unknownAllowed = false,
-		enlighten = { name = "Enlighten", level = 3 }, exceptionalGems = true, awakenedGems = false, timeless = true },
+		enlighten = nil, exceptionalGems = false, awakenedGems = false, timeless = true, scarce = false },
 	{ id = "HIGH", label = "High investment (items up to 150 divines)", maxUnique = 150, maxAnoint = 50, maxTattoo = 10, influences = 2, maxInfluenced = 4, eldritchTier = 5, quality = 2, unknownAllowed = true,
 		enlighten = { name = "Enlighten", level = 4 }, exceptionalGems = true, awakenedGems = true, timeless = true, corruptedMain = true },
 	{ id = "ENDGAME", label = "Endgame investment (items up to 500 divines, Mageblood level)", maxUnique = 500, maxAnoint = 150, maxTattoo = 30, influences = 2, maxInfluenced = 7, eldritchTier = 6, quality = 4, unknownAllowed = true,
@@ -40,6 +40,27 @@ PriceSourceClass.levels = {
 		enlighten = { name = "Awakened Enlighten", level = 5 }, exceptionalGems = true, awakenedGems = true, timeless = true, corruptedMain = true, corruptedSupports = true },
 }
 PriceSourceClass.defaultLevel = 3
+
+-- Uniques found too rarely to count on below High investment, whatever their
+-- price says (prices are low later in a league, but few drop early on).
+-- Exceptional gems (Enlighten, Empower, Enhance) are held back the same way
+-- by the levels' exceptionalGems.
+PriceSourceClass.scarceUniques = {
+	["Split Personality"] = true, ["Watcher's Eye"] = true, ["Cinderswallow Urn"] = true,
+	["Bottled Faith"] = true, ["Dying Sun"] = true, ["Progenesis"] = true, ["The Squire"] = true,
+	["Ashes of the Stars"] = true, ["Melding of the Flesh"] = true, ["Impossible Escape"] = true,
+	["Forbidden Flame"] = true, ["Forbidden Flesh"] = true, ["Megalomaniac"] = true, ["Voices"] = true,
+	["Aul's Uprising"] = true, ["Original Sin"] = true, ["Nimis"] = true, ["Mageblood"] = true,
+	["Headhunter"] = true, ["Sublime Vision"] = true, ["Badge of the Brotherhood"] = true,
+	["Thread of Hope"] = false,
+}
+
+-- Can a unique be counted on at an investment level (scarce ones from High)?
+function PriceSourceClass.Available(level, title)
+	if not level or not title then return true end
+	if level.scarce == false and PriceSourceClass.scarceUniques[title] then return false end
+	return true
+end
 
 function PriceSourceClass:PriceSource()
 	self.uniques, self.tattoos, self.oils = { }, { }, { }

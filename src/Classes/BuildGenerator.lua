@@ -2182,11 +2182,14 @@ function BuildGeneratorClass:ChooseMetaJewels(onlyKinds)
 	})
 	local prices = GetPriceSource()
 	local kinds = { "forbidden" }
-	if investment.exceptionalGems then t_insert(kinds, "watcher") end
-	-- Split Personality (cheap, limited to 2): stronger the further its socket
+	-- (Watcher's Eye and Split Personality are scarce: from High investment)
+	if prices.Available(investment, "Watcher's Eye") then t_insert(kinds, "watcher") end
+	-- Split Personality (limited to 2): stronger the further its socket
 	-- is from the class start, so long paths and cluster sockets are tried
-	t_insert(kinds, "split")
-	t_insert(kinds, "split")
+	if prices.Available(investment, "Split Personality") then
+		t_insert(kinds, "split")
+		t_insert(kinds, "split")
+	end
 	-- any other unique jewel within the budget (radius jewels, conditional ones...)
 	t_insert(kinds, "unique")
 	t_insert(kinds, "unique")
@@ -2198,6 +2201,7 @@ function BuildGeneratorClass:ChooseMetaJewels(onlyKinds)
 		end
 	end
 	local function allowed(title)
+		if not prices.Available(investment, title) then return false end
 		local price = prices.uniques[title]
 		if price then return not investment.maxUnique or price <= investment.maxUnique end
 		return investment.unknownAllowed ~= false
@@ -2346,12 +2350,9 @@ function BuildGeneratorClass:ApplyArchetypeUniques()
 		finder:Equip(best.item, best.slot, true)
 		self.itemsTab:PopulateSlots()
 		self.lockedSlots[best.slot] = true
-		-- (a body armour without sockets: the main skill moves to a 4-link)
-		if self.mainGroup and self.mainGroup.slot == best.slot then
-			for _, modLine in ipairs(best.item.explicitModLines or { }) do
-				if modLine.line == "Has no Sockets" then self:RelocateMainLink() break end
-			end
-		end
+		-- (fewer sockets than the gems there, e.g. a body armour without
+		-- sockets: the main skill moves to a 4-link, setups packed again)
+		self:FitSockets()
 		if best.slot:match("^Weapon") then self.weaponFinalists = nil end
 		local price = GetPriceSource():UniquePrice(best.item)
 		t_insert(kept, string.format("%s in %s (%s)", best.item.title or best.item.name, best.slot, GetPriceSource().FormatPrice(price)))
@@ -2376,6 +2377,7 @@ function BuildGeneratorClass:ChooseArchetypeJewels()
 		tick = function() self:Tick() end,
 	})
 	for _, title in ipairs(archetype.jewels) do
+		if not GetPriceSource().Available(self.options.investment, title) then goto nextJewel end
 		local base = self:FullScore()
 		local result = finder:UniqueJewel(base, title, archetype.jewelStat)
 		if result and result.gain > 0.003 then
@@ -2387,6 +2389,7 @@ function BuildGeneratorClass:ChooseArchetypeJewels()
 			self.costs = self.costs or { }
 			t_insert(self.costs, price or false)
 		end
+		::nextJewel::
 	end
 end
 
@@ -2476,10 +2479,12 @@ function BuildGeneratorClass:JointMoves(rounds)
 			for i, g in ipairs(self.mainGroup.gemList) do state.gems[i] = g end
 			for k, v in pairs(self.build.configTab.input) do state.input[k] = v end
 			state.newItems = { }
+			state.groups = self:SaveGroups()
 			for _, p in ipairs(move.placement) do
 				t_insert(state.newItems, self:Equip(p.item, p.slot))
 			end
 			self.itemsTab:PopulateSlots()
+			self:FitSockets()
 			if move.keystone and not move.keystone.alloc and move.keystone.path then spec:AllocNode(move.keystone) end
 			self:Recalculate()
 			self:TrimTree()
@@ -2494,6 +2499,11 @@ function BuildGeneratorClass:JointMoves(rounds)
 				if slot and slot.selItemId ~= id then slot:SetSelItemId(id) end
 			end
 			for _, item in ipairs(state.newItems) do self.itemsTab:DeleteItem(item, true) end
+			local log = { }
+			for i, l in ipairs(self.log) do log[i] = l end
+			self:RestoreGroups(state.groups)
+			for i = #self.log, 1, -1 do self.log[i] = nil end
+			for i, l in ipairs(log) do self.log[i] = l end
 			for i = #self.mainGroup.gemList, 1, -1 do self.mainGroup.gemList[i] = nil end
 			for i, g in ipairs(state.gems) do self.mainGroup.gemList[i] = g end
 			self.build.skillsTab:ProcessSocketGroup(self.mainGroup)
@@ -2645,7 +2655,10 @@ function BuildGeneratorClass:ChooseMetaUniques()
 				local previous = slot.selItemId
 				local newItem = finder:Equip(item, bestSlot, true)
 				self.itemsTab:PopulateSlots()
+				local savedGroups = self:SaveGroups()
+				self:FitSockets()
 				local after = self:FullScore()
+				if after <= before + 0.003 then self:RestoreGroups(savedGroups) end
 				if after > before + 0.003 then
 					local price = GetPriceSource():UniquePrice(item)
 					t_insert(kept, string.format("%s in %s (%d%% of players; %s)", item.title or item.name, bestSlot, math.floor(entry.share * 100 + 0.5), GetPriceSource().FormatPrice(price)))
@@ -2665,6 +2678,48 @@ function BuildGeneratorClass:ChooseMetaUniques()
 	elseif meta.total and meta.total > 0 then
 		self:Note(string.format("poe.ninja: %d characters use this skill; none of their common uniques improved this build", meta.total))
 	end
+end
+
+-- Gem setups that no longer fit their item's sockets after an item change
+-- (a unique with a fixed socket count, like Crest of Desire's one socket):
+-- the main link moves to a 4-link when its slot has fewer than 3 sockets,
+-- or keeps fewer supports; the utility setups are packed again. Returns
+-- true if anything changed.
+function BuildGeneratorClass:FitSockets()
+	local setup = new("GemSetup"):GemSetup(self)
+	local skillsTab = self.build.skillsTab
+	local changed = false
+	local main = self.mainGroup
+	if main and main.slot then
+		local sockets = setup:SlotSockets(main.slot)
+		if sockets < #main.gemList then
+			changed = true
+			if sockets < 3 then
+				self:RelocateMainLink()
+			else
+				self.mainLinkLimit = sockets - 1
+				while #main.gemList > sockets do t_remove(main.gemList) end
+				skillsTab:ProcessSocketGroup(main)
+				self:ChooseSupports(5)
+			end
+		end
+	end
+	local used = { }
+	for _, group in ipairs(skillsTab.socketGroupList) do
+		if group ~= main and group.slot and group.enabled ~= false then
+			used[group.slot] = (used[group.slot] or 0) + #group.gemList
+		end
+	end
+	if main and main.slot then used[main.slot] = (used[main.slot] or 0) + #main.gemList end
+	for slotName, count in pairs(used) do
+		if count > setup:SlotSockets(slotName) then
+			self:ChooseUtilityGems()
+			changed = true
+			break
+		end
+	end
+	if changed then self:Recalculate() end
+	return changed
 end
 
 -- Socket groups and the main link state, to undo a move
@@ -2746,11 +2801,9 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 	for _, group in ipairs(self.build.skillsTab.socketGroupList) do
 		if group.slot and group.enabled ~= false and #group.gemList > 0 then groupSlots[group.slot] = true end
 	end
+	local setup = new("GemSetup"):GemSetup(self)
 	local function noSockets(item)
-		for _, modLine in ipairs(item.explicitModLines or { }) do
-			if modLine.line == "Has no Sockets" then return true end
-		end
-		return false
+		return setup.ItemGemSockets(item) == 0
 	end
 	-- (a two handed weapon would also empty the off hand: left to the weapon stages)
 	local function changesHands(item, slotName)
@@ -2824,10 +2877,11 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 			local previous = slot.selItemId
 			local newItem = finder:Equip(entry.item, entry.slot, true)
 			self.itemsTab:PopulateSlots()
-			local savedGroups = entry.relocate and self:SaveGroups()
-			local moved = entry.relocate and self:RelocateMainLink()
+			local savedGroups = self:SaveGroups()
+			self:FitSockets()
+			local moved = not entry.relocate or self.mainGroup.slot ~= "Body Armour"
 			self:Recalculate()
-			local after = (not entry.relocate or moved) and self:FullScore() or before
+			local after = moved and self:FullScore() or before
 			if self.options.debugTiming then ConPrintf("[uniques] tried %s in %s%s: %.3f -> %.3f", entry.item.title or entry.item.name, entry.slot, entry.relocate and " (main link moved)" or "", before, after) end
 			if after > before + 0.005 then
 				usedSlots[entry.slot] = true
@@ -2838,7 +2892,7 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 				self.costs = self.costs or { }
 				t_insert(self.costs, price or false)
 			else
-				if savedGroups then self:RestoreGroups(savedGroups) end
+				self:RestoreGroups(savedGroups)
 				slot:SetSelItemId(previous)
 				self.itemsTab:DeleteItem(newItem, true)
 				self.itemsTab:PopulateSlots()
@@ -3001,7 +3055,7 @@ function BuildGeneratorClass:LearnFromTopBuilds(maxTries)
 					local gemId
 					for id, gem in pairs(data.gems) do if gem.name == sup.name and gem.grantedEffect and gem.grantedEffect.support then gemId = id end end
 					local gem = gemId and data.gems[gemId]
-					if gem and (investment.awakenedGems ~= false or not gem.tags.awakened) and #list - 1 < (self.mainLinkLimit or 5) then
+					if gem and (investment.awakenedGems ~= false or not gem.tags.awakened) and (investment.exceptionalGems ~= false or not gem.tags.exceptional) and #list - 1 < (self.mainLinkLimit or 5) then
 						t_insert(list, { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId })
 						t_insert(names, gem.name)
 					end
@@ -3035,7 +3089,10 @@ function BuildGeneratorClass:LearnFromTopBuilds(maxTries)
 				local previous = slot.selItemId
 				local newItem = finder:Equip(c.item, c.slot, true)
 				self.itemsTab:PopulateSlots()
+				local savedGroups = self:SaveGroups()
+				self:FitSockets()
 				undo = function()
+					self:RestoreGroups(savedGroups)
 					slot:SetSelItemId(previous)
 					self.itemsTab:DeleteItem(newItem, true)
 					self.itemsTab:PopulateSlots()
@@ -3557,6 +3614,8 @@ function BuildGeneratorClass:Run()
 	end
 
 	self:RemoveUnusedItems()
+	-- (last check: every gem setup fits its item's sockets)
+	if self:FitSockets() then self:Note("Gem setups packed again to fit the items' sockets") end
 	self:AutoConfigure()
 	self:Recalculate()
 	local final = self.scorer:Evaluate(self.calcFunc, { })

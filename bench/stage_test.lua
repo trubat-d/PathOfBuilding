@@ -100,6 +100,18 @@ elseif step == "refine" then
 	for _, n in ipairs({ 6, 10, 16, 6 }) do print("REFINE", n, gen:RefineTree(n)) end
 elseif step == "flaskenchant" then
 	gen:FlaskEnchantMove()
+elseif step == "fitsockets" then
+	-- UNIQUE=<name> SLOT=<slot>: equipped, then the gem setups fitted to its sockets
+	local item
+	for _, u in pairs(main.uniqueDB.list) do if u.title == os.getenv("UNIQUE") then item = u end end
+	new("BestItemFinder"):BestItemFinder(build.itemsTab):Equip(item, os.getenv("SLOT"), true)
+	build.itemsTab:PopulateSlots()
+	print("SOCKETS", new("GemSetup"):GemSetup(gen).ItemGemSockets(item), "CHANGED", gen:FitSockets())
+	for _, g in ipairs(build.skillsTab.socketGroupList) do
+		local names = { }
+		for _, gem in ipairs(g.gemList) do table.insert(names, gem.gemData and gem.gemData.name or "?") end
+		print("GROUP", g.slot, g.label, table.concat(names, ", "))
+	end
 elseif step == "clusters" then
 	gen:ChooseClusterJewels(tonumber(os.getenv("LARGE") or "0"))
 elseif step == "swap" then

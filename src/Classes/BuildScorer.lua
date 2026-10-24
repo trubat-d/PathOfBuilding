@@ -458,6 +458,81 @@ function BuildScorerClass:ScoreOutput(output, ratio)
 	return self:ScoreFromValues(dps, ehp, (self:GetPenalties(output)), output)
 end
 
+-- Passives whose effect PoB doesn't calculate (GeneratorRules.uncountedNodes:
+-- ignite spread from Fan the Flames...), valued for the build. Counts the
+-- allocated passives and those a calculation adds (virtual cluster notables
+-- are named "notable:<name>").
+function BuildScorerClass:UncountedBonus(output, override)
+	local rules = GetGeneratorRules()
+	local known = rules.uncountedNodes
+	if not known or not self.build.spec or self.uncounted == false then return 0 end
+	override = override or { }
+	local found = { }
+	local function consider(node)
+		local name = node and (node.dn or node.name)
+		if name then
+			name = name:gsub("^notable:", "")
+			if known[name] then found[name] = true end
+		end
+	end
+	local removed = override.removeNodes or { }
+	for _, node in pairs(self.build.spec.allocNodes) do
+		if not removed[node] then consider(node) end
+	end
+	for node in pairs(override.addNodes or { }) do consider(node) end
+	local names = { }
+	for name in pairs(found) do t_insert(names, name) end
+	if #names == 0 then return 0 end
+	table.sort(names)
+	return rules.UncountedBonus(names, self:RuleContext(output))
+end
+
+-- What the uncounted passive rules look at
+function BuildScorerClass:RuleContext(output)
+	local build = self.build
+	local env = build.calcsTab and build.calcsTab.mainEnv
+	local mainSkill = env and env.player and env.player.mainSkill
+	local skill = { }
+	for skillType, on in pairs(mainSkill and mainSkill.skillTypes or { }) do
+		for name, value in pairs(SkillType) do
+			if value == skillType and on then skill[name] = true end
+		end
+	end
+	local supports, heralds, auras = { }, 0, 0
+	for _, group in ipairs(build.skillsTab and build.skillsTab.socketGroupList or { }) do
+		if group.enabled ~= false then
+			for _, gem in ipairs(group.gemList or { }) do
+				local gd = gem.gemData
+				if gd and gem.enabled ~= false then
+					if group == build.skillsTab.socketGroupList[build.mainSocketGroup] and gd.grantedEffect.support then supports[gd.name] = true end
+					if not gd.grantedEffect.support and gd.tags then
+						if gd.tags.herald then heralds = heralds + 1 elseif gd.tags.aura then auras = auras + 1 end
+					end
+				end
+			end
+		end
+	end
+	local itemsTab = build.itemsTab
+	return {
+		output = output, focus = self.focus, skill = skill, mainSkill = mainSkill, heralds = heralds, auras = auras,
+		hasSupport = function(name) return supports[name] or false end,
+		itemHas = function(pattern)
+			for _, slot in ipairs(itemsTab and itemsTab.orderedSlots or { }) do
+				local item = itemsTab.items[slot.selItemId]
+				if item then
+					for _, list in ipairs({ item.explicitModLines or { }, item.implicitModLines or { }, item.enchantModLines or { } }) do
+						for _, modLine in ipairs(list) do
+							if modLine.line and modLine.line:match(pattern) then return true end
+						end
+					end
+				end
+			end
+			return false
+		end,
+		uses = function(charge) return build.configTab and build.configTab.input["use" .. charge .. "Charges"] or false end,
+	}
+end
+
 -- Is a flask a utility flask (not life / mana / hybrid)?
 local function isUtilityFlask(item)
 	return item.base and item.base.flask and not (item.base.flask.life or item.base.flask.mana)
@@ -606,8 +681,10 @@ function BuildScorerClass:Evaluate(calcFunc, override, opts)
 		ehp = rawEhp * opts.ratio.ehp
 	end
 	local penalty, penalties = self:GetPenalties(output)
+	local bonus = self:UncountedBonus(output, override)
 	return {
-		score = self:ScoreFromValues(dps, ehp, penalty, output),
+		score = self:ScoreFromValues(dps, ehp, penalty, output) + bonus,
+		uncounted = bonus,
 		dps = dps,
 		ehp = ehp,
 		rawDps = rawDps,
