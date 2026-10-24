@@ -55,6 +55,10 @@ the app's settings to use it offline) and `details_<skill>.json` for
   generator method and calculator runs.
 * `stage_test.lua` (`OURS=`, `STEP=flasks|uniquejewels|uniquesweep|uniqueflasks|mageblood|aurastack|metajewels|watcher|learn|fillmain|finalrares|ascendancy|supports|refine|rares`):
   one generator step on a saved build (`CRAFTS=0`: rares without bench crafts).
+  More steps: `ostentation`, `cost`, `upgrade` (upgrade order), `fitbudget` (`BUDGET=`), `bossskill` (`CONFIG=`), `fullscorecost`.
+* `upgrade_build.lua` (`BUILD=<xml or code file>`, `INVEST=`, `BUDGET=`, `FOCUS=`, `CONFIG=`, `SKILL=`, `SAVE=`):
+  the window's "Upgrade open build" on an existing build; prints the numbers before and after.
+* `penalty_census.py <eval folder>`: which scorer penalties fire on top players' builds (calibration).
 * `worker_test.lua '<job json>'`: a generation the way a background thread runs
   it (`Modules/GeneratorWorker.lua`).
 * `popup_test.lua` (`SKILL=`, `ASC=`, `INVEST=`, `WORKERS=`): the Generate

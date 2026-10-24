@@ -5102,25 +5102,138 @@ end
 -- Main
 ------------------------------------------------------------------------------
 
-function BuildGeneratorClass:Run()
+-- Upgrades the open build instead of making one: its main skill, class,
+-- tree, gear and gems are the start, and the late steps of a generation run
+-- on it within the investment level (or total budget), each change kept only
+-- when the build is better: supports, ascendancy, every affordable unique,
+-- rares made for the build, jewels, anoint, tattoos, flasks, the tree,
+-- conditions and unique combos, rebuild-and-repair rounds. Returns what Run
+-- returns, plus .before (the build's own numbers) for the comparison.
+function BuildGeneratorClass:Upgrade()
 	local opts = self.options
+	local build = self.build
 	self.lastYield = GetTime()
 	self.startClock = os.clock()
-	self.overlap = nil
 	self.costs = { }
-	self.stageCount = opts.quick and 7 or 12
+	self.stageCount = 6
 	local function stage(index, label)
-		-- big searches leave a lot of garbage: free it between stages when it
-		-- piled up (a full collection of the game data takes a second)
 		if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
-		if opts.debugTiming and self.scorer then
-			local _, r = self:FullScore()
-			ConPrintf("[stage] before %d: score %.3f dps %.0f ehp %.0f lua %.0f MB t=%.0fs", index, r.score, r.dps, r.ehp, collectgarbage("count") / 1024, os.clock() - (self.startClock or 0))
-		end
 		self.stageIndex, self.stage = index, label
 		self.subProgress, self.moveFrom, self.moveTo = 0, 0, 1
 		self:Tick()
 	end
+	self:PrepareOptions()
+	stage(1, "Reading the build")
+	-- the build's main skill, class and level
+	local skillsTab = build.skillsTab
+	local group = skillsTab.socketGroupList[build.mainSocketGroup]
+	local first
+	for _, g in ipairs(group and group.gemList or { }) do
+		if g.gemData and not g.gemData.grantedEffect.support then first = g break end
+	end
+	if not first then error("the build has no main skill to upgrade (choose one in the Skills tab)") end
+	self.mainGroup, self.mainGem = group, first.gemData
+	opts.gemId = first.gemId
+	opts.classId, opts.ascendClassId = build.spec.curClassId, build.spec.curAscendClassId
+	opts.level = build.characterLevel
+	self.className, self.ascendName = build.spec.curClassName, build.spec.curAscendClassName
+	self.bloodlineId = build.spec.curSecondaryAscendClassId
+	local sockets = new("GemSetup"):GemSetup(self):SlotSockets(group.slot or "Body Armour")
+	self.mainLinkLimit = m_max(1, m_min(5, (sockets > 0 and sockets or #group.gemList) - 1))
+	self.lockedSlots = { }
+	self:SetupScorer()
+	self.scorer.useChecklist = true
+	self:AutoConfigure()
+	local beforeScore, beforeResult = self:FullScore()
+	local beforeCost = self:BuildCost()
+	local beforeHit = self.scorer:MinMaxHit(build.calcsTab.mainOutput) or 0
+	self:Note(string.format("Upgrading %s (%s, level %d): score %.2f, %s DPS, max hit %s, about %s",
+		self.mainGem.name, self.ascendName or self.className or "?", build.characterLevel, beforeScore,
+		formatNumSep(math.floor(beforeResult.dps or 0)), formatNumSep(math.floor(beforeHit)),
+		GetPriceSource().FormatPrice(beforeCost)))
+
+	stage(2, "Supports and ascendancy")
+	self:Move(1, 2, "Supports of the main skill")
+	self:FinalSupports()
+	self:Move(2, 2, "Ascendancy")
+	self:AscendancyRecheck()
+
+	stage(3, "Uniques and rares")
+	self:Move(1, 3, "Every affordable unique")
+	if opts.uniqueSweep ~= false then self:UniqueSweep() end
+	self:Move(2, 3, "Rares made for the build")
+	if opts.finalRares ~= false then self:FinalRares() end
+	self:Move(3, 3, "Flasks")
+	if opts.uniqueSweep ~= false then self:UniqueFlaskSweep() end
+	if opts.permanentFlasks ~= false then self:PermanentFlaskMove() end
+
+	stage(4, "Jewels, anoint, tattoos, pantheon")
+	self:Move(1, 4, "Jewels")
+	if opts.jewels ~= false then self:FillEmptySockets() end
+	if opts.timeless ~= false then self:ChooseTimelessJewel() end
+	if opts.metaJewels ~= false then self:ChooseMetaJewels() end
+	self:Move(2, 4, "Anoint")
+	if opts.allowAnoints ~= false then self:ChooseAnoint() end
+	self:Move(3, 4, "Tattoos")
+	if opts.allowTattoos ~= false then self:ChooseTattoos() end
+	self:Move(4, 4, "Pantheon and bandit")
+	self:ChoosePantheonAndBandit()
+
+	stage(5, "Passive tree, conditions and combos")
+	self:Move(1, 3, "Passive tree")
+	self:OptimizeTree()
+	self:Move(2, 3, "Damage behind conditions and unique combos")
+	if opts.conditionAudit ~= false then
+		local ok, err = pcall(function() self:ConditionEnablerMove(1) end)
+		if not ok then ConPrintf("Condition audit failed: %s", tostring(err)) end
+	end
+	if opts.uniqueCombos ~= false then
+		local ok, err = pcall(function() self:UniqueCombosMove(1) end)
+		if not ok then ConPrintf("Unique combos failed: %s", tostring(err)) end
+	end
+	self:Move(3, 3, "Rebuilding parts of the build")
+	if (opts.repairRounds or 6) > 0 then self:RepairSearch(opts.repairRounds or 6) end
+
+	stage(6, "Finishing")
+	if opts.totalBudget then
+		local ok, err = pcall(function() self:FitTotalBudget() end)
+		if not ok then ConPrintf("Fitting the total budget failed: %s", tostring(err)) end
+	end
+	if opts.requirements ~= false then self:RequirementsMove() end
+	self:RemoveUnusedItems()
+	if self:FitSockets() then self:Note("Gem setups packed again to fit the items' sockets") end
+	self:SanitizeRares()
+	if opts.upgradeOrder ~= false then
+		local ok, err = pcall(function() self:UpgradeOrder() end)
+		if not ok then ConPrintf("Upgrade order failed: %s", tostring(err)) end
+	end
+	self:AutoConfigure()
+	self:Recalculate()
+	local final = self.scorer:Evaluate(self.calcFunc, { })
+	self.final = final
+	build.buildFlag = true
+	local afterCost = self:BuildCost()
+	self:Note(string.format("Upgraded: score %.2f -> %.2f, DPS %s -> %s, max hit %s -> %s, cost about %s -> %s",
+		beforeScore, final.score, formatNumSep(math.floor(beforeResult.dps or 0)), formatNumSep(math.floor(final.dps or 0)),
+		formatNumSep(math.floor(beforeHit)), formatNumSep(math.floor(self.scorer:MinMaxHit(build.calcsTab.mainOutput) or 0)),
+		GetPriceSource().FormatPrice(beforeCost), GetPriceSource().FormatPrice(afterCost)))
+	local prices = GetPriceSource()
+	return {
+		log = self.log, final = final, before = beforeResult, ideas = { },
+		configChanges = self.configChanges or { },
+		costLine = prices.loaded and string.format("Estimated cost of the upgraded build: %s (it was about %s)", prices.FormatPrice(afterCost), prices.FormatPrice(beforeCost))
+			or "Prices not loaded: uniques, anoints and tattoos were not filtered by price",
+		assumptions = {
+			"Investment level: " .. opts.investment.label,
+			"Configuration set automatically for: " .. ((opts.configScenario and opts.configScenario.label) or "Pinnacle boss") .. " (your own configuration was replaced)",
+			"Your items, gems and passives were the start; every change was kept only if it scored better",
+		},
+	}
+end
+
+-- The player's unique choices, the investment level and rare quality
+function BuildGeneratorClass:PrepareOptions()
+	local opts = self.options
 	-- the player's excluded / forced uniques (the window's "Uniques..." list)
 	do
 		local rules = GetGeneratorRules()
@@ -5135,9 +5248,11 @@ function BuildGeneratorClass:Run()
 		local finderProbe = new("BestItemFinder"):BestItemFinder(self.itemsTab)
 		opts.quality = finderProbe.rareQualityList[opts.investment.quality or 2]
 	end
+end
 
-	stage(1, "Setting up the character and configuration")
-	self:Setup()
+-- The scorer for the options (focus, budget tier, configuration, archetype lens)
+function BuildGeneratorClass:SetupScorer()
+	local opts = self.options
 	self.overlap = new("HitOverlap"):HitOverlap(self.build, opts.scenario)
 	local bossFight = not opts.configScenario or opts.configScenario.boss and true or false
 	opts.chargesPerSecond = opts.chargesPerSecond or (bossFight and 1.5 or 4)
@@ -5171,6 +5286,32 @@ function BuildGeneratorClass:Run()
 		self.scorer.focus = copyTable(self.scorer.focus, true)
 		self.scorer.focus.ehp = opts.ehpWeight
 	end
+end
+
+function BuildGeneratorClass:Run()
+	local opts = self.options
+	self.lastYield = GetTime()
+	self.startClock = os.clock()
+	self.overlap = nil
+	self.costs = { }
+	self.stageCount = opts.quick and 7 or 12
+	local function stage(index, label)
+		-- big searches leave a lot of garbage: free it between stages when it
+		-- piled up (a full collection of the game data takes a second)
+		if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
+		if opts.debugTiming and self.scorer then
+			local _, r = self:FullScore()
+			ConPrintf("[stage] before %d: score %.3f dps %.0f ehp %.0f lua %.0f MB t=%.0fs", index, r.score, r.dps, r.ehp, collectgarbage("count") / 1024, os.clock() - (self.startClock or 0))
+		end
+		self.stageIndex, self.stage = index, label
+		self.subProgress, self.moveFrom, self.moveTo = 0, 0, 1
+		self:Tick()
+	end
+	self:PrepareOptions()
+
+	stage(1, "Setting up the character and configuration")
+	self:Setup()
+	self:SetupScorer()
 	if opts.archetype then
 		self:Note("Archetype: " .. opts.archetype.label)
 	end

@@ -1340,7 +1340,71 @@ function BuildIdeasPopupClass:OpenGenerator()
 		tooltip:AddLine(14, "^7shows what carries each of them and which of their parts would improve the open build.")
 	end
 
-	controls.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {128, 164, 0, 16}, function() return state.status end)
+	-- the open build improved instead of a new one: a copy opens, upgraded
+	-- (BuildGenerator:Upgrade), with every change and its gain listed
+	controls.upgrade = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {122, 162, 120, 20}, "Upgrade open build", function()
+		local current = main.modes["BUILD"]
+		if main.mode ~= "BUILD" or not current or not current.skillsTab then
+			state.status = "^7Open the build to upgrade first (it must have a main skill)."
+			return
+		end
+		if main.uniqueDB.loading then
+			state.status = "^7The unique database is still loading, try again in a moment."
+			return
+		end
+		local options = makeOptions()
+		local xml = current:SaveDB("code")
+		local buildName = "Upgraded " .. (current.buildName or "build")
+		state.running = true
+		state.progress = 0
+		state.status = "^7Opening a copy of the build..."
+		main:SetMode("BUILD", false, buildName, xml)
+		local waited = false
+		main.onFrameFuncs["BuildGenerator"] = function()
+			if not waited then waited = true return end
+			local build = main.modes["BUILD"]
+			local generator = new("BuildGenerator"):BuildGenerator(build, options)
+			state.generator = generator
+			options.onProgress = function(stage, index, count, sub)
+				local inTry = ((index - 1) + (sub or 0)) / m_max(1, count)
+				state.progress = inTry
+				state.status = string.format("^7Upgrading, step %d of %d (%d%%): %s...", index, count, m_floor(inTry * 100), stage)
+			end
+			runInBackground("BuildGenerator", popup, function() return generator:Upgrade() end, function(result)
+				state.running = false
+				local before, final = result.before or { }, result.final
+				local lines = { string.format("^7Upgraded copy of the build: score %.2f -> %.2f, damage %s -> %s, effective hit pool %s -> %s. It is open and not saved yet: use Save As to keep it (your own build file is unchanged).",
+					before.score or 0, final.score or 0, formatNumSep(string.format("%.0f", before.dps or 0)), formatNumSep(string.format("%.0f", final.dps or 0)),
+					formatNumSep(string.format("%.0f", before.ehp or 0)), formatNumSep(string.format("%.0f", final.ehp or 0))) }
+				for _, l in ipairs(result.log) do t_insert(lines, "^7- " .. l) end
+				t_insert(lines, "^xC0C0C0" .. result.costLine)
+				for _, c in ipairs(result.configChanges or { }) do t_insert(lines, "^x66CCFFConfig: ^7" .. c) end
+				for _, p in ipairs(final.penalties or { }) do t_insert(lines, colorCodes.NEGATIVE .. "Cost: ^7" .. p.label) end
+				for _, a in ipairs(result.assumptions) do t_insert(lines, "^x66CCFFAssumes: ^7" .. a) end
+				setLog(lines)
+				state.status = "^7Upgrade finished."
+				local opened = main.modes["BUILD"]
+				if opened then
+					opened.buildFlag = true
+					opened.modFlag = true
+				end
+			end, function(err)
+				state.running = false
+				state.status = "^1Upgrade failed: " .. tostring(err)
+			end)
+		end
+	end)
+	controls.upgrade.enabled = idle
+	controls.upgrade.tooltipFunc = function(tooltip)
+		tooltip:Clear()
+		tooltip:AddLine(16, "^7Improves the build that is open instead of making a new one. Its main skill, class, tree,")
+		tooltip:AddLine(16, "^7gear and gems are the start; supports, ascendancy, uniques, rares, jewels, anoint, tattoos,")
+		tooltip:AddLine(16, "^7flasks and the tree are then improved within the Investment level (or Total div), each change")
+		tooltip:AddLine(16, "^7kept only if the build scores better for \"Aim for\" and \"Configure for\". The upgraded copy")
+		tooltip:AddLine(16, "^7opens as a new, unsaved build with every change, its gain and cost, and what to buy first.")
+		tooltip:AddLine(16, "^7The skill, ascendancy and archetype choices above are not used.")
+	end
+	controls.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {250, 164, 0, 16}, function() return state.status end)
 	-- how far the running generation / scan is
 	controls.progress = new("ProgressBarControl"):ProgressBarControl({"TOPLEFT",nil,"TOPLEFT"}, {128, 182, 776, 8}, function()
 		return state.running and state.progress or nil
