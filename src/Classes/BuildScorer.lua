@@ -60,13 +60,28 @@ end
 -- Life and energy shield recovered per second while fighting, net of
 -- self-damage over time. Leech, gain on hit and recoup only happen while
 -- hitting / being hit, which is most of a fight; recharge needs a pause.
+-- Life and energy shield recovered per second from blocking and suppressing
+-- (an enemy hit a second, half attacks and half spells: what a fight is like)
+local hitsTakenPerSecond = 1
+function BuildScorerClass:BlockRecovery(output)
+	local attackBlock = (output.EffectiveBlockChance or output.BlockChance or 0) / 100
+	local spellBlock = (output.EffectiveSpellBlockChance or output.SpellBlockChance or 0) / 100
+	local suppress = (output.EffectiveSpellSuppressionChance or output.SpellSuppressionChance or 0) / 100
+	local anyBlock = (attackBlock + spellBlock) / 2
+	local life = (output.LifeOnBlock or 0) * anyBlock + (output.LifeOnSuppress or 0) * suppress * 0.5
+	local es = (output.EnergyShieldOnBlock or 0) * anyBlock + (output.EnergyShieldOnSpellBlock or 0) * spellBlock * 0.5
+		+ (output.EnergyShieldOnSuppress or 0) * suppress * 0.5
+	return life * hitsTakenPerSecond, es * hitsTakenPerSecond
+end
+
 function BuildScorerClass:Recovery(output)
-	local life = output.ComprehensiveNetLifeRegen or output.NetLifeRegen or output.LifeRegenRecovery or 0
+	local blockLife, blockES = self:BlockRecovery(output)
+	local life = (output.ComprehensiveNetLifeRegen or output.NetLifeRegen or output.LifeRegenRecovery or 0) + blockLife
 	local es = output.ComprehensiveNetEnergyShieldRegen or output.NetEnergyShieldRegen or output.EnergyShieldRegenRecovery or 0
 	local leech = (output.LifeLeechGainRate or 0) + (output.EnergyShieldLeechGainRate or 0)
 	local onKill = ((output.LifeOnKill or 0) + (output.EnergyShieldOnKill or 0)) * self.killsPerSecond
 	local recharge = (output.EnergyShieldRecharge or 0) * 0.25
-	return life + es + leech * 0.8 + onKill + recharge
+	return life + es + blockES + leech * 0.8 + onKill + recharge
 end
 
 -- Recovery per second as a share of the life + energy shield pool. Each pool
@@ -75,11 +90,12 @@ end
 function BuildScorerClass:RecoveryRatio(output)
 	local lifePool = m_max(0, output.Life or 0)
 	local esPool = m_max(0, output.EnergyShield or 0)
+	local blockLife, blockES = self:BlockRecovery(output)
 	local lifeSide = (output.ComprehensiveNetLifeRegen or output.NetLifeRegen or output.LifeRegenRecovery or 0)
-		+ (output.LifeLeechGainRate or 0) * 0.8 + (output.LifeOnKill or 0) * self.killsPerSecond
+		+ (output.LifeLeechGainRate or 0) * 0.8 + (output.LifeOnKill or 0) * self.killsPerSecond + blockLife
 	local esSide = (output.ComprehensiveNetEnergyShieldRegen or output.NetEnergyShieldRegen or output.EnergyShieldRegenRecovery or 0)
 		+ (output.EnergyShieldLeechGainRate or 0) * 0.8 + (output.EnergyShieldOnKill or 0) * self.killsPerSecond
-		+ (output.EnergyShieldRecharge or 0) * 0.25
+		+ (output.EnergyShieldRecharge or 0) * 0.25 + blockES
 	local recovered = m_min(lifeSide, 0.5 * lifePool) + m_min(esSide, 0.5 * esPool)
 	return recovered / m_max(lifePool + esPool, 3000)
 end

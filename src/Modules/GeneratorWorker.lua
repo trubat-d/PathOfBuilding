@@ -15,8 +15,31 @@
 --        allowAnoints, allowTattoos, timeless, meta, plan (true: also run the
 --        scaling planner over every archetype) }
 --
-return function(jobJson, userPath)
+return function(jobJson, userPath, scriptBase)
 	local startClock = os.clock()
+	-- every file by absolute path (scriptBase: the scripts' folder): the
+	-- process's working directory can change while the thread runs
+	if scriptBase and scriptBase ~= "" then
+		local function abs(path)
+			if type(path) ~= "string" or path:match("^%a:[/\\]") or path:match("^[/\\]") then return path end
+			return scriptBase .. path
+		end
+		local l_dofile, l_loadfile, l_open, l_lines = dofile, loadfile, io.open, io.lines
+		dofile = function(path, ...) return l_dofile(abs(path), ...) end
+		loadfile = function(path, ...) return l_loadfile(abs(path), ...) end
+		io.open = function(path, ...) return l_open(abs(path), ...) end
+		io.lines = function(path, ...) if path == nil then return l_lines() end return l_lines(abs(path), ...) end
+		local function absPaths(list)
+			local out = { }
+			for entry in list:gmatch("[^;]+") do
+				if entry:match("^%.[/\\]") or entry:match("^%.%.[/\\]") then entry = scriptBase .. entry end
+				out[#out + 1] = entry
+			end
+			return table.concat(out, ";")
+		end
+		package.path = absPaths(package.path)
+		package.cpath = absPaths(package.cpath)
+	end
 	-- trace of the worker's start-up and steps (GeneratorWorker_<n>.log next
 	-- to the scripts), to find where a background thread fails
 	local traceName = jobJson:match('"traceName"%s*:%s*"([^"]+)"')
