@@ -1,6 +1,6 @@
 -- Test: runs one generator step on a saved generated build and prints what
 -- it did, so a step can be checked without a whole generation.
--- From the src folder: OURS=<build .xml> STEP=<flasks|uniquejewels|aurastack|metajewels> INVEST=ENDGAME luajit ../bench/stage_test.lua
+-- From the src folder: OURS=<build .xml> STEP=<flasks|uniquejewels|aurastack|metajewels|uniquesweep|uniqueflasks|fillmain|finalrares|ascendancy|rares> INVEST=ENDGAME luajit ../bench/stage_test.lua
 io.stdout:setvbuf("no")
 local benchDir = arg and arg[0] and arg[0]:match("^(.*)[/\\]") or "../bench"
 dofile("HeadlessWrapper.lua")
@@ -40,6 +40,10 @@ elseif step == "uniquejewels" then
 	print("RESULT", result and result.label, result and result.gain)
 elseif step == "aurastack" then
 	gen:AuraStackMove()
+elseif step == "uniquesweep" then
+	print("KEPT", gen:UniqueSweep())
+elseif step == "uniqueflasks" then
+	print("KEPT", gen:UniqueFlaskSweep())
 elseif step == "metajewels" then
 	gen:ChooseMetaJewels()
 elseif step == "fillmain" or step == "finalrares" then
@@ -54,7 +58,14 @@ elseif step == "rares" then
 	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
 	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
 	gen.options.weaponSeeds = tonumber(os.getenv("WEAPON_SEEDS") or "")
+	gen.options.crafts = os.getenv("CRAFTS") ~= "0"
 	gen:MakeRares(true)
+	for _, slot in ipairs(build.itemsTab.orderedSlots) do
+		local item = build.itemsTab.items[slot.selItemId]
+		if item and item.rarity == "RARE" then
+			for _, l in ipairs(item.explicitModLines) do if l.crafted then print("CRAFT", slot.slotName, l.line) end end
+		end
+	end
 end
 local after, r1 = gen:FullScore()
 print(string.format("AFTER score %.3f dps %.0f (%.0f s)", after, r1.dps, os.clock() - t0))

@@ -174,6 +174,15 @@ BuildArchetypesClass.list = {
 		applies = function(info) return info.attack and info.weaponTypes ~= nil and not info.minion end,
 	},
 	{
+		-- (what top melee players run: Pride, Brutality, impale from the tree or the Impale support)
+		id = "IMPALE", label = "Pure physical: Pride, Brutality, impale",
+		summary = "Physical damage only: Pride and Brutality (no elemental or chaos damage), impales stacking on the target.",
+		auras = { "Pride" },
+		supports = { "Brutality" },
+		excludeKeystones = { "Elemental Overload", "Avatar of Fire" },
+		applies = function(info) return info.attack and info.weaponTypes ~= nil and not info.elemental and not info.minion end,
+	},
+	{
 		id = "AURAS", label = "Aura stacking (reservation efficiency, many auras)",
 		summary = "As many auras as reservation efficiency allows: the tree and gear pay for them.",
 		maxAuras = 7,

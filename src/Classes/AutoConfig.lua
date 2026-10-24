@@ -277,6 +277,8 @@ function AutoConfigClass:Run()
 		local crit = skillValue(output, "CritChance") or 0
 		setIfUsed("conditionCritRecently", crit >= 30, string.format("%.0f%% critical strike chance", crit))
 		setIfUsed("conditionKilledRecently", not boss, boss and "not while fighting a boss" or "clearing maps")
+		local impale = math.max(skillValue(output, "ImpaleChance") or 0, skillValue(output, "ImpaleChanceOnCrit") or 0)
+		setIfUsed("conditionImpaledRecently", impale * speedOf(output) >= 100, string.format("%.0f%% impale chance", impale))
 
 		-- enemy ailments the main skill keeps up: a small chance is enough when
 		-- the skill hits often and the ailment lasts (e.g. 20% bleed chance at

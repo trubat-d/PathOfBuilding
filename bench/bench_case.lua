@@ -1,6 +1,6 @@
 -- Benchmark: generates one build headless and prints one result line (JSON).
 -- Run from the src folder:
---   luajit ../bench/bench_case.lua "<Skill>" "<Ascendancy>" <investment id> <quick|full> [archetype id]
+--   luajit ../bench/bench_case.lua "<Skill>" "<Ascendancy>" <investment id> <quick|full> [archetype id | LIST]
 -- Needs LUA_PATH="../runtime/lua/?.lua;../runtime/lua/?/init.lua;;"
 io.stdout:setvbuf("no")
 local skillName, ascName, investmentId, mode, archetypeId = arg[1], arg[2], arg[3] or "MID", arg[4] or "quick", arg[5]
@@ -25,6 +25,13 @@ for _, level in ipairs(ps.levels) do if level.id == investmentId then investment
 assert(investment, "investment level not found: " .. investmentId)
 
 local archetype
+if archetypeId == "LIST" then
+	-- the archetypes that fit the skill (run_bench.py "auto" mode scans them)
+	local ids = { }
+	for _, a in ipairs(new("BuildArchetypes"):BuildArchetypes().ForSkill(data.gems[gemId], nil)) do table.insert(ids, a.id) end
+	print("ARCHETYPES " .. table.concat(ids, ","))
+	os.exit(0)
+end
 if archetypeId then
 	for _, a in ipairs(new("BuildArchetypes"):BuildArchetypes().ForSkill(data.gems[gemId], nil)) do
 		if a.id == archetypeId then archetype = a end

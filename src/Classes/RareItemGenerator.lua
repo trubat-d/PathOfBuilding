@@ -7,7 +7,8 @@
 --   2. the item is filled one mod at a time, recalculating after each pick, so
 --      mods that stop mattering (e.g. resistance once capped) are skipped
 -- Rules followed: at most 3 prefixes and 3 suffixes, one mod per mod group,
--- no influenced, eldritch, crafted, fractured or delve mods.
+-- at most one crafting bench mod (it takes an affix slot), no fractured or
+-- delve mods; influence and eldritch mods only when asked for.
 -- Runs entirely locally using the build's own calculator.
 --
 local pairs = pairs
@@ -153,6 +154,43 @@ function RareItemGeneratorClass:GetCandidates(item, quality, levelOnly, modTable
 	return candidates
 end
 
+-- Crafting bench mods for this item (one per item, taking an affix slot like
+-- the natural ones): the best tier the character's level allows per mod group.
+-- Bench "meta" crafts (prefixes cannot be changed...) are left out.
+local craftCache = { }
+function RareItemGeneratorClass:GetCraftCandidates(item, quality)
+	local class = item.type
+	local charLevel = self.build.characterLevel
+	local key = tostring(class) .. "|" .. charLevel .. "|" .. tostring(quality.range)
+	if craftCache[key] then return craftCache[key] end
+	local best, indexOf = { }, { }
+	for index, mod in ipairs(data.masterMods or { }) do
+		if (mod.type == "Prefix" or mod.type == "Suffix") and mod.types and mod.types[class] and (mod.level or 1) <= charLevel and mod[1] then
+			local usable = true
+			for _, line in ipairs(mod) do
+				local modList, extra = modLib.parseMod((itemLib.applyRange(line, quality.range, 1, 1)))
+				if not modList or extra then usable = false break end
+			end
+			if usable then
+				local k = (mod.group or "") .. "|" .. table.concat(mod.statOrder or { }, ",")
+				if not best[k] or (mod.level or 0) > (best[k].level or 0) then best[k] = mod; indexOf[mod] = index end
+			end
+		end
+	end
+	local list = { }
+	for _, mod in pairs(best) do
+		local lines = { }
+		for _, line in ipairs(mod) do t_insert(lines, (itemLib.applyRange(line, quality.range, 1, 1))) end
+		t_insert(list, {
+			modId = "craft" .. indexOf[mod], mod = mod, group = mod.group or ("craft" .. indexOf[mod]), type = mod.type,
+			crafted = true, lines = lines, label = table.concat(lines, ", ") .. " (crafted)",
+		})
+	end
+	t_sort(list, function(a, b) return a.modId < b.modId end)
+	craftCache[key] = list
+	return list
+end
+
 -- Total amount by which the build's resistances / attributes are worse than the baseline
 local function deficit(output, baseOutput, opts)
 	local total = 0
@@ -193,6 +231,9 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 	-- jewels roll from their own mod pool (2 prefixes + 2 suffixes on rares)
 	local modTable = current.type == "Jewel" and data.itemMods.Jewel or nil
 	local candidates = self:GetCandidates(subject, quality, opts.levelOnly, modTable)
+	if current.type ~= "Jewel" and opts.crafts ~= false then
+		for _, craft in ipairs(self:GetCraftCandidates(subject, quality)) do t_insert(candidates, craft) end
+	end
 
 	-- Adds the parsed lines of a candidate to the test subject
 	local function push(candidate)
@@ -290,7 +331,7 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 	local function fill(seed)
 		local chosen = { }
 		local usedGroups = { }
-		local counts = { Prefix = 0, Suffix = 0 }
+		local counts = { Prefix = 0, Suffix = 0, crafted = 0 }
 		local limits = { Prefix = prefixLimit, Suffix = suffixLimit }
 		local currentPower = blankPower
 		local currentDeficit = blankDeficit
@@ -299,13 +340,14 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			t_insert(chosen, seed)
 			usedGroups[seed.group] = true
 			counts[seed.type] = counts[seed.type] + 1
+			if seed.crafted then counts.crafted = counts.crafted + 1 end
 			local output, power = evaluate()
 			currentPower, currentDeficit = power, deficit(output, ctx.baseOutput, opts)
 		end
 		while counts.Prefix + counts.Suffix < prefixLimit + suffixLimit do
 			local best, bestPower, bestDeficit
 			for _, candidate in ipairs(shortlist) do
-				if not usedGroups[candidate.group] and counts[candidate.type] < limits[candidate.type] then
+				if not usedGroups[candidate.group] and counts[candidate.type] < limits[candidate.type] and not (candidate.crafted and counts.crafted > 0) then
 					push(candidate)
 					local output, power = evaluate()
 					pop(candidate)
@@ -331,6 +373,7 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			t_insert(chosen, best)
 			usedGroups[best.group] = true
 			counts[best.type] = counts[best.type] + 1
+			if best.crafted then counts.crafted = counts.crafted + 1 end
 			currentPower, currentDeficit = bestPower, bestDeficit
 		end
 		-- take the mods off again: the caller builds the real item
@@ -369,7 +412,14 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 	local p, s = 1, 1
 	for _, candidate in ipairs(chosen) do
 		local entry = { modId = candidate.modId, range = quality.range }
-		if candidate.type == "Prefix" then
+		if candidate.crafted then
+			-- (kept by Craft, which only rebuilds the natural affixes)
+			for _, line in ipairs(candidate.lines) do
+				local modLine = { line = line, crafted = true, modTags = candidate.mod.modTags or { } }
+				modLine[candidate.type == "Prefix" and "prefix" or "suffix"] = true
+				t_insert(item.explicitModLines, modLine)
+			end
+		elseif candidate.type == "Prefix" then
 			item.prefixes[p] = entry
 			p = p + 1
 		else

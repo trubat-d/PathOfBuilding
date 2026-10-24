@@ -1338,7 +1338,7 @@ function BuildGeneratorClass:MakeRares(withInfluences)
 		influences = withInfluences and investment and investment.influences or 0,
 		elevated = withInfluences and investment and investment.elevated or false,
 		eldritchTier = withInfluences and investment and investment.eldritchTier or 0,
-		weaponSeeds = self.options.weaponSeeds,
+		weaponSeeds = self.options.weaponSeeds, crafts = self.options.crafts,
 		yieldEvery = nil,
 	}
 	local function withSlots(slots)
@@ -1454,45 +1454,46 @@ function BuildGeneratorClass:MakeFlasks()
 end
 
 -- Rares made again at the end, once the tree, jewels, flasks and gems are
--- final (they were made for the build as it was then): plain rares only
--- (influenced ones keep their influence choice); kept if the build is better
+-- final (they were made for the build as it was then): every rare slot,
+-- influences and eldritch implicits included (the weapon bases and the
+-- uniques stay); kept if the build is better
 function BuildGeneratorClass:FinalRares()
-	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
-	local scorer = self.scorer
-	local locked = self.lockedSlots or { }
-	local slots = { }
-	local saved = { }
+	local saved, uniqueSlots = { }, { }
+	local any = false
 	for _, slot in ipairs(self.itemsTab.orderedSlots) do
 		local item = self.itemsTab.items[slot.selItemId]
-		if item and item.rarity == "RARE" and not locked[slot.slotName] and not slot.nodeId and not item.base.flask and item.type ~= "Jewel" then
-			local influenced = false
-			for _, info in ipairs(finder.rareGenerator.influenceList) do
-				if item[info.key] then influenced = true end
-			end
-			if not influenced then
-				t_insert(slots, slot.slotName)
-				saved[slot.slotName] = slot.selItemId
+		if item and not slot.nodeId and not item.base.flask and item.type ~= "Jewel" then
+			saved[slot.slotName] = slot.selItemId
+			if item.rarity == "RARE" and not (self.lockedSlots and self.lockedSlots[slot.slotName]) then
+				any = true
+			else
+				uniqueSlots[slot.slotName] = true
 			end
 		end
 	end
-	if #slots == 0 then return 0 end
+	if not any then return 0 end
 	self:Recalculate()
 	local before = self:FullScore()
-	local ratio = self.ratio
-	local options = {
-		quality = self.options.quality, levelOnly = true,
-		keepResists = false, keepAttributes = false, keepLife = false,
-		scoreFunc = function(output) return scorer:ScoreOutput(output, ratio) end,
-		influences = 0, elevated = false, eldritchTier = (self.options.investment or { }).eldritchTier or 0,
-		weaponSeeds = self.options.weaponSeeds, slots = slots,
-	}
-	local count = finder:EquipAll(finder:RunRares(options))
+	local savedLocked, savedFinalists = self.lockedSlots, self.weaponFinalists
+	local savedLog = #self.log
+	local locked = { }
+	for k, v in pairs(savedLocked or { }) do locked[k] = v end
+	for k in pairs(uniqueSlots) do locked[k] = true end
+	self.lockedSlots, self.weaponFinalists = locked, nil
+	local ok, err = pcall(function() self:MakeRares(true) end)
+	self.lockedSlots, self.weaponFinalists = savedLocked, savedFinalists
+	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
 	self:Recalculate()
-	local after = self:FullScore()
-	if count > 0 and after > before + 0.005 then
+	local after = ok and self:FullScore() or before
+	if ok and after > before + 0.005 then
+		local count = 0
+		for slotName, id in pairs(saved) do
+			if self.itemsTab.slots[slotName].selItemId ~= id then count = count + 1 end
+		end
 		self:Note(string.format("Rares made again for the finished build: %d item%s improved, score %+.3f", count, count == 1 and "" or "s", after - before))
 		return after - before
 	end
+	if not ok then ConPrintf("Final rares failed: %s", tostring(err)) end
 	for slotName, id in pairs(saved) do self.itemsTab.slots[slotName]:SetSelItemId(id) end
 	self.itemsTab:PopulateSlots()
 	self:Recalculate()
@@ -2220,6 +2221,174 @@ function BuildGeneratorClass:ChooseMetaUniques()
 	end
 end
 
+-- Every affordable unique in every gear slot, without poe.ninja: the game's
+-- whole unique list is screened with the quick score (one calculation each),
+-- the best few are equipped for real and kept when the full score agrees.
+-- Finds what top players find on their own (Kaom's Heart for Righteous Fire,
+-- Mageblood when it is affordable...). Items without sockets are skipped in
+-- slots that hold a gem setup.
+function BuildGeneratorClass:UniqueSweep(maxTries)
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local filter = { obtainableOnly = true, levelOnly = true, investment = self.options.investment }
+	local groupSlots = { }
+	for _, group in ipairs(self.build.skillsTab.socketGroupList) do
+		if group.slot and group.enabled ~= false and #group.gemList > 0 then groupSlots[group.slot] = true end
+	end
+	local function noSockets(item)
+		for _, modLine in ipairs(item.explicitModLines or { }) do
+			if modLine.line == "Has no Sockets" then return true end
+		end
+		return false
+	end
+	-- (a two handed weapon would also empty the off hand: left to the weapon stages)
+	local function changesHands(item, slotName)
+		if not slotName:match("^Weapon 1") then return false end
+		local info = item.base and data.weaponTypeInfo[item.base.type]
+		local offSlot = self.itemsTab.slots[slotName:gsub("Weapon 1", "Weapon 2")]
+		local offItem = offSlot and self.itemsTab.items[offSlot.selItemId]
+		return info and not info.oneHand and offItem and offItem.base.type ~= "Quiver"
+	end
+	local candidates = { }
+	for _, item in pairs(main.uniqueDB.list) do
+		if item.type ~= "Jewel" and item.type ~= "Flask" and item.type ~= "Tincture" and finder:IsItemAllowed(item, filter) then
+			t_insert(candidates, item)
+		end
+	end
+	t_sort(candidates, function(a, b) return (a.title or a.name) < (b.title or b.name) end)
+	self:Recalculate()
+	local current = self:Score()
+	local gains = { }
+	for _, slotName in ipairs(finder:GetActiveSlots()) do
+		local slot = self.itemsTab.slots[slotName]
+		local equipped = slot and self.itemsTab.items[slot.selItemId]
+		if slot and not (self.lockedSlots and self.lockedSlots[slotName]) then
+			for _, item in ipairs(candidates) do
+				if self.itemsTab:IsItemValidForSlot(item, slotName) and not (equipped and equipped.title == item.title)
+					and not (groupSlots[slotName] and noSockets(item)) and not changesHands(item, slotName) then
+					local score = self:Score({ repSlotName = slotName, repItem = item })
+					if score > current + 0.01 then
+						t_insert(gains, { item = item, slot = slotName, gain = score - current })
+					end
+				end
+			end
+		end
+	end
+	t_sort(gains, function(a, b) return a.gain > b.gain end)
+	if self.options.debugTiming then
+		ConPrintf("[uniques] %d candidates, %d gains", #candidates, #gains)
+		for i = 1, m_min(10, #gains) do ConPrintf("  %.3f %s in %s", gains[i].gain, gains[i].item.title or gains[i].item.name, gains[i].slot) end
+	end
+	local kept, usedSlots, usedItems = { }, { }, { }
+	local tries = 0
+	for _, entry in ipairs(gains) do
+		if tries >= (maxTries or 6) then break end
+		local title = entry.item.title or entry.item.name
+		if not usedSlots[entry.slot] and not usedItems[title] then
+			tries = tries + 1
+			self:Recalculate()
+			local before = self:FullScore()
+			local slot = self.itemsTab.slots[entry.slot]
+			local previous = slot.selItemId
+			local newItem = finder:Equip(entry.item, entry.slot, true)
+			self.itemsTab:PopulateSlots()
+			self:Recalculate()
+			local after = self:FullScore()
+			if after > before + 0.005 then
+				usedSlots[entry.slot] = true
+				usedItems[title] = true
+				if entry.slot:match("^Weapon") then self.weaponFinalists = nil end
+				local price = GetPriceSource():UniquePrice(entry.item)
+				t_insert(kept, string.format("%s in %s (+%.2f; %s)", title, entry.slot, after - before, GetPriceSource().FormatPrice(price)))
+				self.costs = self.costs or { }
+				t_insert(self.costs, price or false)
+			else
+				slot:SetSelItemId(previous)
+				self.itemsTab:DeleteItem(newItem, true)
+				self.itemsTab:PopulateSlots()
+				self:Recalculate()
+			end
+		end
+	end
+	if #kept > 0 then
+		self:Note("Uniques found by trying every affordable unique: " .. table.concat(kept, ", "))
+	end
+	return #kept
+end
+
+-- Unique flasks (Dying Sun, Bottled Faith, Cinderswallow Urn...) against the
+-- generated magic ones: each affordable unique flask in each flask slot,
+-- screened with the quick score, the best few checked with flask uptimes
+function BuildGeneratorClass:UniqueFlaskSweep(maxTries)
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local filter = { obtainableOnly = true, levelOnly = true, investment = self.options.investment }
+	local candidates = { }
+	for _, item in pairs(main.uniqueDB.list) do
+		if item.type == "Flask" and item.base and item.base.flask and finder:IsItemAllowed(item, filter) then
+			t_insert(candidates, item)
+		end
+	end
+	t_sort(candidates, function(a, b) return (a.title or a.name) < (b.title or b.name) end)
+	self:Recalculate()
+	local current = self:Score()
+	local gains = { }
+	local active = { }
+	for i = 1, 5 do active["Flask " .. i] = true end
+	for i = 1, 5 do
+		local slotName = "Flask " .. i
+		local slot = self.itemsTab.slots[slotName]
+		if slot then
+			local equipped = self.itemsTab.items[slot.selItemId]
+			for _, item in ipairs(candidates) do
+				if self.itemsTab:IsItemValidForSlot(item, slotName) and not (equipped and equipped.title == item.title) then
+					local score = self:Score({ repSlotName = slotName, repItem = item, activeFlaskSlots = active })
+					if score > current + 0.005 then
+						t_insert(gains, { item = item, slot = slotName, gain = score - current })
+					end
+				end
+			end
+		end
+	end
+	t_sort(gains, function(a, b) return a.gain > b.gain end)
+	local kept, usedSlots, usedItems = { }, { }, { }
+	local tries = 0
+	for _, entry in ipairs(gains) do
+		if tries >= (maxTries or 5) then break end
+		local title = entry.item.title or entry.item.name
+		if not usedSlots[entry.slot] and not usedItems[title] then
+			tries = tries + 1
+			self:Recalculate()
+			local before = self:FullScore()
+			local slot = self.itemsTab.slots[entry.slot]
+			local previous, wasActive = slot.selItemId, slot.active
+			local newItem = finder:Equip(entry.item, entry.slot, true)
+			slot.active = true
+			if self.itemsTab.activeItemSet[entry.slot] then self.itemsTab.activeItemSet[entry.slot].active = true end
+			self.itemsTab:PopulateSlots()
+			self:Recalculate()
+			local after = self:FullScore()
+			if after > before + 0.005 then
+				usedSlots[entry.slot] = true
+				usedItems[title] = true
+				local price = GetPriceSource():UniquePrice(entry.item)
+				t_insert(kept, string.format("%s in %s (+%.2f; %s)", title, entry.slot, after - before, GetPriceSource().FormatPrice(price)))
+				self.costs = self.costs or { }
+				t_insert(self.costs, price or false)
+			else
+				slot:SetSelItemId(previous)
+				slot.active = wasActive
+				if self.itemsTab.activeItemSet[entry.slot] then self.itemsTab.activeItemSet[entry.slot].active = wasActive end
+				self.itemsTab:DeleteItem(newItem, true)
+				self.itemsTab:PopulateSlots()
+				self:Recalculate()
+			end
+		end
+	end
+	if #kept > 0 then
+		self:Note("Unique flasks: " .. table.concat(kept, ", "))
+	end
+	return #kept
+end
+
 -- Best anoint for the amulet within the investment level
 function BuildGeneratorClass:ChooseAnoint()
 	local extras = new("TreeExtras"):TreeExtras(self.build)
@@ -2444,6 +2613,10 @@ function BuildGeneratorClass:Run()
 	self:FullScore()
 	self:ChooseUtilityGems()
 	self:ChooseMetaUniques()
+	if opts.uniqueSweep ~= false then
+		self.stage = "Trying every affordable unique"
+		self:UniqueSweep()
+	end
 	self:ChooseArchetypeJewels()
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'ChooseMetaUniques', r.score, r.dps, r.ehp) end
 	if opts.jewels ~= false then self:AddJewels(opts.maxJewels or 4) end
@@ -2468,6 +2641,7 @@ function BuildGeneratorClass:Run()
 	self.scorer.useChecklist = true
 	self:FullScore()
 	self:MakeFlasks()
+	if opts.uniqueSweep ~= false then self:UniqueFlaskSweep() end
 	self:ChoosePantheonAndBandit()
 	if opts.auraStacking ~= false then
 		self.stage = "Trying aura stacking"

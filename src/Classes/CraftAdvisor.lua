@@ -100,6 +100,16 @@ function CraftAdvisorClass:Describe(item)
 			end
 		end
 	end
+	-- the bench craft the generator chose (crafted lines on the item)
+	local craftedLines = { }
+	for _, modLine in ipairs(item.explicitModLines or { }) do
+		if modLine.crafted then t_insert(craftedLines, modLine.line) end
+	end
+	if #craftedLines > 0 then
+		-- (then a natural bench-craftable mod is rolled, not crafted)
+		for _, text in ipairs(result.bench) do t_insert(result.random, text) end
+		result.bench = { table.concat(craftedLines, ", ") }
+	end
 	local parts = { }
 	if #result.essence > 0 then t_insert(parts, "essence: " .. table.concat(result.essence, ", ")) end
 	if #result.influenced > 0 then t_insert(parts, "influence mods: " .. table.concat(result.influenced, ", ")) end

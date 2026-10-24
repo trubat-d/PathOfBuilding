@@ -11,7 +11,10 @@ python3 bench/compare.py bench/results/<label>.jsonl bench/results/<other>.jsonl
 ```
 
 Needs `luajit` and Python 3; run from the repository root. Each line of the
-cases files is `skill | ascendancy | investment | quick or full | archetype`.
+cases files is `skill | ascendancy | investment | quick, full or auto | archetype`.
+`auto` does what the app's automatic mode does: a quick build of every
+archetype that fits the skill, then full builds of the best `--auto-top` (2)
+ones; the best full build is marked `"auto": true`.
 Results (`bench/results/*.jsonl`, not committed) hold score, DPS, lowest max
 hit, EHP, sustain, penalties, keystones, supports and the generator log.
 
@@ -30,15 +33,16 @@ OURS=<generated .xml> CODE=<file> luajit ../bench/transplant.lua  # each part of
 Run them from the `src` folder (with `LUA_PATH` as for the benchmark). Benchmark
 runs save each generated build as `results/<label>/<case>.xml` for this.
 `FOCUS=` and `TIER=uber|pinnacle` choose the scorer settings (default
-`DPS_FLOOR`, `uber`). `cases_pro.txt` / `cases_pro_arch.txt` hold endgame
-cases for skills with saved top-player builds.
+`DPS_FLOOR`, `uber`). `cases_pro*.txt` hold endgame (and mirror tier) cases
+for skills with saved top-player builds; `cases_pro_arch2.txt` uses the
+archetypes the players use (impale, Hatred, crit).
 
 ## Other tools
 
 * `profile_gen.lua "<Skill>" "<Ascendancy>" <investment> <quick|full>`: time per
   generator method and calculator runs.
-* `stage_test.lua` (`OURS=`, `STEP=flasks|uniquejewels|aurastack|metajewels`):
-  one generator step on a saved build.
+* `stage_test.lua` (`OURS=`, `STEP=flasks|uniquejewels|uniquesweep|aurastack|metajewels|fillmain|finalrares|ascendancy|rares`):
+  one generator step on a saved build (`CRAFTS=0`: rares without bench crafts).
 * `worker_test.lua '<job json>'`: a generation the way a background thread runs
   it (`Modules/GeneratorWorker.lua`).
 * `popup_test.lua` (`SKILL=`, `ASC=`, `INVEST=`, `WORKERS=`): the Generate

@@ -1,0 +1,5 @@
+# top-player comparisons with the archetypes the players use (endgame, full builds)
+Tornado Shot | Deadeye | ENDGAME | full | PHYS_ELE
+Cyclone | Slayer | ENDGAME | full | IMPALE
+Boneshatter | Juggernaut | ENDGAME | full | IMPALE
+Tornado Shot | Deadeye | ENDGAME | full | CRIT
