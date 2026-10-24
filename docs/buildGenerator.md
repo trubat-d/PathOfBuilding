@@ -22,6 +22,9 @@ The score is logarithmic in damage and in the max hit, so doubling the damage is
 - **Alternatives**: the automatic mode keeps every idea's full build; those within 1 point of the best are listed and can be opened.
 - **Explanation**: each build says what it is built around and what carries it (each part taken out alone: the damage and max hit it would lose).
 
+#### The main skill as used in a fight
+PoB shows one skill part at a time and leaves counts like Toxic Rain's overlapping pods at 1. [`SkillProfiles`](../src/Classes/SkillProfiles.lua) sets what a player realistically gets on a pinnacle boss (and while mapping), for about 30 of the most played skills: the part shown (Tornado Shot's combined projectiles, Ball Lightning's bolts in range, Explosive Arrow's sustainable fuses...), the best element (Elemental Hit), counts (3 Toxic Rain pods or Storm Rain beams overlapping, Perforate spikes, Shrapnel Ballista projectiles), parts that add up on one target (Earthquake's impact and aftershock, Kinetic Blast's projectile and 2 explosions, Glacial Cascade's bursts, a third of Spark's possible hits), stacks kept up (Blade Vortex blades), conditions (Cyclone channelled). The assumption is noted in the log ("Main skill as used in a fight"). Boneshatter's trauma is PoB's own sustainable trauma.
+
 #### Archetypes
 An archetype ([`BuildArchetypes`](../src/Classes/BuildArchetypes.lua)) is what the generator commits to before optimising everything else around it: keystones (crit, Elemental Overload, Resolute Technique, Chaos Inoculation, Avatar of Fire...), auras and supports (Pride + Brutality for impale, Hatred for physical weapons), uniques that scale with a stat (mana, intelligence, strength, dexterity, life) and playstyles (mines, traps, totems). The scan builds a quick version of every archetype that fits the skill; the automatic mode then builds the best three fully and keeps the best one.
 

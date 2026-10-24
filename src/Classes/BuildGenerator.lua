@@ -194,53 +194,32 @@ function BuildGeneratorClass:Score(override)
 	return r.score, r
 end
 
--- Skills whose part is a number of stacks the build must keep up (Blade
--- Vortex blades): the part follows what the build sustains, so supports and
--- passives that keep more blades up (cast speed, duration, Unleash...) count
-local stackParts = {
-	{ pattern = "^Blade Vortex", counts = { 0, 5, 10 }, sustain = function(output)
-		-- one blade per cast, each lasting the skill duration
-		return (output.Speed or 0) * (output.Duration or 4)
-	end },
-}
+-- How the main skill is used in a fight (Classes/SkillProfiles): the skill
+-- part, stages and counts a player realistically gets on a boss (Blade
+-- Vortex blades kept up, Toxic Rain pods overlapping, Tornado Shot's
+-- projectiles...). Returns true if the build changed (it needs recalculating).
 function BuildGeneratorClass:AdjustSkillPart()
-	local gem = self.mainGem
-	local first = self.mainGroup and self.mainGroup.gemList[1]
-	if not gem or not first then return false end
-	for _, rule in ipairs(stackParts) do
-		if gem.name:match(rule.pattern) then
-			local output = self.build.calcsTab.mainOutput or { }
-			local sustained = rule.sustain(output)
-			local part = 1
-			for i, count in ipairs(rule.counts) do
-				if sustained >= count then part = i end
-			end
-			if first.skillPart ~= part then
-				first.skillPart, first.skillPartCalcs = part, part
-				self.build.skillsTab:ProcessSocketGroup(self.mainGroup)
-				self.sustainedStacks = sustained
-				return true
-			end
-			return false
-		end
-	end
-	return false
+	if self.options.skillProfiles == false then return false end
+	self.skillProfiles = self.skillProfiles or new("SkillProfiles"):SkillProfiles()
+	return self.skillProfiles.Apply(self)
 end
 
--- Skills whose damage on one target adds several of their parts: PoB shows
--- one part at a time (Kinetic Blast: the projectile, or one explosion)
-local combinedParts = {
-	["Kinetic Blast"] = { { part = 1, weight = 1 }, { part = 2, weight = 2 }, note = "the projectile and 2 of its 3 explosions hitting a boss" },
-}
-
--- Hit damage of the combined parts relative to the part shown, kept on the
--- scorer (it adds that much more of the shown part's hit DPS)
+-- Skills whose damage on one target adds several of their parts (PoB shows
+-- one part at a time: Kinetic Blast's projectile, or one explosion): their
+-- hit damage relative to the part shown, kept on the scorer (it adds that
+-- much more of the shown part's hit DPS)
 function BuildGeneratorClass:UpdateCombinedParts()
+	if not self.scorer then return end
+	self.skillProfiles = self.skillProfiles or new("SkillProfiles"):SkillProfiles()
 	local gem = self.mainGem
-	local rule = gem and combinedParts[gem.name]
-	if not rule or not self.scorer then return end
 	local first = self.mainGroup and self.mainGroup.gemList[1]
-	if not first then return end
+	local configScenario = self.options.configScenario
+	local ctx = { output = self.build.calcsTab.mainOutput or { }, boss = not configScenario or configScenario.id == "BOSS", gen = self }
+	local rule = gem and first and self.options.skillProfiles ~= false and self.skillProfiles.Combine(gem, ctx)
+	if not rule then
+		self.scorer.hitScale = nil
+		return
+	end
 	local current = first.skillPartCalcs or first.skillPart or 1
 	local total, shown = 0, nil
 	for _, entry in ipairs(rule) do
@@ -254,10 +233,6 @@ function BuildGeneratorClass:UpdateCombinedParts()
 	first.skillPart, first.skillPartCalcs = current, current
 	self.build.skillsTab:ProcessSocketGroup(self.mainGroup)
 	self.scorer.hitScale = shown and shown > 0 and total / shown or nil
-	if not self.combinedNoted then
-		self.combinedNoted = true
-		self:Note(string.format("%s damage counts %s", gem.name, rule.note))
-	end
 end
 
 function BuildGeneratorClass:FullScore()
@@ -3975,6 +3950,7 @@ function BuildGeneratorClass:Run()
 		end
 		self:AutoConfigure()
 		self:Recalculate()
+		if self.skillProfileNote then self:Note("Main skill as used in a fight: " .. self.skillProfileNote) end
 		-- (the archetype's stat lens left out: archetypes compared as they are)
 		self.scorer.lens = nil
 		local final = self.scorer:Evaluate(self.calcFunc, { })
@@ -4135,6 +4111,7 @@ function BuildGeneratorClass:Run()
 	if self:FitSockets() then self:Note("Gem setups packed again to fit the items' sockets") end
 	self:AutoConfigure()
 	self:Recalculate()
+	if self.skillProfileNote then self:Note("Main skill as used in a fight: " .. self.skillProfileNote) end
 	-- (the archetype's stat lens left out: archetypes compared as they are)
 	self.scorer.lens = nil
 	local final = self.scorer:Evaluate(self.calcFunc, { })
