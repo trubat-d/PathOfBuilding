@@ -84,7 +84,7 @@ def main():
     ap.add_argument("--jobs", type=int, default=2)
     ap.add_argument("--only", default="")
     ap.add_argument("--src", default="", help="run another copy of the src folder (e.g. a snapshot)")
-    ap.add_argument("--auto-top", type=int, default=2, help="auto mode: full builds of the best N archetypes")
+    ap.add_argument("--auto-top", type=int, default=3, help="auto mode: full builds of the best N archetypes (the app builds 3)")
     args = ap.parse_args()
     global src
     if args.src:

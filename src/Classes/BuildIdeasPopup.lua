@@ -819,9 +819,12 @@ function BuildIdeasPopupClass:OpenGenerator()
 	state.parallelFull = function()
 		local pgStatic = new("ParallelGenerator"):ParallelGenerator()
 		if not pgStatic.Available() then return false end
+		-- (at least the best three: a quick build ranks archetypes by how they
+		-- start, and the one that ends best is often second or third)
 		local candidates = { }
+		local wanted = math.max(3, pgStatic.MaxWorkers())
 		for _, entry in ipairs(controls.archetype.list) do
-			if entry.archetype and entry.scan and entry.scan.built and not entry.scan.error and #candidates < pgStatic.MaxWorkers() then
+			if entry.archetype and entry.scan and entry.scan.built and not entry.scan.error and #candidates < wanted then
 				t_insert(candidates, entry.archetype)
 			end
 		end

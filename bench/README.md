@@ -13,7 +13,7 @@ python3 bench/compare.py bench/results/<label>.jsonl bench/results/<other>.jsonl
 Needs `luajit` and Python 3; run from the repository root. Each line of the
 cases files is `skill | ascendancy | investment | quick, full or auto | archetype`.
 `auto` does what the app's automatic mode does: a quick build of every
-archetype that fits the skill, then full builds of the best `--auto-top` (2)
+archetype that fits the skill, then full builds of the best `--auto-top` (3)
 ones; the best full build is marked `"auto": true`.
 Results (`bench/results/*.jsonl`, not committed) hold score, DPS, lowest max
 hit, EHP, sustain, penalties, keystones, supports and the generator log.

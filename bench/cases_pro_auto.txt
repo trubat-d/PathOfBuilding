@@ -1,4 +1,4 @@
-# top-player comparisons the way the app works: every archetype scanned, the best two built fully (endgame)
+# top-player comparisons the way the app works: every archetype scanned, the best three built fully (endgame)
 Boneshatter | Juggernaut | ENDGAME | auto
 Tornado Shot | Deadeye | ENDGAME | auto
 Ball Lightning | Hierophant | ENDGAME | auto

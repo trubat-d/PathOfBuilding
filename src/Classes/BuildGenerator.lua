@@ -1830,7 +1830,7 @@ end
 
 -- The unique jewels most poe.ninja builds use: a Forbidden Flame / Flesh pair
 -- (from Budget) and a Watcher's Eye for the build's auras (from Mid)
-function BuildGeneratorClass:ChooseMetaJewels()
+function BuildGeneratorClass:ChooseMetaJewels(onlyKinds)
 	local investment = self.options.investment or { }
 	if investment.timeless == false then return end
 	local finder = new("MetaJewelFinder"):MetaJewelFinder({
@@ -1850,6 +1850,13 @@ function BuildGeneratorClass:ChooseMetaJewels()
 	-- any other unique jewel within the budget (radius jewels, conditional ones...)
 	t_insert(kinds, "unique")
 	t_insert(kinds, "unique")
+	if onlyKinds then
+		local wanted = { }
+		for _, k in ipairs(onlyKinds) do wanted[k] = true end
+		for i = #kinds, 1, -1 do
+			if not wanted[kinds[i]] then t_remove(kinds, i) end
+		end
+	end
 	local function allowed(title)
 		local price = prices.uniques[title]
 		if price then return not investment.maxUnique or price <= investment.maxUnique end
@@ -2729,6 +2736,15 @@ function BuildGeneratorClass:Run()
 		-- archetype scan: a first version of the build, enough to compare archetypes
 		-- (aura stacking needs its tree move to show what it's worth)
 		if opts.archetype and opts.archetype.maxAuras then self:AuraStackMove() end
+		-- the cheap late steps that change which archetype comes out best (a
+		-- Watcher's Eye for the archetype's auras, a build-defining unique,
+		-- supports for the gear): without them the scan ranks archetypes by
+		-- their start, not by where they end
+		if opts.scanExtras ~= false then
+			if opts.uniqueSweep ~= false then self:UniqueSweep(3) end
+			if opts.metaJewels ~= false then self:ChooseMetaJewels({ "watcher" }) end
+			self:FinalSupports()
+		end
 		self:AutoConfigure()
 		self:Recalculate()
 		local final = self.scorer:Evaluate(self.calcFunc, { })
