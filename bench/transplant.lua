@@ -81,8 +81,11 @@ for _, entry in ipairs(new("BuildScorer"):BuildScorer(build).focusList) do
 end
 local scorer = new("BuildScorer"):BuildScorer(build, { focus = focus, hitFloor = focus.hitFloor, chargesPerSecond = 1.5, bossTier = os.getenv("TIER") or "uber" })
 scorer.useChecklist = true
+local fair = dofile(benchDir .. "/fair.lua")
+local fairGen = not os.getenv("RAW_PART") and fair.Setup(build, scorer) or nil
 local function measure(override, reconfigure)
 	if reconfigure then ac:Run() else ac:Recalculate() end
+	fair.Refresh(fairGen)
 	local r = scorer:Evaluate(build.calcsTab:GetMiscCalculator(), override or { })
 	return { score = r.score, dps = r.dps, minHit = scorer:MinMaxHit(r.output) }
 end

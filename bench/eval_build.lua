@@ -46,7 +46,13 @@ end
 local scorer = new("BuildScorer"):BuildScorer(build, { focus = focus, hitFloor = focus.hitFloor, chargesPerSecond = 1.5, bossTier = os.getenv("TIER") or "uber" })
 scorer.useChecklist = true
 
+local fair = dofile(benchDir .. "/fair.lua")
+local fairGen
 local function evaluate(label)
+	-- (the generator's skill profile: RAW_PART=1 keeps the part the build was saved with)
+	if not os.getenv("RAW_PART") then
+		if fairGen then fair.Refresh(fairGen, true) else fairGen = fair.Setup(build, scorer) end
+	end
 	local calcFunc = build.calcsTab:GetMiscCalculator()
 	local r = scorer:Evaluate(calcFunc, { })
 	local o = r.output

@@ -267,6 +267,25 @@ function TimelessJewelFinderClass.MakeItem(jewelType, seed, conqueror, extraLine
 	return item
 end
 
+-- Allocated passives that only give attributes (+30 to Strength...)
+function TimelessJewelFinderClass:AttributeOnlyPassives()
+	local count = 0
+	for _, node in pairs(self.spec.allocNodes) do
+		if node.type == "Normal" and not node.ascendancyName and node.sd and #node.sd > 0 then
+			local only = true
+			for _, line in ipairs(node.sd) do
+				if not (line:match("^%+%d+ to Strength$") or line:match("^%+%d+ to Dexterity$") or line:match("^%+%d+ to Intelligence$")
+					or line:match("^%+%d+ to all Attributes$") or line:match("^%+%d+ to Strength and %a+$") or line:match("^%+%d+ to Dexterity and Intelligence$")) then
+					only = false
+					break
+				end
+			end
+			if only then count = count + 1 end
+		end
+	end
+	return count
+end
+
 -- Socket a jewel for real and score the build; everything is restored afterwards.
 -- Points spent on the socket path (and on a keystone, if given) are charged at pointValue.
 function TimelessJewelFinderClass:TryReal(socket, item, keystone)
@@ -282,6 +301,13 @@ function TimelessJewelFinderClass:TryReal(socket, item, keystone)
 	spec:BuildAllDependsAndPaths()
 	local points = spec:CountAllocNodes() - usedBefore
 	local score = self.ctx.fullScore() - points * (self.pointValue or 0.006)
+	-- Supreme Ostentation ("Ignore Attribute Requirements"): the passives taken
+	-- only for attributes become free points - what casters use it for. PoB's
+	-- score can't see it until the tree is rebuilt, so they count as refunded
+	local env = self.build.calcsTab.mainEnv
+	if env and env.player.modDB:Flag(nil, "IgnoreAttributeRequirements") then
+		score = score + self:AttributeOnlyPassives() * (self.pointValue or 0.006)
+	end
 	slot:SetSelItemId(previous)
 	itemsTab:DeleteItem(equipped, true)
 	spec:RestoreUndoState(undo)

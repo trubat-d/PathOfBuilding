@@ -477,7 +477,9 @@ function GemSetupClass:ChooseAuras(maxBuffs)
 			end
 		end
 		chosen[best] = true
-		count = count + 1
+		-- (golems reserve nothing: they don't use up the aura count; the golem
+		-- limit bounds them - Elementalists run three or four)
+		if not gem.tags.golem then count = count + 1 end
 		current = bestScore
 	end
 	for _, group in ipairs(self.groups) do group.capacity = nil end

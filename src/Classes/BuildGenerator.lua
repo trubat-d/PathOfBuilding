@@ -3859,26 +3859,71 @@ function BuildGeneratorClass:UniqueFlaskSweep(maxTries)
 	return #kept
 end
 
--- Best anoint for the amulet within the investment level
+-- Best anoints for an amulet (as many as it takes), chosen one after the
+-- other: { item, score, entries } or nil if none helps
+function BuildGeneratorClass:BestAnoints(extras, amulet, baseScore)
+	local candidates = extras:AnointCandidates(self.options.investment)
+	local item, score, entries = amulet, baseScore, { }
+	local taken = { }
+	for k = 1, extras.AnointSlots(amulet) do
+		local best, bestScore, bestEntry
+		for _, entry in ipairs(candidates) do
+			if not taken[entry.node.dn] then
+				local copy = extras:AnointedCopy(item, entry.node, k > 1)
+				local s = self:Score({ repSlotName = "Amulet", repItem = copy })
+				if not bestScore or s > bestScore + 1e-9 then best, bestScore, bestEntry = copy, s, entry end
+			end
+		end
+		if not best or bestScore <= score + 0.002 then break end
+		item, score = best, bestScore
+		taken[bestEntry.node.dn] = true
+		t_insert(entries, bestEntry)
+		self:Tick()
+	end
+	if #entries == 0 then return nil end
+	return { item = item, score = score, entries = entries }
+end
+
+-- Best anoint for the amulet within the investment level; amulets with
+-- several anoints (Stranglegasp: four) are also tried in its place, each
+-- with its best anoints - worth nothing bare, a lot anointed
 function BuildGeneratorClass:ChooseAnoint()
 	local extras = new("TreeExtras"):TreeExtras(self.build)
 	local slot = self.itemsTab.slots["Amulet"]
 	local amulet = slot and self.itemsTab.items[slot.selItemId]
-	if not extras:CanAnoint(amulet) then return end
 	self:Recalculate()
 	local current = self:Score()
-	local best, bestScore, bestEntry
-	for _, entry in ipairs(extras:AnointCandidates(self.options.investment)) do
-		local copy = extras:AnointedCopy(amulet, entry.node)
-		local score = self:Score({ repSlotName = "Amulet", repItem = copy })
-		if not bestScore or score > bestScore + 1e-9 then best, bestScore, bestEntry = copy, score, entry end
+	local best = extras:CanAnoint(amulet) and self:BestAnoints(extras, amulet, current) or nil
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local filter = { obtainableOnly = true, levelOnly = true, investment = self.options.investment }
+	for _, item in pairs(main.uniqueDB.list) do
+		if item.type == "Amulet" and extras.AnointSlots(item) > 1 and extras:CanAnoint(item) and finder:IsItemAllowed(item, filter) then
+			local bare = new("Item"):Item(item:BuildRaw())
+			bare:BuildAndParseRaw()
+			local bareScore = self:Score({ repSlotName = "Amulet", repItem = bare })
+			local option = self:BestAnoints(extras, bare, bareScore)
+			if option and option.score > (best and best.score or current) + 0.002 then
+				option.unique = bare
+				best = option
+			end
+		end
 	end
-	if best and bestScore > current + 0.002 then
-		self:Equip(best, "Amulet")
+	if best and best.score > current + 0.002 then
+		self:Equip(best.item, "Amulet")
 		self.itemsTab:PopulateSlots()
-		self:Note(string.format("Anoint: %s (%s)", bestEntry.node.dn, GetPriceSource().FormatPrice(bestEntry.price)))
-		self.costs = self.costs or { }
-		t_insert(self.costs, bestEntry.price or false)
+		local names = { }
+		for _, entry in ipairs(best.entries) do
+			t_insert(names, string.format("%s (%s)", entry.node.dn, GetPriceSource().FormatPrice(entry.price)))
+			self.costs = self.costs or { }
+			t_insert(self.costs, entry.price or false)
+		end
+		if best.unique then
+			local price = GetPriceSource():UniquePrice(best.unique)
+			t_insert(self.costs, price or false)
+			self:Note(string.format("Amulet: %s (%s), for its %d anoints: %s", best.unique.title or best.unique.name, GetPriceSource().FormatPrice(price), #best.entries, table.concat(names, ", ")))
+		else
+			self:Note("Anoint: " .. table.concat(names, ", "))
+		end
 	end
 end
 

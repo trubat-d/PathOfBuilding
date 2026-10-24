@@ -131,6 +131,12 @@ elseif step == "cross" then
 elseif step == "explain" then
 	gen:FullScore()
 	gen:Explain()
+elseif step == "anoint" then
+	gen:ChooseAnoint()
+	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
+elseif step == "script" then
+	_G.gen = gen
+	dofile(os.getenv("SCRIPT"))
 elseif step == "prune" then
 	print("REMOVED", gen:PruneUselessGems())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end

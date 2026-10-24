@@ -283,6 +283,20 @@ function AutoConfigClass:Run()
 			if self:GeneratesCharge(kind, lines, gems, flags) then
 				self:Set("use" .. kind .. "Charges", true, "the build generates them")
 			end
+			-- "Lose all Power Charges on reaching Maximum Power Charges" (Tulfall,
+			-- Malachai's Loop...): the charges cycle from none to the maximum, half
+			-- of it on average - unless the build counts as always having the
+			-- maximum (Ralakesh's Impatience), which turns the drawback off
+			local word = kind:lower()
+			local cycles, countsMax = false, false
+			for _, line in ipairs(lines) do
+				if line:find("lose all " .. word .. " charges on reaching maximum", 1, true) then cycles = true end
+				if line:find("count as having maximum number of " .. word .. " charges", 1, true) then countsMax = true end
+			end
+			local maxCharges = output[kind .. "ChargesMax"]
+			if cycles and not countsMax and maxCharges and maxCharges > 0 then
+				self:Set("override" .. kind .. "Charges", math.floor(maxCharges / 2), string.format("charges lost on reaching the maximum (%d): half of it on average", maxCharges))
+			end
 		end
 
 		-- what the main skill does

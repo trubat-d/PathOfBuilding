@@ -29,17 +29,30 @@ end
 -- Anoints
 ------------------------------------------------------------------------------
 
--- Copy of an amulet with its anoint replaced by this notable
-function TreeExtrasClass:AnointedCopy(amulet, node)
+-- Copy of an amulet with its anoint replaced by this notable (keep: added
+-- to its anoints instead, for amulets with several, like Stranglegasp)
+function TreeExtrasClass:AnointedCopy(amulet, node, keep)
 	local item = new("Item"):Item(amulet:BuildRaw())
-	for i = #item.enchantModLines, 1, -1 do
-		if item.enchantModLines[i].line:match("^Allocates ") then
-			t_remove(item.enchantModLines, i)
+	if not keep then
+		for i = #item.enchantModLines, 1, -1 do
+			if item.enchantModLines[i].line:match("^Allocates ") then
+				t_remove(item.enchantModLines, i)
+			end
 		end
 	end
 	t_insert(item.enchantModLines, 1, { crafted = true, line = "Allocates " .. node.dn })
 	item:BuildAndParseRaw()
 	return item
+end
+
+-- How many anoints an amulet takes ("Can have 3 additional Enchantment Modifiers": 4)
+function TreeExtrasClass.AnointSlots(item)
+	local slots = 1
+	for _, modLine in ipairs(item and item.explicitModLines or { }) do
+		local extra = modLine.line and tonumber(modLine.line:match("^Can have (%d+) additional Enchantment Modifiers"))
+		if extra then slots = slots + extra end
+	end
+	return slots
 end
 
 function TreeExtrasClass:CanAnoint(item)
