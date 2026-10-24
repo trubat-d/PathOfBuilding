@@ -109,6 +109,11 @@ function calcs.getMiscCalculator(build)
 			env.player.output.FullDPS = fullDPS.combinedDPS
 			env.player.output.FullDotDPS = fullDPS.TotalDotDPS
 		end
+		-- (build generator: the items this calculation used, for drawbacks PoB
+		-- doesn't calculate - Modules/GeneratorRules)
+		-- (kept beside the output, not in it: UI code iterates outputs)
+		GeneratorOutputItems = GeneratorOutputItems or setmetatable({ }, { __mode = "k" })
+		GeneratorOutputItems[env.player.output] = env.player.itemList
 		return env.player.output
 	end, env.player.output
 end

@@ -155,8 +155,13 @@ end
 -- Share of time the main skill can be paid for (1 = always)
 function BuildScorerClass:SkillSustain(output)
 	local fraction, limiting = 1, nil
+	-- costs of unique drawbacks PoB doesn't calculate (mana lost on use, life
+	-- sacrificed on cast...): the build's recovery must cover them too
+	local env = self.build.calcsTab and self.build.calcsTab.mainEnv
+	local flags = env and env.player.mainSkill and env.player.mainSkill.skillFlags or { }
+	local extra = GetGeneratorRules().ExtraCosts(output, flags.attack, flags.spell)
 	for _, resource in ipairs({ "Mana", "Life" }) do
-		local cost = (output[resource .. "PerSecondCost"] or 0) * costMargin
+		local cost = ((output[resource .. "PerSecondCost"] or 0) + (extra[resource] or 0)) * costMargin
 		if cost > 0 then
 			local f = math.min(1, self:SustainableRate(output, resource) / cost)
 			if f < fraction then fraction, limiting = f, resource end
@@ -248,6 +253,11 @@ function BuildScorerClass:GetPenalties(output)
 		end
 		total = total + missingTotal
 		t_insert(penalties, { label = "Missing defences: " .. table.concat(names, ", "), value = missingTotal })
+	end
+	-- Unique drawbacks the build doesn't counter (Modules/GeneratorRules)
+	for _, p in ipairs(GetGeneratorRules().Penalties(output)) do
+		total = total + p.value
+		t_insert(penalties, p)
 	end
 	-- One-shot by a pinnacle boss hit
 	local bossRatio, bossName = self:BossHitRatio(output)
