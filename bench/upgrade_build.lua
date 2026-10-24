@@ -2,7 +2,7 @@
 -- "Upgrade this build") headless and prints one result line (JSON).
 -- Run from the src folder:
 --   BUILD=<build .xml or file with a PoB code> luajit ../bench/upgrade_build.lua
--- Optional: INVEST=<level id> (default HIGH), BUDGET=<total divines>,
+-- Optional: INVEST=<level id> (default HIGH), BUDGET=<total divines>, REVIEW=<key=-1|0|1,...>,
 --   FOCUS=<focus id> (default DPS_FLOOR), CONFIG=<BOSS|MAPPING|BOSS_CLEAR>,
 --   SKILL=<gem name> (main skill, else the build's), SAVE=<path for the upgraded .xml>
 -- Needs LUA_PATH="../runtime/lua/?.lua;../runtime/lua/?/init.lua;;"
@@ -41,9 +41,19 @@ local focus
 for _, entry in ipairs(new("BuildScorer"):BuildScorer(build).focusList) do if entry.id == (os.getenv("FOCUS") or "DPS_FLOOR") then focus = entry end end
 local configScenario
 for _, sc in ipairs(new("AutoConfig"):AutoConfig(build).scenarioList) do if sc.id == os.getenv("CONFIG") then configScenario = sc end end
+-- REVIEW="maxhit=-1,move=-1,dps=1": the window's review (-1 too low, 0 fine, 1 too high), the focus moved by it
+local review = new("BuildReview"):BuildReview()
+local verdicts = { }
+for k, v in (os.getenv("REVIEW") or ""):gmatch("(%w+)=(%-?%d)") do verdicts[k] = tonumber(v) end
+if next(verdicts) then
+	local values = review.Values(build, focus)
+	for key, v in pairs(values) do print("VALUE", key, v.text) end
+	focus = review.ImproveFocus(focus, verdicts, values)
+	print("FOCUS", focus.label)
+end
 local gen = new("BuildGenerator"):BuildGenerator(build, {
 	investment = investment, focus = focus, configScenario = configScenario,
-	totalBudget = tonumber(os.getenv("BUDGET") or ""), yieldEvery = 1e9,
+	totalBudget = tonumber(os.getenv("BUDGET") or ""), yieldEvery = 1e9, hitFloor = focus and focus.raiseHitFloor,
 	debugTiming = os.getenv("DEBUG_TIMING") == "1",
 })
 local t0 = os.clock()

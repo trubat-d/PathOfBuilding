@@ -1613,7 +1613,7 @@ function BuildGeneratorClass:RunRaresParallel(finder, options)
 	end
 	local sc = self.scorer
 	local scorerJob = {
-		focusId = sc.focus and sc.focus.id, focusCustom = sc.focus and sc.focus.id == "CUSTOM" and sc.focus or nil,
+		focusId = sc.focus and sc.focus.id, focusCustom = sc.focus,
 		chargesPerSecond = sc.chargesPerSecond, ehpFloor = sc.ehpFloor, hitFloor = sc.hitFloor,
 		bossTier = sc.bossTier, killsPerSecond = sc.killsPerSecond, flaskRealism = sc.flaskRealism,
 		scenarioId = self.options.scenario and self.options.scenario.id,
@@ -5124,6 +5124,8 @@ function BuildGeneratorClass:Upgrade()
 	end
 	self:PrepareOptions()
 	stage(1, "Reading the build")
+	if opts.learntNote then self:Note(opts.learntNote) end
+	if opts.focus and opts.focus.label and opts.focus.label:find("reviewed", 1, true) then self:Note("Aimed at: " .. opts.focus.label) end
 	-- the build's main skill, class and level
 	local skillsTab = build.skillsTab
 	local group = skillsTab.socketGroupList[build.mainSocketGroup]
@@ -5263,7 +5265,7 @@ function BuildGeneratorClass:SetupScorer()
 	if opts.configScenario and opts.configScenario.clear then self.scorer.clearBoost = opts.clearBoost or 0.35 end
 	-- (buffs that only exist while clearing - Headhunter's stolen modifiers -
 	-- count for clear speed when the build is made for clearing too)
-	self.scorer.clearBuffs = (opts.configScenario and (opts.configScenario.clear or not opts.configScenario.boss)) or (opts.focus and opts.focus.id == "CLEAR") or nil
+	self.scorer.clearBuffs = (opts.configScenario and (opts.configScenario.clear or not opts.configScenario.boss)) or (opts.focus and opts.focus.id and opts.focus.id:match("^CLEAR") ~= nil) or nil
 	-- the archetype's stacked stat, valued on its own while the build is made
 	if opts.archetype and opts.archetype.lens and opts.statLens ~= false then
 		self.scorer.lens = opts.archetype.lens
@@ -5310,6 +5312,7 @@ function BuildGeneratorClass:Run()
 	self:PrepareOptions()
 
 	stage(1, "Setting up the character and configuration")
+	if opts.learntNote then self:Note(opts.learntNote) end
 	self:Setup()
 	self:SetupScorer()
 	if opts.archetype then

@@ -141,6 +141,89 @@ local function openGoalWeights(onDone)
 	main:OpenPopup(530, y + 36, "Custom mix of goals", controls, "done", nil, "done")
 end
 
+-- Review of the open build (Classes/BuildReview): each key stat marked too
+-- low / fine / too high, kept to learn from; "Improve" calls onImprove(focus)
+-- with the build's focus moved by the review
+local function openReview(build, baseFocus, onImprove)
+	local review = new("BuildReview"):BuildReview()
+	local data = review.Load()
+	local values = review.Values(build, baseFocus)
+	local verdicts = { }
+	local controls = { }
+	controls.intro = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 20, 0, 14}, "^7How does the build look to you? Mark what is too low or too high (leave the rest).")
+	local y = 44
+	local colours = { [-1] = "^xFF8040", [0] = "^x60E060", [1] = "^x40A0FF" }
+	for i, stat in ipairs(review.stats) do
+		local v = values[stat.key]
+		if v then
+			controls["label" .. i] = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, y + 2, 0, 16}, "^7" .. stat.label .. ":")
+			controls["value" .. i] = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {210, y + 2, 0, 16}, "^xC0C0C0" .. v.text)
+			local x = 380
+			for _, verdict in ipairs({ -1, 0, 1 }) do
+				local text = review.verdictLabels[verdict]
+				local width = verdict == 0 and 50 or 70
+				controls["v" .. i .. "_" .. verdict] = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {x, y, width, 20}, function()
+					return (verdicts[stat.key] == verdict and colours[verdict] or "^7") .. text
+				end, function()
+					verdicts[stat.key] = verdicts[stat.key] ~= verdict and verdict or nil
+				end)
+				x = x + width + 4
+			end
+			y = y + 24
+		end
+	end
+	controls.noteLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, y + 8, 0, 16}, "^7Note (kept with the review):")
+	controls.note = new("EditControl"):EditControl({"TOPLEFT",nil,"TOPLEFT"}, {210, y + 6, 390, 20}, "", nil, nil, 200)
+	y = y + 34
+	controls.ask = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {210, y, 18}, "Ask after every build:", function(on)
+		data.askAfter = on
+	end, "Open this review when a generation or an upgrade finishes.", data.askAfter ~= false)
+	controls.learn = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {500, y, 18}, "Use what reviews taught:", function(on)
+		data.useLearned = on
+	end, "Every review moves a factor per stat a little (too low: up, too high: down);\nthe generator's focus is multiplied by them from then on.", data.useLearned ~= false)
+	y = y + 28
+	local learnt = { }
+	for k, f in pairs(data.factors or { }) do if math.abs(f - 1) >= 0.05 then t_insert(learnt, string.format("%s x%.2f", k, f)) end end
+	table.sort(learnt)
+	controls.learnt = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, y, 0, 14}, "^xC0C0C0" .. (#learnt > 0 and ("Learnt so far (" .. #(data.records or { }) .. " reviews): " .. table.concat(learnt, ", ")) or "Nothing learnt yet: reviews move the weights a little each time."))
+	y = y + 22
+	local function keep()
+		local record = { time = os.time(), verdicts = verdicts, values = { }, note = controls.note.buf ~= "" and controls.note.buf or nil,
+			focus = baseFocus and baseFocus.id, skill = build.skillsTab and build.skillsTab.socketGroupList[build.mainSocketGroup]
+				and build.skillsTab.socketGroupList[build.mainSocketGroup].displayLabel,
+			ascendancy = build.spec and build.spec.curAscendClassName }
+		for k, v in pairs(values) do record.values[k] = v.value end
+		local any = next(verdicts) ~= nil or record.note
+		if any then review.Learn(data, record) end
+		review.Save(data)
+		return any
+	end
+	local function anyChange()
+		for _, v in pairs(verdicts) do if v ~= 0 then return true end end
+		return false
+	end
+	controls.improve = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {16, y, 150, 20}, "Improve this build", function()
+		keep()
+		main:ClosePopup()
+		if onImprove then onImprove((review.ImproveFocus(baseFocus, verdicts, values))) end
+	end)
+	controls.improve.enabled = function() return onImprove ~= nil and anyChange() end
+	controls.improve.tooltipFunc = function(tooltip)
+		tooltip:Clear()
+		tooltip:AddLine(16, "^7Upgrades the open build again, with the weights of what you marked too low raised")
+		tooltip:AddLine(16, "^7and of what you marked too high lowered (an upgraded copy opens).")
+	end
+	controls.save = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {176, y, 120, 20}, "Save review", function()
+		keep()
+		main:ClosePopup()
+	end)
+	controls.close = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {520, y, 80, 20}, "Close", function()
+		review.Save(data)
+		main:ClosePopup()
+	end)
+	main:OpenPopup(620, y + 32, "Review the build", controls, nil, nil, "close")
+end
+
 -- Window to exclude or force uniques before generating
 local function openUniqueChoices()
 	local choices = loadUniqueChoices()
@@ -779,6 +862,9 @@ function BuildIdeasPopupClass:OpenGenerator()
 			yieldEvery = 80,
 		}
 		options.archetype = archetypeEntry and archetypeEntry.archetype
+		-- what the player's reviews taught (Classes/BuildReview)
+		local learnt, note = new("BuildReview"):BuildReview().ApplyLearned(options.focus)
+		if note then options.focus, options.learntNote = learnt, note end
 		-- the player's unique choices
 		local choices = loadUniqueChoices()
 		options.excludedUniques = { }
@@ -890,6 +976,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 					opened.buildFlag = true
 					opened.modFlag = true
 				end
+				state.lastFocus = options.focus
+				state.askReview()
 			end, function(err)
 				state.running = false
 				state.status = "^1Generation failed: " .. tostring(err)
@@ -1342,7 +1430,12 @@ function BuildIdeasPopupClass:OpenGenerator()
 
 	-- the open build improved instead of a new one: a copy opens, upgraded
 	-- (BuildGenerator:Upgrade), with every change and its gain listed
+	local startUpgrade
 	controls.upgrade = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {122, 162, 120, 20}, "Upgrade open build", function()
+		startUpgrade()
+	end)
+	-- (focusOverride: the focus a review asked for)
+	startUpgrade = function(focusOverride)
 		local current = main.modes["BUILD"]
 		if main.mode ~= "BUILD" or not current or not current.skillsTab then
 			state.status = "^7Open the build to upgrade first (it must have a main skill)."
@@ -1353,6 +1446,11 @@ function BuildIdeasPopupClass:OpenGenerator()
 			return
 		end
 		local options = makeOptions()
+		if focusOverride then
+			options.focus = focusOverride
+			if focusOverride.raiseHitFloor then options.hitFloor = m_max(options.hitFloor or 0, focusOverride.raiseHitFloor) end
+		end
+		state.lastFocus = options.focus
 		local xml = current:SaveDB("code")
 		local buildName = "Upgraded " .. (current.buildName or "build")
 		state.running = true
@@ -1388,13 +1486,36 @@ function BuildIdeasPopupClass:OpenGenerator()
 					opened.buildFlag = true
 					opened.modFlag = true
 				end
+				state.askReview()
 			end, function(err)
 				state.running = false
 				state.status = "^1Upgrade failed: " .. tostring(err)
 			end)
 		end
-	end)
+	end
 	controls.upgrade.enabled = idle
+	-- the review of the open build (Classes/BuildReview); "Improve" upgrades it
+	-- with the focus the review asks for
+	local function reviewOpen()
+		local current = main.modes["BUILD"]
+		if main.mode ~= "BUILD" or not current or not current.calcsTab then
+			state.status = "^7Open a build to review first."
+			return
+		end
+		openReview(current, state.lastFocus or selectedFocus(), function(focus) startUpgrade(focus) end)
+	end
+	controls.review = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {248, 162, 110, 20}, "Review & improve", reviewOpen)
+	controls.review.enabled = idle
+	controls.review.tooltipFunc = function(tooltip)
+		tooltip:Clear()
+		tooltip:AddLine(16, "^7Mark the open build's key stats too low, fine or too high. \"Improve\" upgrades it with")
+		tooltip:AddLine(16, "^7those weights moved; every review is kept and slowly moves the generator's weights.")
+	end
+	-- (after a generation or an upgrade, when the player wants it)
+	state.askReview = function()
+		local data = new("BuildReview"):BuildReview().Load()
+		if data.askAfter ~= false then reviewOpen() end
+	end
 	controls.upgrade.tooltipFunc = function(tooltip)
 		tooltip:Clear()
 		tooltip:AddLine(16, "^7Improves the build that is open instead of making a new one. Its main skill, class, tree,")
@@ -1404,7 +1525,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 		tooltip:AddLine(16, "^7opens as a new, unsaved build with every change, its gain and cost, and what to buy first.")
 		tooltip:AddLine(16, "^7The skill, ascendancy and archetype choices above are not used.")
 	end
-	controls.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {250, 164, 0, 16}, function() return state.status end)
+	controls.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {366, 164, 0, 16}, function() return state.status end)
 	-- how far the running generation / scan is
 	controls.progress = new("ProgressBarControl"):ProgressBarControl({"TOPLEFT",nil,"TOPLEFT"}, {128, 182, 776, 8}, function()
 		return state.running and state.progress or nil
