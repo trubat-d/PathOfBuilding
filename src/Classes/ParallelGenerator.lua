@@ -18,6 +18,22 @@ local m_min = math.min
 ---@class ParallelGenerator
 local ParallelGeneratorClass = newClass("ParallelGenerator")
 
+-- Traces next to the scripts (absolute: the working directory may be elsewhere)
+local function tracePath(name)
+	local base = GetScriptPath and GetScriptPath() or ""
+	if base ~= "" and not base:match("[/\\]$") then base = base .. "/" end
+	return base .. name
+end
+ParallelGeneratorClass.TracePath = tracePath
+-- the main thread's side: GeneratorThreads.log
+function ParallelGeneratorClass.Trace(text)
+	local f = io.open(tracePath("GeneratorThreads.log"), "a")
+	if f then
+		f:write(os.date("%H:%M:%S") .. "  " .. text .. "\n")
+		f:close()
+	end
+end
+
 local workerScript = [[
 local jobJson, userPath = ...
 local run = dofile("Modules/GeneratorWorker.lua")
@@ -74,7 +90,9 @@ function ParallelGeneratorClass.Available()
 	if not ParallelGeneratorClass.processWorkers and not (main and main.generatorThreads) then return false end
 	if not (LaunchSubScript and launch and launch.RegisterSubScript and launch.subScripts) then return false end
 	if ParallelGeneratorClass.availableChecked == nil then
+		ParallelGeneratorClass.Trace("checking background threads (" .. tostring(ParallelGeneratorClass.CoreCount()) .. " cores)")
 		local ok, id = pcall(LaunchSubScript, "return true", "", "")
+		ParallelGeneratorClass.Trace("check: " .. tostring(ok) .. " " .. tostring(id))
 		ParallelGeneratorClass.availableChecked = ok and id ~= nil or false
 		if ok and id then launch:RegisterSubScript(id, function() end) end
 	end
@@ -110,7 +128,8 @@ function ParallelGeneratorClass:Run(jobs, callbacks)
 	for index, job in ipairs(jobs) do
 		-- (each worker writes its trace to its own file next to the scripts)
 		ParallelGeneratorClass.traceCount = ParallelGeneratorClass.traceCount % 8 + 1
-		job.traceName = job.traceName or string.format("GeneratorWorker_%d.log", ParallelGeneratorClass.traceCount)
+		job.traceName = job.traceName or tracePath(string.format("GeneratorWorker_%d.log", ParallelGeneratorClass.traceCount))
+		ParallelGeneratorClass.Trace(string.format("job %d queued (%s), trace %s", index, tostring(job.kind or (job.quick and "quick build" or "full build")), job.traceName))
 		local f = io.open(job.traceName, "w")
 		if f then f:write(string.format("job %d (%s), launched at %s\n", index, tostring(job.kind or (job.quick and "quick build" or "full build")), os.date("%H:%M:%S"))) f:close() end
 		local ok, text = pcall(dkjson.encode, job)
@@ -131,7 +150,9 @@ function ParallelGeneratorClass:Fill()
 	while not self.stopped and #self.queue > 0 and self:RunningCount() < maxWorkers do
 		local entry = t_remove(self.queue, 1)
 		-- (Inflate / Deflate: the timeless jewel tables are compressed)
+		ParallelGeneratorClass.Trace(string.format("launching job %d (%d bytes of job), %d running", entry.index, #entry.json, self:RunningCount()))
 		local id = LaunchSubScript(workerScript, "Inflate,Deflate", "ConPrintf", entry.json, main.userPath or "")
+		ParallelGeneratorClass.Trace(string.format("job %d launched: %s", entry.index, tostring(id)))
 		local callbacks = self.callbacks
 		local function finished()
 			self.running[entry.index] = nil

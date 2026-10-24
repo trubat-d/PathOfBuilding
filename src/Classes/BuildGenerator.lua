@@ -1475,6 +1475,7 @@ function BuildGeneratorClass:RunRaresParallel(finder, options)
 	if self.options.parallelRares == false or workers < minWorkers or not coroutine.running() or not pgClass.Available() then
 		return finder:RunRares(options)
 	end
+	pgClass.Trace(string.format("rare items in %d threads: %d slots", workers, #usable))
 	local dkjson = require "dkjson"
 	local plain = { }
 	for k, v in pairs(options) do

@@ -48,3 +48,4 @@ runtime/SimpleGraphic/Screenshots
 
 # build generator background thread traces
 src/GeneratorWorker_*.log
+src/GeneratorThreads.log
