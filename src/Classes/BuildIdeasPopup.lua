@@ -225,7 +225,7 @@ function BuildIdeasPopupClass:OpenIdeas(build)
 			allowTattoos = controls.tattoos.state,
 			allowTimeless = controls.timeless.state,
 			meta = meta, metaSkill = skillName,
-			ehpFloor = controls.focus.list[controls.focus.selIndex].focus.ehpFloor and tonumber(controls.ehpFloor.buf) or nil,
+			hitFloor = controls.focus.list[controls.focus.selIndex].focus.hitFloor and tonumber(controls.ehpFloor.buf) or nil,
 			yieldEvery = 30,
 			onProgress = function(stage, done)
 				state.status = string.format("^7%s... (%d combinations tested)", stage, done)
@@ -271,9 +271,9 @@ function BuildIdeasPopupClass:OpenIdeas(build)
 		GetBuildMetaSource():Load(skillName, function(entry) go(entry) end)
 	end)
 	controls.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {128, 78, 0, 16}, function() return state.status end)
-	controls.ehpFloorLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {770, 78, 0, 16}, "^7Min EHP:")
-	controls.ehpFloor = new("EditControl"):EditControl({"TOPLEFT",nil,"TOPLEFT"}, {830, 76, 74, 20}, "120000", nil, "%D", 8)
-	local function floorShown() return controls.focus.list[controls.focus.selIndex].focus.ehpFloor ~= nil end
+	controls.ehpFloorLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {742, 78, 0, 16}, "^7Min max hit:")
+	controls.ehpFloor = new("EditControl"):EditControl({"TOPLEFT",nil,"TOPLEFT"}, {830, 76, 74, 20}, "10000", nil, "%D", 8)
+	local function floorShown() return controls.focus.list[controls.focus.selIndex].focus.hitFloor ~= nil end
 	controls.ehpFloorLabel.shown = floorShown
 	controls.ehpFloor.shown = floorShown
 	controls.ehpFloor.enabled = idle
@@ -322,20 +322,20 @@ function BuildIdeasPopupClass:OpenGenerator()
 	controls.focus = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {120, 48, 260, 20}, focusDropList())
 	controls.focus.enabled = idle
 	controls.investmentLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {400, 50, 0, 16}, "^7Investment:")
-	controls.investment = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {490, 48, 300, 20}, investmentDropList())
+	controls.investment = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {490, 48, 276, 20}, investmentDropList())
 	controls.investment.selIndex = GetPriceSource().defaultLevel
 	controls.investment.enabled = idle
 	controls.investment.tooltipFunc = investmentTooltip
-	controls.ehpFloorLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {800, 50, 0, 16}, "^7Min EHP:")
-	controls.ehpFloor = new("EditControl"):EditControl({"TOPLEFT",nil,"TOPLEFT"}, {856, 48, 50, 20}, "120000", nil, "%D", 8)
-	local function floorShown() return controls.focus.list[controls.focus.selIndex].focus.ehpFloor ~= nil end
+	controls.ehpFloorLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {776, 50, 0, 16}, "^7Min max hit:")
+	controls.ehpFloor = new("EditControl"):EditControl({"TOPLEFT",nil,"TOPLEFT"}, {856, 48, 50, 20}, "10000", nil, "%D", 8)
+	local function floorShown() return controls.focus.list[controls.focus.selIndex].focus.hitFloor ~= nil end
 	controls.ehpFloorLabel.shown = floorShown
 	controls.ehpFloor.shown = floorShown
 	controls.ehpFloor.enabled = idle
 	controls.ehpFloor.tooltipFunc = function(tooltip)
 		tooltip:Clear()
-		tooltip:AddLine(16, "^7Effective hit pool the build must keep. Above it, damage is maximised;")
-		tooltip:AddLine(16, "^7below it, the score drops fast. PoB's EHP depends on the Configuration tab's enemy.")
+		tooltip:AddLine(16, "^7Maximum hit the build must survive, for its weakest damage type (physical, fire, cold,")
+		tooltip:AddLine(16, "^7lightning, chaos). Above it, damage is maximised; below it, the score drops fast.")
 	end
 	controls.scenarioLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 78, 0, 16}, "^7Hits per target:")
 	controls.scenario = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {120, 76, 260, 20}, scenarioDropList())
@@ -383,6 +383,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 				local sx, sy = x.scan and x.scan.score or -math.huge, y.scan and y.scan.score or -math.huge
 				return sx > sy
 			end)
+		else
+			t_insert(list, 1, { label = "Automatic: scan every archetype, then fully build the best one", auto = true })
 		end
 		return list
 	end
@@ -392,6 +394,10 @@ function BuildIdeasPopupClass:OpenGenerator()
 	controls.archetype.tooltipFunc = function(tooltip)
 		tooltip:Clear()
 		local entry = controls.archetype.list[controls.archetype.selIndex]
+		if entry and entry.auto then
+			tooltip:AddLine(16, "^7Builds a quick version of every archetype that fits the skill, then the full build")
+			tooltip:AddLine(16, "^7of the one that scored best. Takes longer: about a minute per archetype first.")
+		end
 		if entry and entry.archetype then
 			tooltip:AddLine(16, "^7" .. entry.archetype.summary)
 			if entry.archetype.keystones and #entry.archetype.keystones > 0 then tooltip:AddLine(16, "^7Keystones: " .. table.concat(entry.archetype.keystones, ", ")) end
@@ -450,7 +456,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 			level = m_min(100, math.max(1, tonumber(controls.level.buf) or 92)),
 			focus = controls.focus.list[controls.focus.selIndex].focus,
 			investment = controls.investment.list[controls.investment.selIndex].level,
-			ehpFloor = controls.focus.list[controls.focus.selIndex].focus.ehpFloor and tonumber(controls.ehpFloor.buf) or nil,
+			hitFloor = controls.focus.list[controls.focus.selIndex].focus.hitFloor and tonumber(controls.ehpFloor.buf) or nil,
 			scenario = controls.scenario.list[controls.scenario.selIndex].scenario,
 			configScenario = controls.config.list[controls.config.selIndex].scenario,
 			allowAnoints = controls.anoints.state,
@@ -484,6 +490,17 @@ function BuildIdeasPopupClass:OpenGenerator()
 			return
 		end
 		state.confirmDiscard = false
+		local entry = controls.archetype.list[controls.archetype.selIndex]
+		if entry and entry.auto then
+			-- scan first; the scan sorts the list best first, then this runs again
+			state.afterScan = function()
+				state.confirmDiscard = true
+				controls.generate.onClick()
+			end
+			state.confirmDiscard = true -- (already confirmed above)
+			state.startScan()
+			return
+		end
 		local skill = controls.skill.list[controls.skill.selIndex]
 		local asc = controls.ascend.list[controls.ascend.selIndex]
 		local options = makeOptions()
@@ -552,7 +569,9 @@ function BuildIdeasPopupClass:OpenGenerator()
 		local skill = controls.skill.list[controls.skill.selIndex]
 		local asc = controls.ascend.list[controls.ascend.selIndex]
 		local list = { }
-		for _, entry in ipairs(archetypeList()) do t_insert(list, entry.archetype) end
+		for _, entry in ipairs(archetypeList()) do
+			if entry.archetype then t_insert(list, entry.archetype) end
+		end
 		local results = { }
 		state.running = true
 		local index = 0
@@ -572,6 +591,10 @@ function BuildIdeasPopupClass:OpenGenerator()
 			t_insert(lines, "^xC0C0C0Quick builds: no bloodline, jewels, flasks or synergies yet, rares in one pass; the full build adds them.")
 			setLog(lines)
 			state.status = string.format("^7Scan finished in %d s.", m_floor((GetTime() - t0) / 1000))
+			-- Automatic: go on with the full build of the best archetype
+			local after = state.afterScan
+			state.afterScan = nil
+			if after then after() end
 		end
 		local function nextOne()
 			index = index + 1

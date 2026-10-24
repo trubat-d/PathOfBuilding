@@ -943,6 +943,12 @@ function BuildGeneratorClass:MakeRares(withInfluences)
 			for k, v in pairs(options) do plain[k] = v end
 			plain.influences, plain.elevated = 0, false
 			plain.slots = redo
+			-- (a white base first: the influenced rare would otherwise be kept as the better item)
+			for _, slotName in ipairs(redo) do
+				local item = self.itemsTab.items[self.itemsTab.slots[slotName].selItemId]
+				self:Equip(makeBase(item.baseName), slotName)
+			end
+			self.itemsTab:PopulateSlots()
 			for _ = 1, (self.options.quick and 1 or 2) do
 				self:Recalculate()
 				finder:EquipAll(finder:RunRares(plain))
@@ -1395,6 +1401,30 @@ function BuildGeneratorClass:ChooseArchetypeJewels()
 	end
 end
 
+-- Removes the items left over from the search (white bases, replaced rares):
+-- only what's equipped (or socketed in the tree) stays in the item list
+function BuildGeneratorClass:RemoveUnusedItems()
+	local itemsTab = self.itemsTab
+	local used = { }
+	for _, slot in pairs(itemsTab.slots) do
+		if slot.selItemId and slot.selItemId ~= 0 then used[slot.selItemId] = true end
+	end
+	for _, itemSet in pairs(itemsTab.itemSets or { }) do
+		for _, entry in pairs(itemSet) do
+			if type(entry) == "table" and entry.selItemId and entry.selItemId ~= 0 then used[entry.selItemId] = true end
+		end
+	end
+	for _, itemId in pairs(self.build.spec.jewels or { }) do
+		if itemId ~= 0 then used[itemId] = true end
+	end
+	local unused = { }
+	for id, item in pairs(itemsTab.items) do
+		if not used[id] then t_insert(unused, item) end
+	end
+	for _, item in ipairs(unused) do itemsTab:DeleteItem(item, true) end
+	itemsTab:PopulateSlots()
+end
+
 -- Uniques most players of this skill use (poe.ninja), tried one by one in
 -- their slot; each stays if the build is better with it
 function BuildGeneratorClass:ChooseMetaUniques()
@@ -1549,7 +1579,7 @@ function BuildGeneratorClass:ApplySynergies(rounds)
 		local before = self:FullScore()
 		local finder = new("SynergyFinder"):SynergyFinder(self.itemsTab, {
 			focus = self.options.focus, scenario = self.options.scenario, quality = self.options.quality,
-			ehpFloor = self.options.ehpFloor, chargesPerSecond = self.options.chargesPerSecond,
+			ehpFloor = self.options.ehpFloor, hitFloor = self.options.hitFloor, chargesPerSecond = self.options.chargesPerSecond,
 			levelOnly = true, obtainableOnly = true, maxIdeas = 5, seedCount = 12,
 			investment = self.options.investment, allowAnoints = self.options.allowAnoints, allowTattoos = self.options.allowTattoos, allowTimeless = self.options.timeless,
 			meta = self.options.meta, metaSkill = self.mainGem and self.mainGem.name, protectedNodes = self.protectedNodes,
@@ -1609,7 +1639,7 @@ function BuildGeneratorClass:Run()
 	self.overlap = new("HitOverlap"):HitOverlap(self.build, opts.scenario)
 	local bossFight = not opts.configScenario or opts.configScenario.id == "BOSS"
 	opts.chargesPerSecond = opts.chargesPerSecond or (bossFight and 1.5 or 4)
-	self.scorer = new("BuildScorer"):BuildScorer(self.build, { focus = opts.focus, chargesPerSecond = opts.chargesPerSecond, overlap = self.overlap, ehpFloor = opts.ehpFloor })
+	self.scorer = new("BuildScorer"):BuildScorer(self.build, { focus = opts.focus, chargesPerSecond = opts.chargesPerSecond, overlap = self.overlap, ehpFloor = opts.ehpFloor, hitFloor = opts.hitFloor })
 	if opts.archetype then
 		self:Note("Archetype: " .. opts.archetype.label)
 	end
@@ -1694,6 +1724,7 @@ function BuildGeneratorClass:Run()
 	self:PairAilments()
 	self:OptimizeTree()
 
+	self:RemoveUnusedItems()
 	self:AutoConfigure()
 	self:Recalculate()
 	local final = self.scorer:Evaluate(self.calcFunc, { })

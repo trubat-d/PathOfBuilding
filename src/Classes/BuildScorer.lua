@@ -29,7 +29,7 @@ BuildScorerClass.focusList = {
 	{ label = "Balanced (damage, tankiness, clear)", id = "BALANCED", dps = 1, ehp = 1, clear = 0.4 },
 	{ label = "Damage first", id = "DPS", dps = 1, ehp = 0.35, clear = 0.2 },
 	{ label = "Tankiness first", id = "TANK", dps = 0.35, ehp = 1, clear = 0.2 },
-	{ label = "Damage, with a minimum EHP", id = "DPS_FLOOR", dps = 1, ehp = 0.15, ehpFloor = 120000, clear = 0.25 },
+	{ label = "Damage, with a minimum max hit (every damage type)", id = "DPS_FLOOR", dps = 1, ehp = 0.15, hitFloor = 10000, clear = 0.25 },
 	{ label = "Mapping (clear speed first)", id = "CLEAR", dps = 0.7, ehp = 0.6, clear = 1 },
 }
 
@@ -46,6 +46,7 @@ function BuildScorerClass:BuildScorer(build, options)
 	options = options or { }
 	self.focus = options.focus or self.focusList[1]
 	self.ehpFloor = options.ehpFloor
+	self.hitFloor = options.hitFloor
 	self.chargesPerSecond = options.chargesPerSecond or 4
 	self.flaskRealism = options.flaskRealism ~= false
 	self.overlap = options.overlap
@@ -115,7 +116,10 @@ end
 -- How much of a resource the build can spend per second over a long fight:
 -- recovery (regen, leech, gain on hit, recovery flasks fed by charges, energy
 -- shield with Eldritch Battery) plus the unreserved pool spread over the fight.
-local fightLength = 30
+local fightLength = 60
+-- other skills (movement, curses, guard...) also cost mana: the main skill
+-- needs this much more recovery than its own cost
+local costMargin = 1.15
 function BuildScorerClass:SustainableRate(output, resource)
 	local recovery, pool = 0, 0
 	if resource == "Mana" then
@@ -138,7 +142,8 @@ function BuildScorerClass:SustainableRate(output, resource)
 			local fd = item and item.flaskData
 			local total = fd and (resource == "Mana" and fd.manaTotal or resource == "Life" and fd.lifeTotal)
 			if total and fd.chargesUsed and fd.chargesUsed > 0 then
-				recovery = recovery + total * self.chargesPerSecond * (fd.gainMod or 1) / fd.chargesUsed
+				-- (half: recovery flasks must be pressed and overlap their own recovery)
+				recovery = recovery + 0.5 * total * self.chargesPerSecond * (fd.gainMod or 1) / fd.chargesUsed
 			end
 		end
 	end
@@ -149,7 +154,7 @@ end
 function BuildScorerClass:SkillSustain(output)
 	local fraction, limiting = 1, nil
 	for _, resource in ipairs({ "Mana", "Life" }) do
-		local cost = output[resource .. "PerSecondCost"] or 0
+		local cost = (output[resource .. "PerSecondCost"] or 0) * costMargin
 		if cost > 0 then
 			local f = math.min(1, self:SustainableRate(output, resource) / cost)
 			if f < fraction then fraction, limiting = f, resource end
@@ -216,8 +221,11 @@ function BuildScorerClass:GetPenalties(output)
 		end
 	end
 	local sustain, limiting = self:SkillSustain(output)
-	if sustain < 0.95 then
-		t_insert(penalties, { label = string.format("Can only pay for the main skill %d%% of the time in a long fight (%s); DPS is reduced to match", sustain * 100, limiting:lower()), value = 0 })
+	if sustain < 0.999 then
+		-- running out of mana mid-fight is worse than lower DPS: casting stops
+		local p = 4 * (1 - sustain)
+		total = total + p
+		t_insert(penalties, { label = string.format("Can only pay for the main skill %d%% of the time in a long fight (%s recovery below its cost plus other skills); DPS is reduced to match", sustain * 100, limiting:lower()), value = p })
 	end
 	-- Self-damage over time (Righteous Fire, degen auras...) bigger than regeneration
 	local deficit, degen = self:DegenDeficit(output)
@@ -238,24 +246,31 @@ end
 -- Smallest of the maximum hits the build survives (physical, elemental,
 -- chaos): a build is only as tanky as its weakest damage type. Immunities
 -- (e.g. chaos with Chaos Inoculation) are capped and don't hide the others.
+-- Also returns the mean log of all of them (how tanky it is overall).
 function BuildScorerClass:MinMaxHit(output)
 	local lowest
+	local sum, n = 0, 0
 	for _, damageType in ipairs({ "Physical", "Fire", "Cold", "Lightning", "Chaos" }) do
 		local hit = output[damageType .. "MaximumHitTaken"]
 		if hit and hit == hit then
-			hit = m_min(hit, maxEHP)
+			hit = m_max(1, m_min(hit, maxEHP))
 			if not lowest or hit < lowest then lowest = hit end
+			sum, n = sum + m_log(hit), n + 1
 		end
 	end
-	return lowest
+	return lowest, n > 0 and sum / n or nil
 end
 
 function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
-	-- tankiness: half effective hit pool, half the weakest maximum hit
-	local minHit = output and self:MinMaxHit(output)
+	-- tankiness: mostly the maximum hit the build survives (the weakest damage
+	-- type first, then all of them), a little effective hit pool. EHP counts
+	-- block, evasion and suppression as averages, so a build can have huge EHP
+	-- and still die to one hit; max hit is the consistent part.
+	local minHit, meanLogHit
+	if output then minHit, meanLogHit = self:MinMaxHit(output) end
 	local tank
 	if minHit then
-		tank = 0.5 * m_log(m_max(ehp, 1)) + 0.5 * m_log(m_max(minHit, 1))
+		tank = 0.15 * m_log(m_max(ehp, 1)) + 0.55 * m_log(minHit) + 0.3 * meanLogHit
 	else
 		tank = m_log(m_max(ehp, 1))
 	end
@@ -264,6 +279,11 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 	local floor = self.ehpFloor or self.focus.ehpFloor
 	if floor and ehp < floor then
 		score = score - 3 * m_log(floor / m_max(ehp, 1))
+	end
+	-- same for the max hit floor (weakest damage type)
+	local hitFloor = self.hitFloor or self.focus.hitFloor
+	if hitFloor and minHit and minHit < hitFloor then
+		score = score - 3 * m_log(hitFloor / minHit)
 	end
 	return score
 end

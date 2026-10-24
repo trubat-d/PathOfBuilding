@@ -59,6 +59,7 @@ function SynergyFinderClass:SynergyFinder(itemsTab, options)
 		chargesPerSecond = self.options.chargesPerSecond,
 		overlap = self.overlap,
 		ehpFloor = self.options.ehpFloor,
+		hitFloor = self.options.hitFloor,
 	})
 	self.flaskGenerator = new("FlaskGenerator"):FlaskGenerator(self.itemFinder.rareGenerator, self.scorer)
 	self.index = new("SynergyIndex"):SynergyIndex()
