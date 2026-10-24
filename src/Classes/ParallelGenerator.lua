@@ -56,14 +56,16 @@ function ParallelGeneratorClass.CoreCount()
 end
 
 -- How many workers to run together: one core is left for the app itself,
--- and at most 3 (each one holds its own game data in memory, about 1 GB)
+-- and at most 8 (each one holds its own game data in memory, about 1 GB)
 function ParallelGeneratorClass.MaxWorkers()
 	local setting = main and tonumber(main.generatorWorkers or "")
 	if setting and setting >= 1 then return m_min(8, setting) end
 	-- each worker holds its own copy of the game data (about 1 GB): 3 on
 	-- machines with 6+ cores, 2 below
 	local cores = ParallelGeneratorClass.CoreCount()
-	return m_max(1, m_min(cores >= 6 and 3 or 2, cores - 1))
+	-- (big machines: more at once; each still needs about 1 GB of memory)
+	local wanted = cores >= 24 and 8 or cores >= 16 and 6 or cores >= 8 and 4 or cores >= 6 and 3 or 2
+	return m_max(1, m_min(wanted, cores - 1))
 end
 
 -- Turns parallel generation off for the session (after workers failed)
@@ -118,7 +120,7 @@ function ParallelGeneratorClass.JobFromOptions(options, extra)
 		configScenarioId = options.configScenario and options.configScenario.id,
 		archetypeId = options.archetype and options.archetype.id,
 		allowAnoints = options.allowAnoints, allowTattoos = options.allowTattoos, timeless = options.timeless,
-		synergies = options.synergies, quick = options.quick, meta = options.meta,
+		synergies = options.synergies, quick = options.quick, meta = options.meta, variant = options.variant,
 	}
 	for k, v in pairs(extra or { }) do job[k] = v end
 	return job

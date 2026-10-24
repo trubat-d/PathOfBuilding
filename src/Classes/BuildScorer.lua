@@ -12,6 +12,7 @@
 --     and self-damage over time (Righteous Fire...) must be out-regenerated.
 --   * clear speed: explosions on kill, area, projectiles and movement speed.
 -- Score = dpsWeight * ln(DPS) + ehpWeight * (ln(EHP) + recovery term)
+--         + avoidWeight * ln(1 / share of hit damage taken)
 --         + clearWeight * clear term - penalties
 --
 local pairs = pairs
@@ -26,11 +27,11 @@ local m_floor = math.floor
 local BuildScorerClass = newClass("BuildScorer")
 
 BuildScorerClass.focusList = {
-	{ label = "Balanced (damage, tankiness, clear)", id = "BALANCED", dps = 1, ehp = 1, clear = 0.4 },
-	{ label = "Damage first", id = "DPS", dps = 1, ehp = 0.35, clear = 0.2 },
-	{ label = "Tankiness first", id = "TANK", dps = 0.35, ehp = 1, clear = 0.2 },
-	{ label = "Damage, with a minimum max hit (every damage type)", id = "DPS_FLOOR", dps = 1, ehp = 0.15, hitFloor = 10000, clear = 0.25 },
-	{ label = "Mapping (clear speed first)", id = "CLEAR", dps = 0.7, ehp = 0.6, clear = 1 },
+	{ label = "Balanced (damage, tankiness, clear)", id = "BALANCED", dps = 1, ehp = 1, avoid = 0.8, clear = 0.4 },
+	{ label = "Damage first", id = "DPS", dps = 1, ehp = 0.35, avoid = 0.3, clear = 0.2 },
+	{ label = "Tankiness first", id = "TANK", dps = 0.35, ehp = 1, avoid = 1, clear = 0.2 },
+	{ label = "Damage, with a minimum max hit (every damage type)", id = "DPS_FLOOR", dps = 1, ehp = 0.15, avoid = 0.35, hitFloor = 10000, clear = 0.25 },
+	{ label = "Mapping (clear speed first)", id = "CLEAR", dps = 0.7, ehp = 0.6, avoid = 0.5, clear = 1 },
 }
 
 local elements = { "Fire", "Cold", "Lightning" }
@@ -391,6 +392,25 @@ function BuildScorerClass:Checklist(output)
 	return total, list
 end
 
+-- Share of incoming hit damage the build takes on average (melee,
+-- projectile, spell, spell projectile hits): evasion, dodge and avoidance,
+-- then block (with its block effect) and spell suppression. 1 = takes every
+-- hit in full. EHP counts these too, but only as a small part of tankiness,
+-- which left block, suppression and evasion worth less than a few % damage.
+function BuildScorerClass:DamageTakenShare(output)
+	local function chance(key) return m_min(1, m_max(0, (output[key] or 0) / 100)) end
+	local blockEffect = m_min(1, m_max(0, (output.BlockEffect or 100) / 100))
+	local suppress = chance("EffectiveSpellSuppressionChance") * m_min(1, m_max(0, (output.SpellSuppressionEffect or 50) / 100))
+	local function taken(notHit, block, spell)
+		return (1 - chance(notHit)) * (1 - chance(block) * blockEffect) * (spell and (1 - suppress) or 1)
+	end
+	local share = (taken("MeleeNotHitChance", "EffectiveBlockChance")
+		+ taken("ProjectileNotHitChance", "EffectiveProjectileBlockChance")
+		+ taken("SpellNotHitChance", "EffectiveSpellBlockChance", true)
+		+ taken("SpellProjectileNotHitChance", "EffectiveSpellProjectileBlockChance", true)) / 4
+	return m_max(0.05, m_min(1, share))
+end
+
 function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 	-- tankiness: mostly the maximum hit the build survives (the weakest damage
 	-- type first, then all of them), a little effective hit pool. EHP counts
@@ -409,6 +429,13 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 		tank = m_log(m_max(ehp, 1))
 	end
 	local score = self.focus.dps * m_log(m_max(dps, 1)) + self.focus.ehp * tank - penalty + self:ExtraTerms(output)
+	-- avoiding, blocking and suppressing hits (see DamageTakenShare): its own
+	-- weight, as top players value it (max block or 100% suppression is worth
+	-- about as much as doubling the damage to them)
+	local avoidWeight = self.avoidanceWeight or self.focus.avoid or 0
+	if output and avoidWeight > 0 then
+		score = score + avoidWeight * m_log(1 / self:DamageTakenShare(output))
+	end
 	-- below the EHP floor, every missing bit costs more than damage can pay back
 	local floor = self.ehpFloor or self.focus.ehpFloor
 	if floor and ehp < floor then
@@ -456,6 +483,13 @@ function BuildScorerClass:FlaskUptime(item, modDB)
 	rate = rate + modDB:Sum("BASE", nil, "FlaskChargesGenerated") + modDB:Sum("BASE", nil, "UtilityFlaskChargesGenerated")
 	if rate <= 0 then
 		return 0
+	end
+	-- (Enkindling enchantments: no charges while it is up, so it is up for its
+	-- duration, then down while it refills)
+	for _, modLine in ipairs(item.enchantModLines or { }) do
+		if modLine.line:lower():match("gains no charges during effect") then
+			return m_min(1, duration / (duration + chargesUsed / rate))
+		end
 	end
 	return m_min(1, duration * rate / chargesUsed)
 end

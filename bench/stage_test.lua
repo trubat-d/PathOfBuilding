@@ -1,6 +1,6 @@
 -- Test: runs one generator step on a saved generated build and prints what
 -- it did, so a step can be checked without a whole generation.
--- From the src folder: OURS=<build .xml> STEP=<flasks|uniquejewels|aurastack|metajewels|uniquesweep|uniqueflasks|fillmain|finalrares|ascendancy|supports|refine|rares> INVEST=ENDGAME luajit ../bench/stage_test.lua
+-- From the src folder: OURS=<build .xml> STEP=<flasks|flaskenchant|clusters|popular|learn|uniquejewels|aurastack|metajewels|uniquesweep|uniqueflasks|fillmain|finalrares|ascendancy|supports|refine|swap|rares> INVEST=ENDGAME luajit ../bench/stage_test.lua
 io.stdout:setvbuf("no")
 local benchDir = arg and arg[0] and arg[0]:match("^(.*)[/\\]") or "../bench"
 dofile("HeadlessWrapper.lua")
@@ -53,6 +53,23 @@ elseif step == "learn" then
 	gen.options.meta = { details = require("dkjson").decode(mf:read("*a")) }
 	mf:close()
 	print("KEPT", gen:LearnFromTopBuilds())
+elseif step == "popular" then
+	-- META_DETAILS=<json details> or META_CODES="<files with PoB codes>" (aggregated like poe.ninja players)
+	if os.getenv("META_CODES") then
+		local chars = { }
+		for path in os.getenv("META_CODES"):gmatch("%S+") do
+			local cf = assert(io.open(path))
+			table.insert(chars, { pathOfBuildingExport = cf:read("*a") })
+			cf:close()
+		end
+		gen.options.meta = { details = new("BuildMetaSource"):BuildMetaSource().AggregateCharacters(gen.mainGem.name, chars) }
+	else
+		local mf = assert(io.open(os.getenv("META_DETAILS")))
+		gen.options.meta = { details = require("dkjson").decode(mf:read("*a")) }
+		mf:close()
+	end
+	gen.options.popularMinBuilds = tonumber(os.getenv("MIN_BUILDS") or "")
+	print("GAIN", gen:PopularPassivesMove())
 elseif step == "watcher" then
 	-- the build's Watcher's Eye taken out, then searched again
 	for _, slot in ipairs(build.itemsTab.orderedSlots) do
@@ -81,6 +98,12 @@ elseif step == "refine" then
 	-- (one allocation first, as the generator's tree has been allocated before refining)
 	gen:AllocateTree(true)
 	for _, n in ipairs({ 6, 10, 16, 6 }) do print("REFINE", n, gen:RefineTree(n)) end
+elseif step == "flaskenchant" then
+	gen:FlaskEnchantMove()
+elseif step == "clusters" then
+	gen:ChooseClusterJewels(tonumber(os.getenv("LARGE") or "0"))
+elseif step == "swap" then
+	print("KEPT", gen:SwapForNotables(10))
 elseif step == "supports" then
 	gen:FinalSupports()
 elseif step == "ascendancy" then

@@ -376,6 +376,25 @@ local function parseShort(text)
 end
 BuildMetaSourceClass.ParseShort = parseShort
 
+-- Allocated passive node ids and class id of a PoB code's active tree, or nil
+-- (read straight from the XML: no build needs loading)
+function BuildMetaSourceClass.TreeOfCode(code)
+	if type(code) ~= "string" or code == "" or not Inflate then return nil end
+	local ok, xml = pcall(function() return Inflate(common.base64.decode((code:gsub("%s", ""):gsub("-", "+"):gsub("_", "/")))) end)
+	if not ok or type(xml) ~= "string" then return nil end
+	local active = tonumber(xml:match('<Tree[^>]-activeSpec="(%d+)"') or "1") or 1
+	local index = 0
+	for tag in xml:gmatch("<Spec%s[^>]*>") do
+		index = index + 1
+		if index == active then
+			local nodes = { }
+			for id in (tag:match('%snodes="([%d,]*)"') or ""):gmatch("%d+") do t_insert(nodes, tonumber(id)) end
+			return nodes, tonumber(tag:match('%sclassId="(%d+)"') or "")
+		end
+	end
+	return nil
+end
+
 -- Aggregates character JSONs (poe.ninja character endpoint) for a skill
 function BuildMetaSourceClass.AggregateCharacters(skillName, characters)
 	local details = { count = 0, supportSets = { }, supports = { }, uniques = { }, uniquePairs = { }, keystones = { },
@@ -383,6 +402,7 @@ function BuildMetaSourceClass.AggregateCharacters(skillName, characters)
 	local setCount, setGems = { }, { }
 	local hits = { Physical = { }, Fire = { }, Cold = { }, Lightning = { }, Chaos = { } }
 	local ehps = { }
+	local treeCounts = { }
 	local function add(map, key) if key and key ~= "" then map[key] = (map[key] or 0) + 1 end end
 	for _, char in ipairs(characters) do
 		details.count = details.count + 1
@@ -432,6 +452,14 @@ function BuildMetaSourceClass.AggregateCharacters(skillName, characters)
 			for j = i + 1, #ulist do add(details.uniquePairs, ulist[i] .. "|" .. ulist[j]) end
 		end
 		for _, k in ipairs(char.keyStones or { }) do add(details.keystones, k.name) end
+		-- passives allocated, per class (the tree's start decides what is near)
+		local nodes, classId = BuildMetaSourceClass.TreeOfCode(char.pathOfBuildingExport)
+		if nodes and classId then
+			local key = tostring(classId)
+			treeCounts[key] = treeCounts[key] or { builds = 0, nodes = { } }
+			treeCounts[key].builds = treeCounts[key].builds + 1
+			for _, id in ipairs(nodes) do treeCounts[key].nodes[id] = (treeCounts[key].nodes[id] or 0) + 1 end
+		end
 		add(details.pantheonMajor, char.pantheonMajor)
 		add(details.pantheonMinor, char.pantheonMinor)
 		add(details.bandit, char.banditChoice)
@@ -447,6 +475,19 @@ function BuildMetaSourceClass.AggregateCharacters(skillName, characters)
 	t_sort(details.supportSets, function(a, b) return a.count > b.count end)
 	for damageType, list in pairs(hits) do details.maxHit[damageType] = median(list) end
 	details.ehp = median(ehps)
+	-- passives taken by at least two players, per class: { [classId] = { builds, nodes = { { id, count } } } }
+	details.popularNodes = { }
+	for key, entry in pairs(treeCounts) do
+		local list = { }
+		for id, count in pairs(entry.nodes) do
+			if count >= 2 then t_insert(list, { id = id, count = count }) end
+		end
+		t_sort(list, function(x, y)
+			if x.count ~= y.count then return x.count > y.count end
+			return x.id < y.id
+		end)
+		details.popularNodes[key] = { builds = entry.builds, nodes = list }
+	end
 	-- unique pairs used together more than chance (lift)
 	local pairsList = { }
 	local n = math.max(1, details.count)

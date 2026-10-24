@@ -131,6 +131,21 @@ function BuildGeneratorClass:Tick()
 	end
 end
 
+-- Variants of a generation (options.variant 2, 3...): the structural
+-- choices of the first stages (supports, passive tree, ascendancy, weapon)
+-- see their gains scaled by a fixed pseudo-random factor around 1 (15%), so
+-- each variant explores another near-best path; the later stages are exact.
+-- The same variant always gives the same build. 1 for the plain generation.
+function BuildGeneratorClass:Jitter(key)
+	local variant = self.options.variant or 1
+	if variant <= 1 or (self.stageIndex or 0) > (self.options.variantStages or 8) then return 1 end
+	local text = tostring(key) .. "#" .. variant
+	local h = 5381
+	for i = 1, #text do h = (h * 33 + text:byte(i)) % 4294967296 end
+	h = (h * 2654435761) % 4294967296
+	return 1 + (self.options.variantSpread or 0.15) * ((h % 10007) / 10006 - 0.5) * 2
+end
+
 -- Progress within the current stage (0 to 1), for the window's progress bar:
 -- Move(i, n) starts the i-th of n steps of the stage, Inner(f) is how far
 -- the running step is (only ever moves forward)
@@ -543,7 +558,7 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 	local current = self:Score()
 	for pick = 1, maxSupports - forcedCount do
 		self:Inner((pick - 1) / m_max(1, maxSupports - forcedCount))
-		local best, bestScore
+		local best, bestScore, bestSeen
 		for _, gemId in ipairs(supports) do
 			if not inGroup(gemId) then
 				local gem = data.gems[gemId]
@@ -551,8 +566,10 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 				self.build.skillsTab:ProcessSocketGroup(group)
 				local score = self:WithChargesOf(gem, function() return self:Score() end)
 				t_remove(group.gemList)
-				if not bestScore or score > bestScore + 1e-9 then
-					best, bestScore = gemId, score
+				-- (variants: gains seen through their factor)
+				local seen = current + (score - current) * (score > current and self:Jitter("support" .. gemId) or 1)
+				if not bestScore or seen > bestSeen + 1e-9 then
+					best, bestScore, bestSeen = gemId, score, seen
 				end
 			end
 		end
@@ -732,11 +749,15 @@ function BuildGeneratorClass:AuraStackMove()
 		return n
 	end
 	local beforeAuras = auraCount()
+	-- (costs too: reserving mana leaves less to cast with, which the tree and
+	-- the gear fix afterwards; the full score at the end has the real costs)
 	self.scorer.ignoreReservation = true
+	self.scorer.ignoreCosts = true
 	local ok, err = pcall(function()
 		self:ChooseUtilityGems()
 	end)
 	self.scorer.ignoreReservation = false
+	self.scorer.ignoreCosts = false
 	if ok and auraCount() > beforeAuras then
 		self:AutoConfigure()
 		local function debugState(label)
@@ -962,15 +983,19 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly, warm)
 		end
 		return m_max(1, cost)
 	end
+	local function jittered(value, entry)
+		if value > 0 then return value * self:Jitter(entry.node.id .. (entry.effect and ("_" .. entry.effect.id) or "")) end
+		return value
+	end
 	local function ratio(entry)
 		if entry.effect then
 			if not effectFree(entry.effect.id) then return -math.huge end
-			return self:Score({ addNodes = { [effectNode(entry.node, entry.effect)] = true } }) - current
+			return jittered(self:Score({ addNodes = { [effectNode(entry.node, entry.effect)] = true } }) - current, entry)
 		end
 		local pathSet = { }
 		for _, n in ipairs(entry.node.path) do pathSet[n] = true end
 		local score = self:Score({ addNodes = pathSet })
-		return (score - current) / pathCost(entry.node)
+		return jittered((score - current) / pathCost(entry.node), entry)
 	end
 	local function allocate(entry)
 		local node = entry.node
@@ -1198,6 +1223,11 @@ function BuildGeneratorClass:SearchAscendancy()
 				if cost(union) <= left then
 					t_insert(chosen, t)
 					local score = self:Score({ addNodes = union })
+					if score > current and (self.options.variant or 1) > 1 then
+						local key = { }
+						for _, c in ipairs(chosen) do key[#key + 1] = c.node.id end
+						score = current + (score - current) * self:Jitter("asc" .. table.concat(key, ","))
+					end
 					if score > bestScore + 1e-9 then
 						best, bestScore = { }, score
 						for _, c in ipairs(chosen) do t_insert(best, c) end
@@ -1246,6 +1276,102 @@ function BuildGeneratorClass:TrimTree()
 		spec:AddUndoState()
 		self:Note(string.format("Removed %d passive point%s to stay within the point budget", removed, removed == 1 and "" or "s"))
 	end
+end
+
+-- Swaps for strong passives out of reach: allocation spends points by gain
+-- per point, so the last points go to cheap nearby passives while a strong
+-- notable a few points away is never affordable. Here the passives worth
+-- the most on their own (with their path) are tried one at a time: the
+-- cheapest leaves are taken back to pay for the path, and the swap is kept
+-- if the build is better.
+function BuildGeneratorClass:SwapForNotables(maxTries)
+	local spec = self.build.spec
+	local maxDist = self.options.swapDistance or 7
+	self:Recalculate()
+	local budget = self:PointBudget()
+	local current = self:Score()
+	local function pathCost(node)
+		local cost = 0
+		for _, n in ipairs(node.path) do if not n.isMultipleChoiceOption then cost = cost + 1 end end
+		return m_max(1, cost)
+	end
+	-- 1. the strongest single targets (whole gain, not per point)
+	local targets = { }
+	for _, node in ipairs(nodesById(spec.nodes)) do
+		if not node.alloc and node.path and #node.path >= 2 and #node.path <= maxDist and not node.ascendancyName
+			and (node.type == "Notable" or node.type == "Keystone") and not node.isProxy
+			and not (self.forbiddenNodes and self.forbiddenNodes[node.id]) then
+			local pathSet = { }
+			for _, n in ipairs(node.path) do pathSet[n] = true end
+			local gain = self:Score({ addNodes = pathSet }) - current
+			if gain > 0.01 then t_insert(targets, { node = node, gain = gain, cost = pathCost(node) }) end
+		end
+	end
+	t_sort(targets, function(a, b)
+		if m_floor(a.gain * 1e9) ~= m_floor(b.gain * 1e9) then return a.gain > b.gain end
+		return a.node.id < b.node.id
+	end)
+	local kept, tries = { }, 0
+	for _, target in ipairs(targets) do
+		if tries >= (maxTries or 10) then break end
+		local node = target.node
+		if not node.alloc and node.path then
+			tries = tries + 1
+			local before = self:FullScore()
+			local undo = spec:CreateUndoState()
+			local onPath = { }
+			for _, n in ipairs(node.path) do onPath[n] = true end
+			-- 2. leaves taken back, cheapest first, until the path fits
+			local used = spec:CountAllocNodes()
+			-- (a tree already over the count, e.g. with points from items, stays as over)
+			local need = pathCost(node) - m_max(0, budget - used)
+			local base = self:Score()
+			local leaves = { }
+			for _, leaf in ipairs(nodesById(spec.allocNodes)) do
+				local holdsJewel = leaf.type == "Socket" and (spec.jewels[leaf.id] or 0) ~= 0
+				local protected = self.protectedNodes and self.protectedNodes[leaf.id]
+				if not leaf.ascendancyName and not holdsJewel and not protected and leaf.type ~= "ClassStart" and leaf.type ~= "Mastery"
+					and leaf.type ~= "Keystone" and leaf.depends and #leaf.depends <= 1 and not onPath[leaf] then
+					t_insert(leaves, { node = leaf, loss = base - self:Score({ removeNodes = { [leaf] = true } }) })
+				end
+			end
+			t_sort(leaves, function(a, b)
+				if a.loss ~= b.loss then return a.loss < b.loss end
+				return a.node.id < b.node.id
+			end)
+			local freed = 0
+			for _, leaf in ipairs(leaves) do
+				if freed >= need then break end
+				if leaf.node.alloc and leaf.node.depends and #leaf.node.depends <= 1 then
+					spec:DeallocNode(leaf.node)
+					freed = freed + 1
+				end
+			end
+			local ok = freed >= need and node.path
+			if ok then
+				spec:AllocNode(node)
+				self:Recalculate()
+				-- (a mastery on the new notable's cluster, if a point is free)
+				local after = self:FullScore()
+				if self.options.debugTiming then ConPrintf("[swap] %s: gain alone %+.3f, cost %d, freed %d: %.3f -> %.3f", node.dn, target.gain, target.cost, freed, before, after) end
+				if after > before + 0.005 and spec:CountAllocNodes() <= m_max(budget, used) then
+					t_insert(kept, string.format("%s (%+.2f)", node.dn, after - before))
+					current = self:Score()
+				else
+					ok = false
+				end
+			end
+			if not ok then
+				spec:RestoreUndoState(undo)
+				spec:BuildAllDependsAndPaths()
+				self:Recalculate()
+			end
+		end
+	end
+	if #kept > 0 then
+		self:Note("Passives swapped for stronger ones out of reach: " .. table.concat(kept, ", "))
+	end
+	return #kept
 end
 
 function BuildGeneratorClass:ResetTree()
@@ -1442,7 +1568,8 @@ function BuildGeneratorClass:ChooseBases()
 	local scored = { }
 	for _, option in ipairs(self.weaponOptions or { }) do
 		self:EquipWeapons(option)
-		t_insert(scored, { option = option, score = (self:FullScore()) })
+		-- (variants: up to 0.3 either way)
+		t_insert(scored, { option = option, score = (self:FullScore()) + (self:Jitter("weapon" .. tostring(option.weapon1) .. tostring(option.weapon2)) - 1) * 2 })
 	end
 	t_sort(scored, function(a, b) return a.score > b.score end)
 	if scored[1] then
@@ -1666,6 +1793,54 @@ function BuildGeneratorClass:MakeFlasks()
 	self:Note("Flasks: " .. (#names > 0 and table.concat(names, ", ") or "none helped"))
 end
 
+-- Enkindling Orb enchantments on the utility flasks (more effect, duration,
+-- charges...; the flask then gains no charges while it is up, which its uptime
+-- counts): each flask keeps the best one, if the build is better with it.
+-- Top players enchant their flasks, mostly with "increased effect" when
+-- the flasks are permanent (Mageblood).
+function BuildGeneratorClass:FlaskEnchantMove()
+	local enchants = data.enchantments and data.enchantments["UtilityFlask"] and data.enchantments["UtilityFlask"]["ENKINDLING"]
+	if not enchants then return end
+	local kept = { }
+	for _, slotName in ipairs({ "Flask 1", "Flask 2", "Flask 3", "Flask 4", "Flask 5" }) do
+		local slot = self.itemsTab.slots[slotName]
+		local item = slot and self.itemsTab.items[slot.selItemId]
+		if item and item.base and item.base.flask and not (item.base.flask.life or item.base.flask.mana)
+			and item.rarity == "MAGIC" and #(item.enchantModLines or { }) == 0 then
+			local before = self:FullScore()
+			local best
+			for _, enchant in ipairs(enchants) do
+				local copy = new("Item"):Item(item:BuildRaw())
+				for part in enchant:gmatch("[^/]+") do
+					-- (the top of the range: enchanting again is cheap)
+					local line = part:gsub("%((%d+)%-(%d+)%)", "%2")
+					t_insert(copy.enchantModLines, { line = line, enchant = true })
+				end
+				copy:BuildAndParseRaw()
+				-- (full score: the uptime is what changes)
+				local equipped = self:Equip(copy, slotName)
+				self:Recalculate()
+				local score = self:FullScore()
+				slot:SetSelItemId(item.id)
+				self.itemsTab:DeleteItem(equipped, true)
+				if not best or score > best.score + 1e-9 then best = { item = copy, score = score, label = enchant } end
+				self:Tick()
+			end
+			self.itemsTab:PopulateSlots()
+			self:Recalculate()
+			if best and best.score > before + 0.003 then
+				self:Equip(best.item, slotName)
+				self.itemsTab:DeleteItem(item, true)
+				self.itemsTab:PopulateSlots()
+				self:Recalculate()
+				local label = best.label:gsub("%((%d+)%-(%d+)%)", "%2"):gsub("/", ", ")
+				t_insert(kept, string.format("%s: %s", item.name, label))
+			end
+		end
+	end
+	if #kept > 0 then self:Note("Flask enchantments (Enkindling Orb): " .. table.concat(kept, "; ")) end
+end
+
 -- Rares made again at the end, once the tree, jewels, flasks and gems are
 -- final (they were made for the build as it was then): every rare slot,
 -- influences and eldritch implicits included (the weapon bases and the
@@ -1845,6 +2020,7 @@ end
 -- build is better. Catches points spent early that later choices made useless.
 function BuildGeneratorClass:OptimizeTree()
 	local total = 0
+	if self.options.notableSwaps then self:SwapForNotables(10) end
 	-- 1. re-choose and reconnect the targets with the fewest points
 	if self.options.treeSearch ~= false then
 		local ok, gain, swaps = pcall(function() return new("TreeOptimizer"):TreeOptimizer(self):Run() end)
@@ -2078,11 +2254,9 @@ function BuildGeneratorClass:ChooseClusterJewels(maxJewels)
 		equip = function(item, slotName) return self:Equip(item, slotName) end,
 		tick = function() self:Tick() end,
 	})
-	for _ = 1, maxJewels or 2 do
-		local base = self:FullScore()
-		gen.values = { } -- values change once a jewel is in
-		local result = gen:Best(base, { maxPath = 6 })
-		if not result or result.gain <= 0.01 then break end
+	-- socket the jewel, rebuild the tree around it; false (and undone) if the
+	-- build isn't better once the points come from elsewhere
+	local function place(result, base)
 		local spec = self.build.spec
 		local undo = spec:CreateUndoState()
 		local slot = self.itemsTab.slots["Jewel " .. result.socket.node.id]
@@ -2099,9 +2273,39 @@ function BuildGeneratorClass:ChooseClusterJewels(maxJewels)
 			spec:BuildClusterJewelGraphs()
 			self.itemsTab:PopulateSlots()
 			self:Recalculate()
-			break
+			return false
 		end
 		self:Note(string.format("%s (%d passive points; a crafted / bought rare, price varies)", result.label, points))
+		return true
+	end
+	for _ = 1, maxJewels or 2 do
+		local base = self:FullScore()
+		gen.values = { } -- values change once a jewel is in
+		local result = gen:Best(base, { maxPath = 6 })
+		if not result or result.gain <= 0.01 or not place(result, base) then break end
+	end
+	-- Medium or Small ones in the sockets the Large ones add (whichever is
+	-- better for the points: a Small one is 2 points for its notable)
+	if self.options.innerClusters == false then return end
+	local tried = { }
+	for _ = 1, 4 do
+		local socket
+		for _, s in ipairs(gen:Sockets(12, true)) do
+			if not tried[s.node.id] then socket = s break end
+		end
+		if not socket then break end
+		tried[socket.node.id] = true
+		local base = self:FullScore()
+		local best
+		for _, jewelName in ipairs({ "Medium Cluster Jewel", "Small Cluster Jewel" }) do
+			gen.values = { }
+			local result = gen:Best(base, { jewel = jewelName, socket = socket })
+			if result and (not best or result.score > best.score + 1e-9) then best = result end
+		end
+		if best and best.gain > 0.01 then
+			local kept = place(best, base)
+			if self.options.debugTiming then ConPrintf("[clusters] %s: estimated %+.3f, %s (%.3f -> %.3f)", best.label, best.gain, kept and "kept" or "dropped", base, self:FullScore()) end
+		end
 	end
 end
 
@@ -2648,6 +2852,102 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 	return #kept
 end
 
+-- The parts (gear, links, passives) of the i-th top player build of the
+-- skill, read once: ok, parts
+function BuildGeneratorClass:TopBuildParts(i)
+	local tops = self.options.meta and self.options.meta.details and self.options.meta.details.topBuilds
+	if not tops or not tops[i] then return false, "no build" end
+	self.topParts = self.topParts or { }
+	if self.topParts[i] == nil then
+		local BC = LoadModule("Modules/BuildComparison")
+		local ok, parts = pcall(function()
+			local entry = new("CompareEntry"):CompareEntry(BC.DecodeCode(tops[i].code), "top player")
+			BC.SelectMainSkill(entry, self.mainGem.name)
+			return BC.ReadParts(entry)
+		end)
+		if not ok then ConPrintf("Top build %d could not be read: %s", i, tostring(parts)) end
+		self.topParts[i] = { ok = ok, parts = parts }
+		self:Tick()
+	end
+	return self.topParts[i].ok, self.topParts[i].parts
+end
+
+-- The passives most top players of the skill take (poe.ninja top builds,
+-- when loaded): the notables and keystones at least half of them allocate,
+-- and then those most of them do, each set allocated with its paths, the
+-- tree trimmed back to the budget around them and refilled; kept if the
+-- build is better. What players converge on often only pays off together.
+function BuildGeneratorClass:PopularPassivesMove(maxBuilds)
+	local details = self.options.meta and self.options.meta.details
+	if not details or not self.mainGem then return 0 end
+	local spec = self.build.spec
+	local counts, read = { }, 0
+	-- the passives of every top player of the class (BuildMetaSource), else
+	-- the few top builds themselves
+	local popular = details.popularNodes and details.popularNodes[tostring(spec.curClassId)]
+	if popular and (popular.builds or 0) >= (self.options.popularMinBuilds or 3) then
+		read = popular.builds
+		for _, e in ipairs(popular.nodes or { }) do counts[e.id] = e.count end
+	else
+		for i = 1, m_min(maxBuilds or 8, #(details.topBuilds or { })) do
+			local ok, parts = self:TopBuildParts(i)
+			if ok and parts and parts.tree and parts.tree.classId == spec.curClassId then
+				read = read + 1
+				for _, id in ipairs(parts.tree.nodes) do counts[id] = (counts[id] or 0) + 1 end
+			end
+		end
+	end
+	if read < (self.options.popularMinBuilds or 3) then return 0 end
+	local total, lastKey = 0, nil
+	for _, share in ipairs({ 0.5, 0.75 }) do
+		local wanted = { }
+		for _, node in ipairs(nodesById(spec.nodes)) do
+			local c = counts[node.id] or 0
+			if c >= read * share and not node.alloc and node.path and (node.type == "Notable" or node.type == "Keystone")
+				and not node.ascendancyName and not node.expansionJewel and not (self.forbiddenNodes and self.forbiddenNodes[node.id]) then
+				t_insert(wanted, node)
+			end
+		end
+		local ids = { }
+		for _, node in ipairs(wanted) do t_insert(ids, node.id) end
+		local key = table.concat(ids, ",")
+		if #wanted > 0 and key ~= lastKey then
+			lastKey = key
+			self:Recalculate()
+			local before = self:FullScore()
+			local undo = spec:CreateUndoState()
+			local savedLog = #self.log
+			local protected = { }
+			for _, node in ipairs(wanted) do
+				if not node.alloc and node.path then spec:AllocNode(node) end
+				protected[node.id] = true
+			end
+			spec:BuildAllDependsAndPaths()
+			self:Recalculate()
+			local savedProtected = self.protectedNodes
+			self.protectedNodes = protected
+			self:TrimTree()
+			self.protectedNodes = savedProtected
+			self:AllocateTree(true)
+			self:Recalculate()
+			local after = self:FullScore()
+			for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+			local names = { }
+			for _, node in ipairs(wanted) do t_insert(names, node.dn) end
+			if self.options.debugTiming then ConPrintf("[popular] %d%%+ of %d builds: %s: %.3f -> %.3f", share * 100, read, table.concat(names, ", "), before, after) end
+			if after > before + 0.005 then
+				self:Note(string.format("Passives most top players take (%d%%+ of %d builds): %s, score %+.3f", share * 100, read, table.concat(names, ", "), after - before))
+				total = total + after - before
+			else
+				spec:RestoreUndoState(undo)
+				spec:BuildAllDependsAndPaths()
+				self:Recalculate()
+			end
+		end
+	end
+	return total
+end
+
 -- What the strongest players of the skill wear and link (poe.ninja top
 -- builds, when they're loaded): each of their gear items and their main
 -- link tried in this build, the best few kept when the full score agrees.
@@ -2666,12 +2966,7 @@ function BuildGeneratorClass:LearnFromTopBuilds(maxTries)
 	local current = self:Score()
 	local candidates = { }
 	for i = 1, m_min(3, #tops) do
-		local ok, parts = pcall(function()
-			local entry = new("CompareEntry"):CompareEntry(BC.DecodeCode(tops[i].code), "top player")
-			BC.SelectMainSkill(entry, self.mainGem.name)
-			return BC.ReadParts(entry)
-		end)
-		if not ok then ConPrintf("Top build %d could not be read: %s", i, tostring(parts)) end
+		local ok, parts = self:TopBuildParts(i)
 		if ok and parts then
 			local who = tostring(tops[i].name or ("player " .. i))
 			local slotNames = { }
@@ -3083,6 +3378,12 @@ function BuildGeneratorClass:Run()
 	self.scorer = new("BuildScorer"):BuildScorer(self.build, { focus = opts.focus, chargesPerSecond = opts.chargesPerSecond, overlap = self.overlap, ehpFloor = opts.ehpFloor, hitFloor = opts.hitFloor,
 		bossTier = opts.investment and opts.investment.awakenedGems and "uber" or "pinnacle" })
 	self.scorer.useChecklist = false -- on from the flask stage
+	-- (A/B options: weight of avoidance in tankiness, weight of tankiness)
+	self.scorer.avoidanceWeight = opts.avoidanceWeight
+	if opts.ehpWeight and self.scorer.focus then
+		self.scorer.focus = copyTable(self.scorer.focus, true)
+		self.scorer.focus.ehp = opts.ehpWeight
+	end
 	if opts.archetype then
 		self:Note("Archetype: " .. opts.archetype.label)
 	end
@@ -3195,6 +3496,7 @@ function BuildGeneratorClass:Run()
 	self:MakeFlasks()
 	if opts.uniqueSweep ~= false then self:UniqueFlaskSweep() end
 	if opts.permanentFlasks ~= false then self:PermanentFlaskMove() end
+	if opts.flaskEnchants ~= false then self:FlaskEnchantMove() end
 	self:Move(2, 6, "Pantheon and bandit")
 	self:ChoosePantheonAndBandit()
 	if opts.auraStacking ~= false then
@@ -3223,6 +3525,8 @@ function BuildGeneratorClass:Run()
 		self:Move(3, 3, "Trying the top players' gear and links")
 		local ok, err = pcall(function() self:LearnFromTopBuilds() end)
 		if not ok then ConPrintf("Learning from top builds failed: %s", tostring(err)) end
+		ok, err = pcall(function() self:PopularPassivesMove() end)
+		if not ok then ConPrintf("Popular passives failed: %s", tostring(err)) end
 	end
 	stage(12, "Finishing: ascendancy, supports and passive tree")
 	self:Move(1, 6, "Choosing the ascendancy again")

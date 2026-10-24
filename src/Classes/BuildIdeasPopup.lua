@@ -391,6 +391,18 @@ function BuildIdeasPopupClass:OpenGenerator()
 	for _, sc in ipairs(new("AutoConfig"):AutoConfig({ }).scenarioList) do t_insert(configList, { label = sc.label, scenario = sc }) end
 	controls.configLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {400, 78, 0, 16}, "^7Configure for:")
 	controls.config = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {490, 76, 300, 20}, configList)
+	-- several attempts of the same build, each exploring other early choices
+	-- (BuildGenerator variants), the best one kept
+	controls.triesLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {800, 78, 0, 16}, "^7Tries:")
+	controls.tries = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {846, 76, 58, 20}, { "1", "2", "3", "4", "6", "8" })
+	controls.tries.enabled = idle
+	controls.tries.tooltipFunc = function(tooltip)
+		tooltip:Clear()
+		tooltip:AddLine(16, "^7Builds the same build several times, each try exploring other early choices")
+		tooltip:AddLine(16, "^7(supports, passives, ascendancy, weapon), and keeps the best. Builds come out")
+		tooltip:AddLine(16, "^7up to a point apart, so more tries give a better build. With \"Several cores\"")
+		tooltip:AddLine(16, "^7the tries run at once; without, one after the other (each takes the full time).")
+	end
 	controls.config.enabled = idle
 	controls.config.tooltipFunc = function(tooltip)
 		tooltip:Clear()
@@ -406,10 +418,16 @@ function BuildIdeasPopupClass:OpenGenerator()
 	controls.timeless.enabled = idle
 	controls.synergies = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {600, 105, 18}, "Look for uniques & synergies (slower):", nil, "After everything else, run the build ideas search once and apply the best idea.", true)
 	controls.synergies.enabled = idle
-	controls.threads = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {800, 105, 18}, "Several cores:", function(state)
-		main.generatorThreads = state
+	controls.threads = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {800, 105, 18}, "Several cores:", function(on)
+		main.generatorThreads = on
 		-- (checked here, in the app's frame: never from inside a generation)
-		if state then new("ParallelGenerator"):ParallelGenerator().Available() end
+		if on then
+			local pg = new("ParallelGenerator"):ParallelGenerator()
+			-- tries run at once: as many as there are threads by default
+			if pg.Available() and controls.tries.selIndex == 1 then
+				controls.tries:SelByValue(tostring(m_min(4, pg.MaxWorkers())))
+			end
+		end
 	end, "Experimental: background threads build several archetypes (and rare items) at once.\nEach thread holds its own copy of the game data (about 1 GB). Off by default:\nit crashed the app on one PC. Without it everything runs one after the other.", main.generatorThreads == true)
 	controls.threads.enabled = idle
 
@@ -573,10 +591,20 @@ function BuildIdeasPopupClass:OpenGenerator()
 		local asc = controls.ascend.list[controls.ascend.selIndex]
 		local options = makeOptions()
 		state.running = true
-		local function startGeneration()
-		state.status = "^7Creating a new build..."
+		-- several tries (variants of the same generation), the best one kept:
+		-- at once in background threads when they're on, else one after the other
+		local tries = tonumber(controls.tries.list[controls.tries.selIndex]) or 1
+		local parallelTries = tries > 1 and not state.noParallelTries and options.archetype
+			and new("ParallelGenerator"):ParallelGenerator().Available()
+		state.noParallelTries = nil
+		local attempt, bestTry, tryScores = 1, nil, { }
+		options.variant = 1
+		local buildName = "Generated " .. skill.label .. " " .. asc.ascendName
+		local startGeneration
+		startGeneration = function()
+		state.status = tries > 1 and string.format("^7Try %d of %d: creating a new build...", attempt, tries) or "^7Creating a new build..."
 		-- Open a new empty build, then generate into it once it exists
-		main:SetMode("BUILD", false, "Generated " .. skill.label .. " " .. asc.ascendName)
+		main:SetMode("BUILD", false, buildName)
 		local waited = false
 		main.onFrameFuncs["BuildGenerator"] = function()
 			if not waited then waited = true return end
@@ -585,23 +613,44 @@ function BuildIdeasPopupClass:OpenGenerator()
 			state.generator = generator
 			state.progress = 0
 			options.onProgress = function(stage, index, count, sub)
-				state.progress = ((index - 1) + (sub or 0)) / m_max(1, count)
-				state.status = string.format("^7Step %d of %d (%d%%): %s...", index, count, m_floor(state.progress * 100), stage)
+				local inTry = ((index - 1) + (sub or 0)) / m_max(1, count)
+				state.progress = ((attempt - 1) + inTry) / tries
+				state.status = string.format("^7%sStep %d of %d (%d%%): %s...", tries > 1 and string.format("Try %d of %d, ", attempt, tries) or "",
+					index, count, m_floor(inTry * 100), stage)
 			end
 			runInBackground("BuildGenerator", popup, function() return generator:Run() end, function(result)
+				-- this try kept if it's the best so far; the next try, or the best one opened
+				local record = { score = result.final.score or -math.huge, xml = build:SaveDB("code"), result = result, variant = attempt,
+					overlap = generator.overlap and generator.overlap:GetAssumptions() or { } }
+				t_insert(tryScores, string.format("%.2f", record.score))
+				if not bestTry or record.score > bestTry.score then bestTry = record end
+				if attempt < tries and state.running then
+					attempt = attempt + 1
+					options.variant = attempt
+					startGeneration()
+					return
+				end
 				state.running = false
-				local lines = { string.format("^7Done. Damage %s, effective hit pool %s. The build is open and not saved yet: use Save As to keep it.",
+				if bestTry.variant ~= attempt then
+					main:SetMode("BUILD", false, buildName, bestTry.xml)
+				end
+				result = bestTry.result
+				local lines = { string.format("^7Done%s. Damage %s, effective hit pool %s. The build is open and not saved yet: use Save As to keep it.",
+					tries > 1 and string.format(" (best of %d tries: try %d; scores %s)", tries, bestTry.variant, table.concat(tryScores, ", ")) or "",
 					formatNumSep(string.format("%.0f", result.final.dps)), formatNumSep(string.format("%.0f", result.final.ehp))) }
 				for _, l in ipairs(result.log) do t_insert(lines, "^7- " .. l) end
 				t_insert(lines, "^xC0C0C0" .. result.costLine)
 				for _, c in ipairs(result.configChanges or { }) do t_insert(lines, "^x66CCFFConfig: ^7" .. c) end
 				for _, p in ipairs(result.final.penalties or { }) do t_insert(lines, colorCodes.NEGATIVE .. "Cost: ^7" .. p.label) end
 				for _, a in ipairs(result.assumptions) do t_insert(lines, "^x66CCFFAssumes: ^7" .. a) end
-				for _, a in ipairs(generator.overlap and generator.overlap:GetAssumptions() or { }) do t_insert(lines, "^x66CCFFAssumes: ^7" .. a) end
+				for _, a in ipairs(bestTry.overlap) do t_insert(lines, "^x66CCFFAssumes: ^7" .. a) end
 				setLog(lines)
 				state.status = "^7Finished."
-				build.buildFlag = true
-				build.modFlag = true
+				local opened = main.modes["BUILD"]
+				if opened then
+					opened.buildFlag = true
+					opened.modFlag = true
+				end
 			end, function(err)
 				state.running = false
 				state.status = "^1Generation failed: " .. tostring(err)
@@ -617,6 +666,12 @@ function BuildIdeasPopupClass:OpenGenerator()
 			started = true
 			main.onFrameFuncs["BuildMetaWait"] = nil
 			options.meta = entry
+			if parallelTries then
+				state.meta = entry
+				state.running = false
+				if state.fullParallel({ options.archetype }, tries) then return end
+				state.running = true
+			end
 			startGeneration()
 		end
 		main.onFrameFuncs["BuildMetaWait"] = function()
@@ -635,7 +690,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 	end
 	-- Generations in background threads, several at once (Classes/ParallelGenerator).
 	-- onResult(archetype, summary, xml) / onFailed(archetype, err), then onAll()
-	local function runParallel(archetypes, quick, meta, onResult, onFailed, onAll)
+	local function runParallel(archetypes, quick, meta, onResult, onFailed, onAll, variants)
 		local pg = new("ParallelGenerator"):ParallelGenerator()
 		state.parallel = pg
 		local jobs = { }
@@ -645,6 +700,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 			options.quick = quick
 			if quick then options.synergies = false end
 			options.meta = meta
+			options.variant = variants and variants[i] or nil
 			jobs[i] = pg.JobFromOptions(options)
 		end
 		local doneCount, runningCount = 0, 0
@@ -652,14 +708,14 @@ function BuildIdeasPopupClass:OpenGenerator()
 		main.onFrameFuncs["BuildParallelStatus"] = function()
 			if not state.running then main.onFrameFuncs["BuildParallelStatus"] = nil return end
 			state.progress = doneCount / m_max(1, #jobs)
-			state.status = string.format("^7Building %d archetype%s at once (up to %d threads): %d running, %d done, %d s...",
+			state.status = string.format("^7Building %d build%s at once (up to %d threads): %d running, %d done, %d s...",
 				#jobs, #jobs == 1 and "" or "s", pg.MaxWorkers(), runningCount, doneCount, m_floor((GetTime() - t0) / 1000))
 		end
 		pg:Run(jobs, {
 			onStart = function() runningCount = runningCount + 1 end,
 			onDone = function(index, summary, xml)
 				runningCount, doneCount = runningCount - 1, doneCount + 1
-				onResult(archetypes[index], summary, xml)
+				onResult(archetypes[index], summary, xml, variants and variants[index])
 			end,
 			onError = function(index, err)
 				runningCount, doneCount = math.max(0, runningCount - 1), doneCount + 1
@@ -849,22 +905,45 @@ function BuildIdeasPopupClass:OpenGenerator()
 		if not pgStatic.Available() then return false end
 		-- (at least the best three: a quick build ranks archetypes by how they
 		-- start, and the one that ends best is often second or third)
-		local candidates = { }
-		local wanted = math.max(3, pgStatic.MaxWorkers())
+		-- (and up to five when more start close to the best one; archetypes whose
+		-- quick builds came out the same, e.g. one adding nothing usable, once)
+		local candidates, scores = { }, { }
+		local bestScore
 		for _, entry in ipairs(controls.archetype.list) do
-			if entry.archetype and entry.scan and entry.scan.built and not entry.scan.error and #candidates < wanted then
-				t_insert(candidates, entry.archetype)
+			local scan = entry.scan
+			if entry.archetype and scan and scan.built and not scan.error and scan.score then
+				local same = false
+				for _, s in ipairs(scores) do if math.abs(s - scan.score) < 1e-6 then same = true end end
+				bestScore = bestScore or scan.score
+				if not same and (#candidates < 3 or (#candidates < 5 and scan.score >= bestScore - 0.5)) then
+					t_insert(candidates, entry.archetype)
+					t_insert(scores, scan.score)
+				end
 			end
 		end
 		if #candidates < 2 then return false end
+		return state.fullParallel(candidates, tonumber(controls.tries.list[controls.tries.selIndex]) or 1)
+	end
+	-- Full builds in background threads: each archetype, each try (variant),
+	-- the best one opened. false when background threads aren't available
+	state.fullParallel = function(archetypes, tries)
+		local pgStatic = new("ParallelGenerator"):ParallelGenerator()
+		if not pgStatic.Available() then return false end
+		local candidates, variants = { }, { }
+		for _, archetype in ipairs(archetypes) do
+			for v = 1, m_max(1, tries or 1) do
+				t_insert(candidates, archetype)
+				t_insert(variants, v)
+			end
+		end
 		local skill = controls.skill.list[controls.skill.selIndex]
 		local asc = controls.ascend.list[controls.ascend.selIndex]
 		state.running = true
 		local best
 		local failures = { }
-		runParallel(candidates, false, state.meta, function(archetype, summary, xml)
+		runParallel(candidates, false, state.meta, function(archetype, summary, xml, variant)
 			if not best or (summary.score or -math.huge) > (best.summary.score or -math.huge) then
-				best = { archetype = archetype, summary = summary, xml = xml }
+				best = { archetype = archetype, summary = summary, xml = xml, variant = variant }
 			end
 		end, function(archetype, err)
 			t_insert(failures, archetype.label .. ": " .. tostring(err))
@@ -875,13 +954,15 @@ function BuildIdeasPopupClass:OpenGenerator()
 				ConPrintf("Parallel generation failed (%s), building in the app instead", tostring(failures[1]))
 				pgStatic.Disable()
 				state.confirmDiscard = true
+				state.noParallelTries = true
 				controls.generate.onClick()
 				return
 			end
 			main:SetMode("BUILD", false, "Generated " .. skill.label .. " " .. asc.ascendName .. " (" .. best.archetype.label .. ")", best.xml)
 			local result = best.summary
-			local lines = { string.format("^7Done: %d archetypes fully built at once, the best kept: %s. Damage %s, effective hit pool %s. The build is open and not saved yet: use Save As to keep it.",
-				#candidates, best.archetype.label, formatNumSep(string.format("%.0f", result.dps or 0)), formatNumSep(string.format("%.0f", result.ehp or 0))) }
+			local lines = { string.format("^7Done: %d builds fully built at once (%d archetype%s x %d tr%s), the best kept: %s, try %d. Damage %s, effective hit pool %s. The build is open and not saved yet: use Save As to keep it.",
+				#candidates, #archetypes, #archetypes == 1 and "" or "s", m_max(1, tries or 1), (tries or 1) == 1 and "y" or "ies", best.archetype.label, best.variant or 1,
+				formatNumSep(string.format("%.0f", result.dps or 0)), formatNumSep(string.format("%.0f", result.ehp or 0))) }
 			for _, l in ipairs(result.log or { }) do t_insert(lines, "^7- " .. l) end
 			if result.costLine then t_insert(lines, "^xC0C0C0" .. result.costLine) end
 			for _, c in ipairs(result.configChanges or { }) do t_insert(lines, "^x66CCFFConfig: ^7" .. c) end

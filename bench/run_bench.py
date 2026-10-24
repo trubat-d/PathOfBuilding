@@ -68,7 +68,15 @@ def run_auto(case, pool, top):
     quick_cases = [[skill, asc, inv, "quick", a] for a in list_archetypes(case)]
     quick = [json.loads(l) for l in pool.map(run_case, quick_cases)]
     ranked = sorted([q for q in quick if q.get("score") is not None], key=lambda q: -q["score"])
-    full_cases = [[skill, asc, inv, "full", q["archetype"]] for q in ranked[:top]]
+    # the best `top`, and up to `top`+2 when they start within 0.5 of the best;
+    # archetypes whose quick builds came out the same only once (as the app)
+    picked = []
+    for q in ranked:
+        if any(abs(p["score"] - q["score"]) < 1e-6 for p in picked):
+            continue
+        if len(picked) < top or (len(picked) < top + 2 and q["score"] >= ranked[0]["score"] - 0.5):
+            picked.append(q)
+    full_cases = [[skill, asc, inv, "full", q["archetype"]] for q in picked]
     full = [json.loads(l) for l in pool.map(run_case, full_cases)]
     best = max([f for f in full if f.get("score") is not None], key=lambda f: f["score"], default=None)
     lines = [json.dumps(dict(q, scan=True)) for q in quick] + [json.dumps(f) for f in full if f is not best]

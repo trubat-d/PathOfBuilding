@@ -5,16 +5,17 @@ Every decision is made by [`BuildScorer`](../src/Classes/BuildScorer.lua) on PoB
 
 - **Damage**: the main skill's DPS (combined parts for skills like Kinetic Blast), reduced when the skill can't be paid for in a long fight.
 - **Tankiness**: mostly the maximum hit taken of the weakest damage type, then all damage types, a little EHP, and how many times over the build takes the toughest pinnacle (or uber) boss hit.
+- **Avoidance**: the share of incoming hit damage the build takes on average (melee, projectile, spell and spell projectile hits) after evasion, dodge, block and spell suppression, with its own weight in every focus. Top players build max block or 100% suppression and value it about as much as doubling their damage; inside EHP it was worth a few % damage.
 - **Focus**: the weights of damage and tankiness. "Damage, with a minimum max hit" (`DPS_FLOOR`) is damage first with a 10,000 max hit floor; below the floor every missing bit costs more than damage can pay back.
 - **Penalties**: elemental resistances below the cap, missing attributes, reservation over 100% (more the further over), self-damage over time bigger than regeneration, a defence checklist (freeze, shock, bleed, poison, stun...) and drawbacks PoB doesn't calculate ([`GeneratorRules`](../src/Modules/GeneratorRules.lua)).
-- **Flasks**: their real uptime from charges gained and used; tinctures from their mana burn.
+- **Flasks**: their real uptime from charges gained and used (a flask that gains no charges while up, from an Enkindling enchantment, is up for its duration then refills); tinctures from their mana burn.
 
 The score is logarithmic in damage and in the max hit, so doubling the damage is worth the same at 1 million as at 100 million.
 
 #### Archetypes
 An archetype ([`BuildArchetypes`](../src/Classes/BuildArchetypes.lua)) is what the generator commits to before optimising everything else around it: keystones (crit, Elemental Overload, Resolute Technique, Chaos Inoculation, Avatar of Fire...), auras and supports (Pride + Brutality for impale, Hatred for physical weapons), uniques that scale with a stat (mana, intelligence, strength, dexterity, life) and playstyles (mines, traps, totems). The scan builds a quick version of every archetype that fits the skill; the automatic mode then builds the best three fully and keeps the best one.
 
-A quick build ranks archetypes by how they start, so the scan also runs the cheap late steps that change the ranking the most (every affordable unique, a Watcher's Eye for the archetype's auras, the supports again).
+A quick build ranks archetypes by how they start, so the scan also runs the cheap late steps that change the ranking the most (every affordable unique, a Watcher's Eye for the archetype's auras, the supports again). The automatic mode fully builds the best three, and up to five when more start within 0.5 of the best one; archetypes whose quick builds came out the same (one that adds nothing usable) are built once.
 
 #### The pipeline
 1. Configuration from what the build does ([`AutoConfig`](../src/Classes/AutoConfig.lua)): charges it generates, ailments it keeps up, conditions it meets.
@@ -25,12 +26,15 @@ A quick build ranks archetypes by how they start, so the scan also runs the chea
 6. Supports again; curse, aura, guard, movement setups linked like real builds ([`GemSetup`](../src/Classes/GemSetup.lua)).
 7. Tree again for the gear.
 8. Influenced rares.
-9. Every affordable unique in every slot, poe.ninja's popular uniques, rare jewels, timeless jewels, Forbidden Flame / Flesh, Watcher's Eye (mods tried in pairs and triples), Split Personality, cluster jewels, anoint, tattoos.
-10. Flasks (unique ones too), pantheon, bandit, aura stacking, the main link filled, the rares made again for the finished build.
-11. Optional: unique / keystone ideas ([`SynergyFinder`](../src/Classes/SynergyFinder.lua)), packages the top players use together, the top players' gear and main link tried in the build.
+9. Every affordable unique in every slot, poe.ninja's popular uniques, rare jewels, timeless jewels, Forbidden Flame / Flesh, Watcher's Eye (mods tried in pairs and triples), Split Personality, cluster jewels (Large ones, then Medium or Small ones in the sockets they add), anoint, tattoos.
+10. Flasks (unique ones too, Enkindling enchantments), pantheon, bandit, aura stacking (auras chosen with reservation and costs ignored, the tree re-spent, what still can't be paid for dropped), the main link filled, the rares made again for the finished build.
+11. Optional: unique / keystone ideas ([`SynergyFinder`](../src/Classes/SynergyFinder.lua)), packages the top players use together, the top players' gear and main link tried in the build, the passives most top players of the class take (read from their PoB codes) allocated as a set with the tree trimmed around them.
 12. Ascendancy and supports checked again (each support swapped against every other one), the tree rebuilt with shorter paths ([`TreeOptimizer`](../src/Classes/TreeOptimizer.lua)), then a short second round (aura stacking, supports, ascendancy) on the rebuilt tree.
 
 Every late move is kept only when the full score (with flask uptimes) is better.
+
+#### Several tries
+"Tries" generates the same build several times with small differences: from the second try on, the early choices (supports, passives per point, ascendancy, weapon finalists) see each option's gain through a fixed ±15% factor of its own, which sends the search down other paths; the real scores still decide, and the best try is kept. With background threads the tries run at once.
 
 The same inputs always give the same build: passive nodes are walked in id order and equal gains are compared to 1e-9 with fixed tie-breaks (LuaJIT changes the order of `pairs()` from run to run).
 

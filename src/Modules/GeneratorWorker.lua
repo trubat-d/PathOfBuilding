@@ -187,7 +187,7 @@ return function(jobJson, userPath, scriptBase)
 		scenario = byId(new("HitOverlap"):HitOverlap(build).scenarioList, job.scenarioId),
 		configScenario = byId(new("AutoConfig"):AutoConfig(build).scenarioList, job.configScenarioId),
 		allowAnoints = job.allowAnoints, allowTattoos = job.allowTattoos, timeless = job.timeless,
-		synergies = job.synergies, quick = job.quick, meta = job.meta,
+		synergies = job.synergies, quick = job.quick, meta = job.meta, variant = job.variant,
 		yieldEvery = 1e9,
 	}
 	local archetypes = new("BuildArchetypes"):BuildArchetypes()

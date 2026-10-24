@@ -1,7 +1,8 @@
 -- Path of Building
 --
 -- Class: Cluster Jewel Generator
--- Makes Large Cluster Jewels for a build's outer jewel sockets:
+-- Makes Large Cluster Jewels for a build's outer jewel sockets, then Medium
+-- or Small ones for the sockets the Large ones add:
 --   1. every enchant (small passive type) the jewel can have is valued: its
 --      small passive stats and each notable it can roll, measured once with
 --      the build's calculator as virtual passives;
@@ -59,11 +60,15 @@ function ClusterJewelGeneratorClass:LinesValue(key, lines)
 end
 
 -- Outer sockets that take a Large Cluster Jewel, empty, within reach
-function ClusterJewelGeneratorClass:Sockets(maxPath)
+-- (inner = true: the sockets a socketed Large jewel adds, for Medium / Small ones)
+function ClusterJewelGeneratorClass:Sockets(maxPath, inner)
 	local list = { }
 	local itemsTab = self.build.itemsTab
 	for _, node in ipairs(nodesById(self.spec.nodes)) do local id = node.id
-		if node.type == "Socket" and node.expansionJewel and node.expansionJewel.size == 2 and not node.expansionJewel.parent
+		local ej = node.expansionJewel
+		local fits = ej and (inner and ej.size == 1 and ej.parent ~= nil and (node.alloc or node.path)
+			or not inner and ej.size == 2 and not ej.parent)
+		if node.type == "Socket" and fits
 			and itemsTab.slots["Jewel " .. id] and (self.spec.jewels[id] or 0) == 0 then
 			local cost = node.alloc and 0 or (node.path and #node.path or 99)
 			if cost <= (maxPath or 5) then
@@ -105,11 +110,21 @@ local function notablesFor(skillId)
 	return notablesBySkill[skillId] or { }
 end
 
-function ClusterJewelGeneratorClass.MakeItem(skillId, nodeCount, notableNames)
-	local jewel = data.clusterJewels.jewels["Large Cluster Jewel"]
+-- Kinds of cluster jewel made: passives, notables, sockets
+local kinds = {
+	["Large Cluster Jewel"] = { nodes = 8, notables = 3, socketLine = "2 Added Passive Skills are Jewel Sockets", small = 3 },
+	-- (the efficient ones top players use: every point on a notable or its path)
+	["Medium Cluster Jewel"] = { nodes = 4, notables = 2, small = 2 },
+	["Small Cluster Jewel"] = { nodes = 2, notables = 1, small = 1 },
+}
+
+function ClusterJewelGeneratorClass.MakeItem(skillId, nodeCount, notableNames, jewelName)
+	jewelName = jewelName or "Large Cluster Jewel"
+	local jewel = data.clusterJewels.jewels[jewelName]
 	local skill = jewel.skills[skillId]
-	local lines = { "Rarity: RARE", "Generated Cluster", "Large Cluster Jewel", "Item Level: 84" }
-	local enchant = { "Adds " .. nodeCount .. " Passive Skills", "2 Added Passive Skills are Jewel Sockets" }
+	local lines = { "Rarity: RARE", "Generated Cluster", jewelName, "Item Level: 84" }
+	local enchant = { "Adds " .. nodeCount .. " Passive Skills" }
+	if kinds[jewelName] and kinds[jewelName].socketLine then t_insert(enchant, kinds[jewelName].socketLine) end
 	for _, l in ipairs(skill.enchant) do t_insert(enchant, l) end
 	t_insert(lines, "Implicits: " .. #enchant)
 	for _, l in ipairs(enchant) do t_insert(lines, "{crafted}" .. l) end
@@ -154,19 +169,27 @@ function ClusterJewelGeneratorClass:TryReal(socket, item, keep)
 	return score, points
 end
 
--- Best Large Cluster Jewel for the nearest free outer socket: { item, socket, score, gain, label } or nil
+-- Best cluster jewel for the nearest free socket: { item, socket, score, gain, label } or nil
+-- opts: maxPath, checks, jewel (default "Large Cluster Jewel"; "Medium Cluster
+-- Jewel" / "Small Cluster Jewel" go in the sockets a Large one adds), socket
 function ClusterJewelGeneratorClass:Best(baseScore, opts)
 	opts = opts or { }
-	local sockets = self:Sockets(opts.maxPath)
-	local socket = sockets[1]
+	local jewelName = opts.jewel or "Large Cluster Jewel"
+	local kind = kinds[jewelName]
+	local socket = opts.socket or self:Sockets(opts.maxPath, jewelName ~= "Large Cluster Jewel")[1]
 	if not socket then return nil end
 	self.base = self.ctx.score({ })
-	local jewel = data.clusterJewels.jewels["Large Cluster Jewel"]
-	local nodeCount = 8
-	local smallCount = 3 -- 8 passives: 3 notables, 2 sockets, 3 small passives
+	local jewel = data.clusterJewels.jewels[jewelName]
+	local nodeCount = kind.nodes
+	local smallCount = kind.small -- (8 passives: 3 notables, 2 sockets, 3 small passives)
 	-- 1-2: estimate every enchant with its best notables
 	local plans = { }
-	for skillId, skill in pairs(jewel.skills) do
+	local skillIds = { }
+	for skillId in pairs(jewel.skills) do t_insert(skillIds, skillId) end
+	t_sort(skillIds)
+	for _, skillId in ipairs(skillIds) do local skill = jewel.skills[skillId]
+		-- (legacy enchants can't be found any more)
+		if skill.name:match("%(Legacy%)") then goto continue end
 		local smallValue = self:LinesValue("small:" .. skillId, skill.stats or { })
 		local options = { }
 		for _, n in ipairs(notablesFor(skill.tag or skillId)) do
@@ -175,10 +198,13 @@ function ClusterJewelGeneratorClass:Best(baseScore, opts)
 				t_insert(options, { name = n.name, type = n.type, value = self:LinesValue("notable:" .. n.name, node.sd) })
 			end
 		end
-		t_sort(options, function(a, b) return a.value > b.value end)
+		t_sort(options, function(a, b)
+			if a.value ~= b.value then return a.value > b.value end
+			return a.name < b.name
+		end)
 		local chosen, prefixes, suffixes, value = { }, 0, 0, smallValue * smallCount
 		for _, o in ipairs(options) do
-			if #chosen >= 3 then break end
+			if #chosen >= kind.notables then break end
 			if o.value > 0 and ((o.type == "Prefix" and prefixes < 2) or (o.type == "Suffix" and suffixes < 2)) then
 				t_insert(chosen, o.name)
 				value = value + o.value
@@ -188,13 +214,17 @@ function ClusterJewelGeneratorClass:Best(baseScore, opts)
 		if #chosen > 0 then
 			t_insert(plans, { skillId = skillId, skill = skill, notables = chosen, value = value })
 		end
+		::continue::
 	end
-	t_sort(plans, function(a, b) return a.value > b.value end)
+	t_sort(plans, function(a, b)
+		if a.value ~= b.value then return a.value > b.value end
+		return a.skillId < b.skillId
+	end)
 	-- 3: real check of the best few
 	local best
 	for i = 1, math.min(opts.checks or 3, #plans) do
 		local plan = plans[i]
-		local item = self.MakeItem(plan.skillId, nodeCount, plan.notables)
+		local item = self.MakeItem(plan.skillId, nodeCount, plan.notables, jewelName)
 		local score = self:TryReal(socket, item)
 		if not best or score > best.score then
 			best = { item = item, socket = socket, score = score, plan = plan }
@@ -202,7 +232,7 @@ function ClusterJewelGeneratorClass:Best(baseScore, opts)
 	end
 	if not best then return nil end
 	best.gain = best.score - baseScore
-	best.label = string.format("Large Cluster Jewel (%s): %s", best.plan.skill.name, table.concat(best.plan.notables, ", "))
+	best.label = string.format("%s (%s): %s", jewelName, best.plan.skill.name, table.concat(best.plan.notables, ", "))
 	return best
 end
 
