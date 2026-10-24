@@ -452,9 +452,14 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 		local value = output[self.lens.stat] or 0
 		score = score + (self.lens.weight or 0.3) * m_log(m_max(1, value) / (self.lens.base or 100))
 	end
+	-- (a layer with a target too: taking half the hit damage on average; past
+	-- it, more avoidance counts for a third)
 	local avoidWeight = self.avoidanceWeight or self.focus.avoid or 0
 	if output and avoidWeight > 0 then
-		score = score + avoidWeight * m_log(1 / self:DamageTakenShare(output))
+		local avoided = m_log(1 / self:DamageTakenShare(output))
+		local target = m_log(2)
+		if avoided > target then avoided = target + (self.pastTarget or 0.35) * (avoided - target) end
+		score = score + avoidWeight * avoided
 	end
 	-- below the EHP floor, every missing bit costs more than damage can pay back
 	local floor = self.ehpFloor or self.focus.ehpFloor

@@ -5,7 +5,7 @@ Every decision is made by [`BuildScorer`](../src/Classes/BuildScorer.lua) on PoB
 
 - **Damage**: the main skill's DPS (combined parts for skills like Kinetic Blast), reduced when the skill can't be paid for in a long fight.
 - **Tankiness**: mostly the maximum hit taken of the weakest damage type, then all damage types, a little EHP, and how many times over the build takes the toughest pinnacle (or uber) boss hit.
-- **Defence targets**: past its target (the max hit: 2.5x the focus's floor; the boss hit: taken twice over) each layer counts for a third, so damage isn't traded for tankiness the build doesn't need.
+- **Defence targets**: past its target (the max hit: 2.5x the focus's floor; the boss hit: taken twice over; avoidance: half the hit damage avoided) each layer counts for a third, so damage isn't traded for tankiness the build doesn't need.
 - **Avoidance**: the share of incoming hit damage the build takes on average (melee, projectile, spell and spell projectile hits) after evasion, dodge, block and spell suppression, with its own weight in every focus. Top players build max block or 100% suppression and value it about as much as doubling their damage; inside EHP it was worth a few % damage.
 - **Focus**: the weights of damage and tankiness. "Damage, with a minimum max hit" (`DPS_FLOOR`) is damage first with a 10,000 max hit floor; below the floor every missing bit costs more than damage can pay back.
 - **Penalties**: elemental resistances below the cap, missing attributes, reservation over 100% (more the further over), self-damage over time bigger than regeneration, a defence checklist (freeze, shock, bleed, poison, stun...) and drawbacks PoB doesn't calculate ([`GeneratorRules`](../src/Modules/GeneratorRules.lua)).
