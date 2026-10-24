@@ -236,8 +236,11 @@ function BuildScorerClass:GetPenalties(output)
 		total = total + p
 		t_insert(penalties, { label = string.format("Self-damage over time is %.0f/s more than regeneration (%.0f/s degen): the build can't keep it up", deficit, degen), value = p })
 	end
-	-- Ailments and stuns the build isn't protected against
-	local missingTotal, missingList = self:Checklist(output)
+	-- Ailments and stuns the build isn't protected against (the generator turns
+	-- this on once flasks are chosen: before that, rares would waste mods on
+	-- ailment avoidance a flask suffix gives for free)
+	local missingTotal, missingList = 0, { }
+	if self.useChecklist ~= false then missingTotal, missingList = self:Checklist(output) end
 	if missingTotal > 0 then
 		local names = { }
 		for _, entry in ipairs(missingList) do

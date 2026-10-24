@@ -1939,6 +1939,7 @@ function BuildGeneratorClass:Run()
 	opts.chargesPerSecond = opts.chargesPerSecond or (bossFight and 1.5 or 4)
 	self.scorer = new("BuildScorer"):BuildScorer(self.build, { focus = opts.focus, chargesPerSecond = opts.chargesPerSecond, overlap = self.overlap, ehpFloor = opts.ehpFloor, hitFloor = opts.hitFloor,
 		bossTier = opts.investment and opts.investment.awakenedGems and "uber" or "pinnacle" })
+	self.scorer.useChecklist = false -- on from the flask stage
 	if opts.archetype then
 		self:Note("Archetype: " .. opts.archetype.label)
 	end
@@ -2018,6 +2019,7 @@ function BuildGeneratorClass:Run()
 	if opts.allowTattoos ~= false then self:ChooseTattoos() end
 
 	stage(10, "Choosing flasks, pantheon and bandit")
+	self.scorer.useChecklist = true
 	self:FullScore()
 	self:MakeFlasks()
 	self:ChoosePantheonAndBandit()
