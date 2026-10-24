@@ -47,10 +47,22 @@ local function addLines(list, text, size, width)
 end
 
 local function isPopupOpen(popup)
+	-- (the generator window folded into its side panel still counts as open)
+	if popup and popup.folded then return true end
 	for _, p in ipairs(main.popups) do
 		if p == popup then return true end
 	end
 	return false
+end
+
+-- Which tab of the build shows what a generation step is working on
+local function viewForStage(stage)
+	local s = (stage or ""):lower()
+	if s:find("support") or s:find("gem setup") or s:find("aura") or s:find("main link") or s:find("curse") then return "SKILLS" end
+	if s:find("flask") or s:find("rare") or s:find("unique") or s:find("item") or s:find("mageblood") or s:find("top players' gear") then return "ITEMS" end
+	if s:find("tree") or s:find("passive") or s:find("ascendancy") or s:find("jewel") or s:find("timeless") or s:find("forbidden")
+		or s:find("cluster") or s:find("anoint") or s:find("tattoo") or s:find("bloodline") or s:find("ailment") then return "TREE" end
+	if s:find("config") then return "CONFIG" end
 end
 
 -- Runs fn in a coroutine, one slice per frame, until it finishes or the popup closes
@@ -540,6 +552,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 		end
 		state.confirmDiscard = false
 		state.progress = nil
+		state.generator = nil
 		local entry = controls.archetype.list[controls.archetype.selIndex]
 		if entry and entry.auto then
 			-- scan first; the scan sorts the list best first, then this runs again
@@ -567,6 +580,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 			if not waited then waited = true return end
 			local build = main.modes["BUILD"]
 			local generator = new("BuildGenerator"):BuildGenerator(build, options)
+			state.generator = generator
 			state.progress = 0
 			options.onProgress = function(stage, index, count, sub)
 				state.progress = ((index - 1) + (sub or 0)) / m_max(1, count)
@@ -752,6 +766,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 				options.synergies = false
 				options.meta = meta
 				local generator = new("BuildGenerator"):BuildGenerator(build, options)
+				state.generator = generator
 				local planning = archetype == standard
 				options.onProgress = function(stage, index, count, sub)
 					local inBuild = ((index or 1) - 1 + (sub or 0)) / m_max(1, count or 1)
@@ -959,7 +974,103 @@ function BuildIdeasPopupClass:OpenGenerator()
 	addPriceControls(controls, 16, 464, idle)
 	controls.close = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {824, 464, 80, 20}, "Close", function()
 		main.onFrameFuncs["BuildGenerator"] = nil
+		main.onFrameFuncs["BuildGeneratorPanel"] = nil
 		main:ClosePopup()
 	end)
 	popup = main:OpenPopup(920, 496, "Generate Build", controls, nil, nil, "close")
+
+	-- While a generation or scan runs, the window folds into a panel on the
+	-- right of the screen: the build stays visible and follows what is being
+	-- tried (tree, items, skills), and the panel shows the progress and the
+	-- notes as they come. Back to the full window when it ends.
+	local panel
+	local panelState = { follow = true, lastView = nil, idleSince = nil, notes = { } }
+	local unfoldWindow
+	local function foldWindow()
+		if panel or popup.folded or main.popups[1] ~= popup then return end
+		local width = 440
+		local height = m_max(300, main.screenH - 110)
+		local pc = { }
+		pc.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {12, 14, 0, 14}, function()
+			local text = state.status or ""
+			-- (long status lines are cut to the panel)
+			if DrawStringWidth(14, "VAR", text) > width - 24 then
+				while #text > 4 and DrawStringWidth(14, "VAR", text .. "...") > width - 24 do text = text:sub(1, -2) end
+				text = text .. "..."
+			end
+			return text
+		end)
+		pc.progress = new("ProgressBarControl"):ProgressBarControl({"TOPLEFT",nil,"TOPLEFT"}, {12, 34, width - 24, 10}, function()
+			return state.progress or 0
+		end)
+		pc.follow = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {150, 52, 18}, "Show each step:", function(on)
+			panelState.follow = on
+		end, "Switch the build to the tab that shows what is being tried (passive tree, items, skills).", panelState.follow)
+		pc.notesLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {12, 76, 0, 14}, "^7What the generator decided so far:")
+		pc.notes = new("TextListControl"):TextListControl({"TOPLEFT",nil,"TOPLEFT"}, {12, 94, width - 24, height - 134}, nil, { })
+		pc.stop = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {12, height - 32, 100, 20}, "Stop", function()
+			if state.running then controls.generate.onClick() end
+		end)
+		pc.window = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {width - 132, height - 32, 120, 20}, "Full window", function()
+			panelState.suppressed = true
+			unfoldWindow()
+		end)
+		main:ClosePopup()
+		popup.folded = true
+		panel = main:OpenPopup(width, height, "Generating", pc)
+		panel.sidePanel = true
+		panel.x = function() return main.screenW - width - 6 end
+		panel.y = function() return 44 end
+		panel.notesControl = pc.notes
+		panelState.lastCount = nil
+	end
+	unfoldWindow = function()
+		if panel then
+			for i, p in ipairs(main.popups) do
+				if p == panel then table.remove(main.popups, i) break end
+			end
+			panel = nil
+		end
+		if popup.folded then
+			popup.folded = nil
+			t_insert(main.popups, 1, popup)
+		end
+	end
+	main.onFrameFuncs["BuildGeneratorPanel"] = function()
+		if not popup.folded and not isPopupOpen(popup) then
+			main.onFrameFuncs["BuildGeneratorPanel"] = nil
+			return
+		end
+		if state.running then
+			panelState.idleSince = nil
+			if not panelState.suppressed then foldWindow() end
+		else
+			-- (a scan hands over to the generation within a frame or two: wait a moment)
+			panelState.idleSince = panelState.idleSince or GetTime()
+			if GetTime() - panelState.idleSince > 600 then
+				panelState.suppressed = nil
+				if panel or popup.folded then unfoldWindow() end
+			end
+			return
+		end
+		if not panel then return end
+		-- notes as the generator writes them
+		local gen = state.generator
+		local log = gen and gen.log or { }
+		if panelState.lastCount ~= #log or panelState.lastGen ~= gen then
+			panelState.lastCount, panelState.lastGen = #log, gen
+			local list = { }
+			for _, l in ipairs(log) do addLines(list, "^7- " .. l, 14, 58) end
+			panel.notesControl.list = list
+		end
+		-- the build follows the step
+		local build = main.modes["BUILD"]
+		if panelState.follow and gen and build and main.mode == "BUILD" then
+			local view = viewForStage(gen.stage)
+			if view and view ~= panelState.lastView then
+				panelState.lastView = view
+				build.viewMode = view
+			end
+		end
+	end
 end

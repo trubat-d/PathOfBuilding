@@ -399,7 +399,21 @@ function main:OnFrame()
 
 	self.viewPort = { x = 0, y = 0, width = self.screenW, height = self.screenH }
 
-	if self.popups[1] then
+	local sidePanel = self.popups[1] and self.popups[1].sidePanel
+	if sidePanel then
+		-- a side panel (the build generator while it runs) only takes the input
+		-- over it: the rest of the window stays usable
+		local panel = self.popups[1]
+		local px, py = panel:GetPos()
+		local pw, ph = panel:GetSize()
+		local cx, cy = GetCursorPos()
+		if cx >= px and cx < px + pw and cy >= py - 12 and cy < py + ph then
+			panel:ProcessInput(self.inputEvents, self.viewPort)
+			wipeTable(self.inputEvents)
+		else
+			self:ProcessControlsInput(self.inputEvents, self.viewPort)
+		end
+	elseif self.popups[1] then
 		self.popups[1]:ProcessInput(self.inputEvents, self.viewPort)
 		wipeTable(self.inputEvents)
 	else
@@ -436,8 +450,10 @@ function main:OnFrame()
 
 	if self.popups[1] then
 		SetDrawLayer(10)
-		SetDrawColor(0, 0, 0, 0.5)
-		DrawImage(nil, 0, 0, self.screenW, self.screenH)
+		if not self.popups[1].sidePanel then
+			SetDrawColor(0, 0, 0, 0.5)
+			DrawImage(nil, 0, 0, self.screenW, self.screenH)
+		end
 		self.popups[1]:Draw(self.viewPort)
 		SetDrawLayer(0)
 	end
