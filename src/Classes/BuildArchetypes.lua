@@ -183,6 +183,15 @@ BuildArchetypesClass.list = {
 		applies = function(info) return info.attack and info.weaponTypes ~= nil and not info.elemental and not info.minion end,
 	},
 	{
+		-- (what top Righteous Fire players run: a huge life pool that the
+		-- skill and its uniques turn into damage)
+		id = "LIFE", label = "Life stacking (Kaom's Heart, life scaling uniques)",
+		summary = "A huge life pool: Kaom's Heart (the main skill moves to a 4-link) and uniques that turn life into damage.",
+		uniques = { "Kaom's Heart" },
+		uniqueLines = { "per %d+ Player Maximum Life", "per %d+ Maximum Life" },
+		applies = function(info) return not info.minion end,
+	},
+	{
 		id = "AURAS", label = "Aura stacking (reservation efficiency, many auras)",
 		summary = "As many auras as reservation efficiency allows: the tree and gear pay for them.",
 		maxAuras = 7,

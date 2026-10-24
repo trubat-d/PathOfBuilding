@@ -1231,7 +1231,6 @@ end
 -- build: they were picked before the gear, jewels and gems were final
 function BuildGeneratorClass:AscendancyRecheck()
 	local spec = self.build.spec
-	self:Recalculate()
 	local before = self:FullScore()
 	local undo = spec:CreateUndoState()
 	local function notables()
@@ -1263,7 +1262,6 @@ end
 function BuildGeneratorClass:FinalSupports()
 	local group = self.mainGroup
 	if not group then return 0 end
-	self:Recalculate()
 	local before = self:FullScore()
 	local saved = { }
 	for i, g in ipairs(group.gemList) do saved[i] = g end
@@ -1280,7 +1278,6 @@ function BuildGeneratorClass:FinalSupports()
 	self.swapSupports = nil
 	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
 	self:AutoConfigure()
-	self:Recalculate()
 	local after = self:FullScore()
 	if after > before + 0.005 and names() ~= old then
 		self:Note(string.format("Supports chosen again for the finished build: %s (was %s), score %+.3f", names(), old, after - before))
@@ -1648,7 +1645,6 @@ function BuildGeneratorClass:FinalRares()
 		end
 	end
 	if not any then return 0 end
-	self:Recalculate()
 	local before = self:FullScore()
 	local savedLocked, savedFinalists = self.lockedSlots, self.weaponFinalists
 	local savedLog = #self.log
@@ -1726,7 +1722,6 @@ function BuildGeneratorClass:AddJewels(maxJewels)
 	for _, node in ipairs(sockets) do
 		if added >= (maxJewels or 4) then break end
 		if not node.alloc and node.path then
-			self:Recalculate()
 			local before = self:FullScore()
 			local treeState = spec:CreateUndoState()
 			spec:AllocNode(node)
@@ -1757,7 +1752,6 @@ end
 -- (after something changed what passives are worth, e.g. a timeless jewel)
 function BuildGeneratorClass:RefineTree(count)
 	local spec = self.build.spec
-	self:Recalculate()
 	local before = self:FullScore()
 	local undo = spec:CreateUndoState()
 	-- leaf passives measured once per batch, the cheapest few removed (each
@@ -1851,7 +1845,6 @@ function BuildGeneratorClass:PairAilments()
 	end
 	for _, pair in ipairs(ailmentPairs) do
 		if not input[pair.var] then
-			self:Recalculate()
 			local before = self:FullScore()
 			-- 1. any passive worth taking if the ailment were up?
 			input[pair.var] = true
@@ -1918,7 +1911,6 @@ function BuildGeneratorClass:ChooseTimelessJewel()
 	local investment = self.options.investment or { }
 	if investment.timeless == false then return end
 	local spec = self.build.spec
-	self:Recalculate()
 	local before = self:FullScore()
 	local finder = new("TimelessJewelFinder"):TimelessJewelFinder({
 		build = self.build,
@@ -1995,7 +1987,6 @@ function BuildGeneratorClass:ChooseMetaJewels(onlyKinds)
 		return investment.unknownAllowed ~= false
 	end
 	for _, kind in ipairs(kinds) do
-		self:Recalculate()
 		local base = self:FullScore()
 		local result
 		if kind == "forbidden" then
@@ -2048,7 +2039,6 @@ function BuildGeneratorClass:ChooseClusterJewels(maxJewels)
 		tick = function() self:Tick() end,
 	})
 	for _ = 1, maxJewels or 2 do
-		self:Recalculate()
 		local base = self:FullScore()
 		gen.values = { } -- values change once a jewel is in
 		local result = gen:Best(base, { maxPath = 6 })
@@ -2112,6 +2102,12 @@ function BuildGeneratorClass:ApplyArchetypeUniques()
 		finder:Equip(best.item, best.slot, true)
 		self.itemsTab:PopulateSlots()
 		self.lockedSlots[best.slot] = true
+		-- (a body armour without sockets: the main skill moves to a 4-link)
+		if self.mainGroup and self.mainGroup.slot == best.slot then
+			for _, modLine in ipairs(best.item.explicitModLines or { }) do
+				if modLine.line == "Has no Sockets" then self:RelocateMainLink() break end
+			end
+		end
 		if best.slot:match("^Weapon") then self.weaponFinalists = nil end
 		local price = GetPriceSource():UniquePrice(best.item)
 		t_insert(kept, string.format("%s in %s (%s)", best.item.title or best.item.name, best.slot, GetPriceSource().FormatPrice(price)))
@@ -2136,7 +2132,6 @@ function BuildGeneratorClass:ChooseArchetypeJewels()
 		tick = function() self:Tick() end,
 	})
 	for _, title in ipairs(archetype.jewels) do
-		self:Recalculate()
 		local base = self:FullScore()
 		local result = finder:UniqueJewel(base, title, archetype.jewelStat)
 		if result and result.gain > 0.003 then
@@ -2202,7 +2197,6 @@ function BuildGeneratorClass:JointMoves(rounds)
 	if #moves == 0 then return end
 	local slots = finder:GetActiveSlots()
 	for _ = 1, rounds or 1 do
-		self:Recalculate()
 		local base = self:FullScore()
 		local current = self:Score()
 		-- 2. quick screening with overrides (no adaptation yet)
@@ -2566,7 +2560,6 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 		local title = entry.item.title or entry.item.name
 		if not usedSlots[entry.slot] and not usedItems[title] then
 			tries = tries + 1
-			self:Recalculate()
 			local before = self:FullScore()
 			local slot = self.itemsTab.slots[entry.slot]
 			local previous = slot.selItemId
@@ -2646,7 +2639,6 @@ function BuildGeneratorClass:UniqueFlaskSweep(maxTries)
 		local title = entry.item.title or entry.item.name
 		if not usedSlots[entry.slot] and not usedItems[title] then
 			tries = tries + 1
-			self:Recalculate()
 			local before = self:FullScore()
 			local slot = self.itemsTab.slots[entry.slot]
 			local previous, wasActive = slot.selItemId, slot.active
@@ -2654,7 +2646,6 @@ function BuildGeneratorClass:UniqueFlaskSweep(maxTries)
 			slot.active = true
 			if self.itemsTab.activeItemSet[entry.slot] then self.itemsTab.activeItemSet[entry.slot].active = true end
 			self.itemsTab:PopulateSlots()
-			self:Recalculate()
 			local after = self:FullScore()
 			if after > before + 0.005 then
 				usedSlots[entry.slot] = true
@@ -2774,7 +2765,6 @@ end
 -- Unique items, keystones and supports from the synergy finder
 function BuildGeneratorClass:ApplySynergies(rounds)
 	for round = 1, rounds do
-		self:Recalculate()
 		local before = self:FullScore()
 		local finder = new("SynergyFinder"):SynergyFinder(self.itemsTab, {
 			focus = self.options.focus, scenario = self.options.scenario, quality = self.options.quality,
