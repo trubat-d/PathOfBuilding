@@ -503,8 +503,13 @@ function main:OnFrame()
 	wipeTable(self.inputEvents)
 
 	-- TODO: this pattern may pose memory management issues for classes that don't exist for the lifetime of the program
-	for _, onFrameFunc in pairs(self.onFrameFuncs) do
-		onFrameFunc()
+	-- (over a copy: the functions add and remove others while they run, which
+	-- a pairs() traversal of the table itself doesn't allow)
+	local funcs = { }
+	for key, onFrameFunc in pairs(self.onFrameFuncs) do funcs[#funcs + 1] = { key, onFrameFunc } end
+	for _, entry in ipairs(funcs) do
+		-- (skipped if an earlier one removed it this frame)
+		if self.onFrameFuncs[entry[1]] == entry[2] then entry[2]() end
 	end
 end
 

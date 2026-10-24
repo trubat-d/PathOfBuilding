@@ -1503,13 +1503,18 @@ function BuildGeneratorClass:RunRaresParallel(finder, options)
 	for i, slotName in ipairs(usable) do t_insert(jobs[(i - 1) % workers + 1].slots, slotName) end
 	local results, failed, done = { }, nil, false
 	local pg = pgClass
-	pg:Run(jobs, {
-		onDone = function(_, summary)
-			for slotName, r in pairs(summary.slots or { }) do results[slotName] = r end
-		end,
-		onError = function(_, err) failed = failed or tostring(err) end,
-		onAllDone = function() done = true end,
-	})
+	-- (launched from the app's frame, not from this coroutine: the app calls
+	-- back the Lua thread that launched a background thread)
+	main.onFrameFuncs["GeneratorRareThreads"] = function()
+		main.onFrameFuncs["GeneratorRareThreads"] = nil
+		pg:Run(jobs, {
+			onDone = function(_, summary)
+				for slotName, r in pairs(summary.slots or { }) do results[slotName] = r end
+			end,
+			onError = function(_, err) failed = failed or tostring(err) end,
+			onAllDone = function() done = true end,
+		})
+	end
 	local savedStage = self.stage
 	self.stage = (self.stage or "") .. string.format(" (%d threads)", workers)
 	while not done do coroutine.yield() end

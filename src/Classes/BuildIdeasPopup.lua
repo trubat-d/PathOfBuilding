@@ -408,6 +408,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 	controls.synergies.enabled = idle
 	controls.threads = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {800, 105, 18}, "Several cores:", function(state)
 		main.generatorThreads = state
+		-- (checked here, in the app's frame: never from inside a generation)
+		if state then new("ParallelGenerator"):ParallelGenerator().Available() end
 	end, "Experimental: background threads build several archetypes (and rare items) at once.\nEach thread holds its own copy of the game data (about 1 GB). Off by default:\nit crashed the app on one PC. Without it everything runs one after the other.", main.generatorThreads == true)
 	controls.threads.enabled = idle
 

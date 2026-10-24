@@ -90,6 +90,10 @@ function ParallelGeneratorClass.Available()
 	if not ParallelGeneratorClass.processWorkers and not (main and main.generatorThreads) then return false end
 	if not (LaunchSubScript and launch and launch.RegisterSubScript and launch.subScripts) then return false end
 	if ParallelGeneratorClass.availableChecked == nil then
+		-- (never from inside a coroutine: the app keeps the Lua thread that
+		-- launched a background thread to call it back, and a generation's
+		-- coroutine is suspended or gone by then - the app crashes)
+		if coroutine.running() then return false end
 		ParallelGeneratorClass.Trace("checking background threads (" .. tostring(ParallelGeneratorClass.CoreCount()) .. " cores)")
 		local ok, id = pcall(LaunchSubScript, "return true", "", "")
 		ParallelGeneratorClass.Trace("check: " .. tostring(ok) .. " " .. tostring(id))
