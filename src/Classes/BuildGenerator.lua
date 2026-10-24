@@ -357,6 +357,13 @@ function BuildGeneratorClass:EquipDefaultWeapons()
 	end
 end
 
+-- Supports whose drawback PoB doesn't calculate, so they look free:
+-- Sacrifice takes 20% of current life every cast (at several casts a second
+-- the build sits near death), PoB only adds its chaos damage
+local unmodelledSupports = {
+	["Sacrifice"] = true,
+}
+
 -- Greedily fills the main skill's link with the best support gems
 function BuildGeneratorClass:ChooseSupports(maxSupports)
 	local group = self.mainGroup
@@ -366,6 +373,7 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 		local tags = gem.tags or { }
 		local affordable = (investment.awakenedGems ~= false or not tags.awakened) and (investment.exceptionalGems ~= false or not tags.exceptional)
 		if gem.grantedEffect and gem.grantedEffect.support and not gem.grantedEffect.unsupported and affordable
+			and not unmodelledSupports[gem.name]
 			and (self.options.allowTriggerSupports or not self.IsAssumptionTrigger(gem)) then
 			t_insert(supports, gemId)
 		end
