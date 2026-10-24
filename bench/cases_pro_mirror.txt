@@ -1,0 +1,8 @@
+# top-player comparisons at mirror tier (the players use mirror-tier gear)
+Boneshatter | Juggernaut | MIRROR | full
+Tornado Shot | Deadeye | MIRROR | full
+Ball Lightning | Hierophant | MIRROR | full
+Lightning Arrow | Deadeye | MIRROR | full
+Righteous Fire | Chieftain | MIRROR | full
+Cyclone | Slayer | MIRROR | full
+Toxic Rain | Pathfinder | MIRROR | full

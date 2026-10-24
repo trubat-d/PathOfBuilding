@@ -264,18 +264,41 @@ function BuildMetaSourceClass:Load(skillName, callback)
 		if not ok or type(state) ~= "table" then return done(nil, "unexpected index answer") end
 		-- the league the prices come from, or the first challenge league
 		local leagueName = GetPriceSource().league
-		local snapshot
+		-- snapshots to try: the price league first, then the others in poe.ninja's
+		-- order (before a new league has players - the first days, or before it
+		-- starts - the previous league's builds are used instead)
+		local snapshots = { }
 		for _, s in ipairs(state.snapshotVersions or { }) do
-			if s.type == "exp" and (not snapshot or (leagueName and s.name == leagueName)) then
-				if not snapshot or s.name == leagueName then snapshot = s end
+			if s.type == "exp" then
+				if leagueName and s.name == leagueName then t_insert(snapshots, 1, s) else t_insert(snapshots, s) end
 			end
 		end
-		if not snapshot then return done(nil, "no build snapshot") end
+		if not snapshots[1] then return done(nil, "no build snapshot") end
+		local minPlayers = 50
+		local function trySnapshot(index, fallback)
+			local snapshot = snapshots[index]
+			if not snapshot or index > 3 then
+				-- none had enough players: the best one found
+				if fallback then return fallback.retry() end
+				return done(nil, "no build statistics")
+			end
 		local url = apiBase .. "builds/" .. snapshot.version .. "/search?overview=" .. snapshot.url .. "&type=exp&skills=" .. skillName:gsub(" ", "%%20")
 		self:Download(url, function(sbody, serr)
 			if not sbody then return done(nil, serr) end
 			local okSearch, search = pcall(self.ParseSearch, sbody)
 			if not okSearch then return done(nil, "could not read build statistics: " .. tostring(search)) end
+			if search.total < minPlayers and not (fallback and fallback.final) then
+				-- too few players in this league yet: try the next one, remembering this one
+				local best = fallback
+				if not best or search.total > best.total then
+					best = { total = search.total, retry = function()
+						minPlayers = 0
+						snapshots = { snapshot }
+						trySnapshot(1, { final = true })
+					end }
+				end
+				return trySnapshot(index + 1, best)
+			end
 			if search.total == 0 then
 				local entry = { time = os.time(), league = snapshot.name, total = 0, items = { }, keystones = { }, anoints = { }, supports = { } }
 				self.cache[skillName] = entry
@@ -327,6 +350,8 @@ function BuildMetaSourceClass:Load(skillName, callback)
 			end
 			nextDict(1)
 		end)
+		end
+		trySnapshot(1, nil)
 	end)
 end
 
@@ -449,6 +474,20 @@ function BuildMetaSourceClass:LoadPlayerDetails(skillName, maxPlayers, callback)
 	local function finish()
 		if #characters > 0 then
 			entry.details = self.AggregateCharacters(skillName, characters)
+			-- the strongest few builds themselves (PoB codes), for comparisons:
+			-- damage and effective hit pool from the player list, sturdy ones first
+			local top = { }
+			for i, char in ipairs(characters) do
+				local p = char.__player or { }
+				if char.pathOfBuildingExport then
+					local dps, ehp = self.ParseShort(p.dps and tostring(p.dps)) or 0, self.ParseShort(p.ehp and tostring(p.ehp)) or 0
+					t_insert(top, { name = p.name, account = p.account, ascendancy = char.class, level = char.level,
+						dps = dps, ehp = ehp, value = dps * math.sqrt(math.max(ehp, 1)) * (ehp >= 20000 and 1 or 0.1), code = char.pathOfBuildingExport })
+				end
+			end
+			t_sort(top, function(a, b) return a.value > b.value end)
+			for i = #top, 4, -1 do top[i] = nil end
+			entry.details.topBuilds = top
 			entry.detailsTime = os.time()
 			self:SaveCache()
 		end
@@ -462,7 +501,10 @@ function BuildMetaSourceClass:LoadPlayerDetails(skillName, maxPlayers, callback)
 		self:Download(url, function(body)
 			if body then
 				local ok, char = pcall(dkjson.decode, body)
-				if ok and type(char) == "table" then t_insert(characters, char) end
+				if ok and type(char) == "table" then
+					char.__player = p
+					t_insert(characters, char)
+				end
 			end
 			nextPlayer(i + 1)
 		end)

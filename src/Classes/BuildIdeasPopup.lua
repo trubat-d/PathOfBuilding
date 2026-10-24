@@ -859,6 +859,80 @@ function BuildIdeasPopupClass:OpenGenerator()
 		return true
 	end
 
+	-- Compare with top players: the open build against the strongest builds of
+	-- the skill on poe.ninja, each scored like a generated build, taken apart
+	-- (what carries it) and tried part by part in the open build (what of
+	-- theirs would help it); in background threads (Modules/BuildComparison)
+	controls.compare = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {650, 464, 168, 20}, "Compare with top players", function()
+		local pg = new("ParallelGenerator"):ParallelGenerator()
+		if not pg.Available() then
+			state.status = "^7Comparing needs background threads, which aren't available here."
+			return
+		end
+		local build = main.modes["BUILD"]
+		if main.mode ~= "BUILD" or not build then
+			state.status = "^7Generate or open a build first."
+			return
+		end
+		local skill = controls.skill.list[controls.skill.selIndex]
+		local investment = controls.investment.list[controls.investment.selIndex].level
+		local focus = controls.focus.list[controls.focus.selIndex].focus
+		local ours = build:SaveDB("code")
+		local function num(v) return formatNumSep(string.format("%.0f", v or 0)) end
+		state.running = true
+		state.status = "^7Loading the top " .. skill.label .. " builds (poe.ninja)..."
+		local source = GetBuildMetaSource()
+		local cached = source.cache and source.cache[skill.label]
+		if cached and cached.details and not cached.details.topBuilds then cached.detailsTime = nil end
+		loadMeta(skill.label, function(entry)
+			local top = entry and entry.details and entry.details.topBuilds or { }
+			if #top == 0 then
+				state.running = false
+				state.status = "^7No top player builds found for " .. skill.label .. "."
+				return
+			end
+			local jobs = { }
+			for i, t in ipairs(top) do
+				jobs[i] = { kind = "compare", code = t.code, ours = ours, skill = skill.label, focusId = focus.id,
+					tier = investment.awakenedGems and "uber" or "pinnacle", player = { name = t.name, ascendancy = t.ascendancy, level = t.level } }
+			end
+			local lines = { "^7Comparison with the strongest " .. skill.label .. " builds on poe.ninja (" .. (entry.league or "current league") .. "), scored like generated builds:" }
+			setLog(lines)
+			state.parallel = pg
+			pg:Run(jobs, {
+				onDone = function(index, r)
+					local p = r.player or { }
+					local t, o = r.theirs or { }, r.ours or { }
+					t_insert(lines, string.format("^7%s (%s, level %s): score %.2f, DPS %s, lowest max hit %s   ^xC0C0C0(yours: score %.2f, DPS %s, max hit %s)",
+						tostring(p.name), tostring(t.class or p.ascendancy), tostring(t.level or p.level), t.score or 0, num(t.dps), num(t.minHit), o.score or 0, num(o.dps), num(o.minHit)))
+					local carries = { }
+					for _, row in ipairs(r.ablation or { }) do t_insert(carries, string.format("%s (%+.2f)", row.label, row.dScore)) end
+					if #carries > 0 then t_insert(lines, "^xC0C0C0    What carries their build: " .. table.concat(carries, ", ")) end
+					local helps = { }
+					for _, row in ipairs(r.transplant or { }) do t_insert(helps, string.format("%s (%+.2f)", row.label, row.dScore)) end
+					t_insert(lines, "^x88CC88    Of theirs, would help yours: " .. (#helps > 0 and table.concat(helps, ", ") or "none of their single parts beats yours"))
+					setLog(lines)
+				end,
+				onError = function(index, err)
+					t_insert(lines, colorCodes.NEGATIVE .. "    Could not compare with " .. tostring(jobs[index].player.name) .. ": " .. tostring(err))
+					setLog(lines)
+				end,
+				onAllDone = function()
+					state.parallel = nil
+					state.running = false
+					state.status = "^7Comparison finished."
+				end,
+			})
+			state.status = string.format("^7Comparing with %d top build%s in background threads...", #jobs, #jobs == 1 and "" or "s")
+		end, function(text) state.status = text end)
+	end)
+	controls.compare.enabled = idle
+	controls.compare.tooltipFunc = function(tooltip)
+		tooltip:Clear()
+		tooltip:AddLine(14, "^7Scores the strongest builds of the selected skill on poe.ninja like generated builds,")
+		tooltip:AddLine(14, "^7shows what carries each of them and which of their parts would improve the open build.")
+	end
+
 	controls.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {128, 164, 0, 16}, function() return state.status end)
 	addPriceControls(controls, 16, 464, idle)
 	controls.close = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {824, 464, 80, 20}, "Close", function()

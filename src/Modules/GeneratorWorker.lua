@@ -56,6 +56,40 @@ return function(jobJson, userPath)
 
 	local dkjson = require "dkjson"
 	local job = dkjson.decode(jobJson)
+
+	-- comparison with a top player's build (Modules/BuildComparison):
+	-- their build scored and taken apart, then each part of it tried in ours
+	if job.kind == "compare" then
+		local BC = LoadModule("Modules/BuildComparison")
+		local function load(xml, name)
+			main:SetMode("BUILD", false, name, xml)
+			runCallback("OnFrame")
+			return main.modes["BUILD"]
+		end
+		local function top(rows, n, positive)
+			local list = { }
+			for _, r in ipairs(rows) do
+				if #list >= n then break end
+				if (positive and r.dScore > 0.01) or (not positive and r.dScore < -0.01) then table.insert(list, r) end
+			end
+			return list
+		end
+		local theirsBuild = load(BC.DecodeCode(job.code), "theirs")
+		if BC.SelectMainSkill(theirsBuild, job.skill) then
+			theirsBuild.buildFlag = true
+			runCallback("OnFrame")
+		end
+		local ctx = BC.Setup(theirsBuild, job.focusId, job.tier)
+		local theirs = BC.Evaluate(ctx)
+		local ablation = top(BC.Ablate(ctx), job.rows or 8, false)
+		local parts = BC.ReadParts(theirsBuild)
+		local oursBuild = load(job.ours, "ours")
+		local ctx2 = BC.Setup(oursBuild, job.focusId, job.tier)
+		local ours = BC.Evaluate(ctx2)
+		local transplant = top(BC.Transplant(ctx2, parts), job.rows or 8, true)
+		return dkjson.encode({ player = job.player, theirs = theirs, ablation = ablation, ours = ours, transplant = transplant,
+			seconds = os.clock() - startClock }), ""
+	end
 	local function byId(list, id, key)
 		for _, entry in ipairs(list or { }) do
 			local value = key and entry[key] or entry
