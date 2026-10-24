@@ -1,6 +1,6 @@
 -- Test: runs one generator step on a saved generated build and prints what
 -- it did, so a step can be checked without a whole generation.
--- From the src folder: OURS=<build .xml> STEP=<flasks|uniquejewels|aurastack|metajewels|uniquesweep|uniqueflasks|fillmain|finalrares|ascendancy|rares> INVEST=ENDGAME luajit ../bench/stage_test.lua
+-- From the src folder: OURS=<build .xml> STEP=<flasks|uniquejewels|aurastack|metajewels|uniquesweep|uniqueflasks|fillmain|finalrares|ascendancy|supports|refine|rares> INVEST=ENDGAME luajit ../bench/stage_test.lua
 io.stdout:setvbuf("no")
 local benchDir = arg and arg[0] and arg[0]:match("^(.*)[/\\]") or "../bench"
 dofile("HeadlessWrapper.lua")
@@ -50,6 +50,12 @@ elseif step == "fillmain" or step == "finalrares" then
 	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
 	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
 	if step == "fillmain" then gen:FillMainLinkMove() else gen:FinalRares() end
+elseif step == "refine" then
+	-- (one allocation first, as the generator's tree has been allocated before refining)
+	gen:AllocateTree(true)
+	for _, n in ipairs({ 6, 10, 16, 6 }) do print("REFINE", n, gen:RefineTree(n)) end
+elseif step == "supports" then
+	gen:FinalSupports()
 elseif step == "ascendancy" then
 	gen.options.classId = build.spec.curClassId
 	gen.options.ascendClassId = build.spec.curAscendClassId

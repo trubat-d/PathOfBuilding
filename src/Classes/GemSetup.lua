@@ -63,6 +63,9 @@ function GemSetupClass:SlotSockets(slotName)
 	local slot = itemsTab.slots[slotName]
 	local item = slot and itemsTab.items[slot.selItemId]
 	if not item or not item.base then return 0 end
+	for _, modLine in ipairs(item.explicitModLines or { }) do
+		if modLine.line == "Has no Sockets" then return 0 end
+	end
 	local count = 0
 	for _, socket in ipairs(item.sockets or { }) do
 		if socket.color ~= "A" then count = count + 1 end
@@ -170,6 +173,11 @@ function GemSetupClass:FreeSockets()
 			-- an aura group still being filled keeps its whole capacity
 			free[group.slot] = free[group.slot] - math.max(#group.gemList, group.capacity or 0)
 		end
+	end
+	-- the main skill moved out of the body armour (e.g. for Kaom's Heart)
+	local main = self.gen.mainGroup
+	if main and main.slot and free[main.slot] then
+		free[main.slot] = math.max(0, free[main.slot] - #main.gemList)
 	end
 	return free
 end
@@ -738,5 +746,10 @@ function GemSetupClass:Run(maxBuffs, ignoreAttributes)
 			t_insert(parts, string.format("%s %d/%d", slotName, self:SlotSockets(slotName) - free[slotName], self:SlotSockets(slotName)))
 		end
 	end
-	self.gen:Note("Sockets used: Body Armour " .. #self.gen.mainGroup.gemList .. "/6 (main skill), " .. table.concat(parts, ", "))
+	local main = self.gen.mainGroup
+	if main.slot == "Body Armour" then
+		self.gen:Note("Sockets used: Body Armour " .. #main.gemList .. "/6 (main skill), " .. table.concat(parts, ", "))
+	else
+		self.gen:Note("Sockets used (main skill in the " .. tostring(main.slot) .. "): " .. table.concat(parts, ", "))
+	end
 end

@@ -256,15 +256,39 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 		return output, ctx.measure(output)
 	end
 
-	-- 1. Score every mod on its own
+	-- 1. Score every mod on its own (the influence variants of a slot share
+	-- the blank base: mods already scored for it are not scored again)
 	local blankOutput, blankPower = evaluate()
 	local blankDeficit = deficit(blankOutput, ctx.baseOutput, opts)
+	local cache = ctx.gainCache
+	local bestNew, newFix = nil, false
 	for _, candidate in ipairs(candidates) do
-		push(candidate)
-		local output, power = evaluate()
-		pop(candidate)
-		candidate.gain = power - blankPower
-		candidate.fix = blankDeficit - deficit(output, ctx.baseOutput, opts)
+		local cached = cache and cache[candidate.modId]
+		if cached then
+			candidate.gain, candidate.fix = cached.gain, cached.fix
+		else
+			push(candidate)
+			local output, power = evaluate()
+			pop(candidate)
+			candidate.gain = power - blankPower
+			candidate.fix = blankDeficit - deficit(output, ctx.baseOutput, opts)
+			if cache then cache[candidate.modId] = { gain = candidate.gain, fix = candidate.fix } end
+			if influences and influences[1] then
+				if not bestNew or candidate.gain > bestNew then bestNew = candidate.gain end
+				if candidate.fix > 0 then newFix = true end
+			end
+		end
+	end
+	-- an influence whose own mods are all weaker than every mod the plain item
+	-- chose can't make a better item: skipped (the slowest part of rare generation)
+	if influences and #influences == 1 and ctx.plainChosen and #ctx.plainChosen > 0 and not (newFix and blankDeficit > 0) then
+		local weakest
+		for _, c in ipairs(ctx.plainChosen) do
+			if not weakest or (c.gain or 0) < weakest then weakest = c.gain or 0 end
+		end
+		if not bestNew or bestNew <= weakest then
+			return nil, { }
+		end
 	end
 	local scores = { }
 	for _, candidate in ipairs(candidates) do
@@ -344,13 +368,33 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			local output, power = evaluate()
 			currentPower, currentDeficit = power, deficit(output, ctx.baseOutput, opts)
 		end
+		-- lazy greedy: a mod's gain only shrinks as the item fills (the score
+		-- is logarithmic: flat and increased damage add up, resistances cap), so
+		-- candidates are measured best-last-gain first and the round stops once
+		-- the next one's last gain can't beat the best found (all are measured
+		-- while resistances / attributes are still short)
+		local lastGain = { }
+		for _, candidate in ipairs(shortlist) do lastGain[candidate] = candidate.gain or 0 end
 		while counts.Prefix + counts.Suffix < prefixLimit + suffixLimit do
 			local best, bestPower, bestDeficit
+			local order = { }
 			for _, candidate in ipairs(shortlist) do
 				if not usedGroups[candidate.group] and counts[candidate.type] < limits[candidate.type] and not (candidate.crafted and counts.crafted > 0) then
+					t_insert(order, candidate)
+				end
+			end
+			t_sort(order, function(a, b)
+				if lastGain[a] ~= lastGain[b] then return lastGain[a] > lastGain[b] end
+				return a.modId < b.modId
+			end)
+			local lazy = currentDeficit <= 0 and opts.lazyFill ~= false
+			for index, candidate in ipairs(order) do
+				if lazy and best and index > 5 and lastGain[candidate] <= (bestPower - currentPower) * 0.8 then break end
+				do
 					push(candidate)
 					local output, power = evaluate()
 					pop(candidate)
+					lastGain[candidate] = power - currentPower
 					local d = deficit(output, ctx.baseOutput, opts)
 					local better
 					if not best then
@@ -569,11 +613,14 @@ end
 function RareItemGeneratorClass:GenerateForSlot(slotName, current, ctx)
 	local opts = ctx.opts
 	self.allowElevated = opts.elevated and true or false
+	ctx.gainCache, ctx.plainChosen = { }, nil
 	local best, bestScores = self:GenerateForSlotWith(slotName, current, ctx, nil)
 	local maxInfluences = opts.influences or 0
 	if maxInfluences <= 0 or not (current.base and current.base.influenceTags) then
+		ctx.gainCache = nil
 		return best, bestScores
 	end
+	ctx.plainChosen = best and best.chosen
 	local singles = { }
 	for _, info in ipairs(self.influenceList) do
 		if current.base.influenceTags[info.key] then
@@ -597,5 +644,6 @@ function RareItemGeneratorClass:GenerateForSlot(slotName, current, ctx)
 			end
 		end
 	end
+	ctx.gainCache, ctx.plainChosen = nil, nil
 	return best, bestScores
 end

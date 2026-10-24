@@ -444,6 +444,8 @@ end
 
 function BuildGeneratorClass:ChooseSupports(maxSupports)
 	local group = self.mainGroup
+	-- (fewer sockets when the main skill left the body armour)
+	maxSupports = m_min(maxSupports, self.mainLinkLimit or maxSupports)
 	-- charges switched on for a support chosen last time: off again until a
 	-- support (or the configuration's own check) brings them back
 	for var in pairs(self.supportChargeVars or { }) do self.build.configTab.input[var] = nil end
@@ -833,7 +835,7 @@ function BuildGeneratorClass:ChooseUtilityGems(ignoreAttributes)
 end
 
 -- Passive tree: repeatedly allocate the path with the best score per point
-function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly)
+function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly, warm)
 	local spec = self.build.spec
 	if not ascendancyOnly then self:AllocateArchetypeKeystones() end
 	local budget, ascBudget = self:PointBudget()
@@ -925,6 +927,13 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly)
 		-- path got shorter); the best few are re-checked before each pick anyway
 		local prev = { }
 		local refreshCount = 0
+		-- (warm: a few points freed from a finished tree, as RefineTree does:
+		-- the values from the last allocation are good estimates, so even the
+		-- first refresh only re-measures the best candidates and new ones)
+		if warm and not ascendancy and self.treePrev then
+			prev = self.treePrev
+			refreshCount = 1
+		end
 		while true do
 			local used, ascUsed = spec:CountAllocNodes()
 			local left = ascendancy and (ascBudget - ascUsed) or (budget - used)
@@ -978,6 +987,7 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly)
 			if not picked or picked.value <= 0 or picked.value == -math.huge then
 				if sinceRefresh > 0 then
 					sinceRefresh = refreshEvery -- try a full refresh before stopping
+					if warm then refreshCount = 0 end
 				else
 					break
 				end
@@ -989,6 +999,7 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly)
 				sinceRefresh = sinceRefresh + 1
 			end
 		end
+		if not ascendancy then self.treePrev = prev end
 	end
 	if not ascendancyOnly then
 		self.stage = "Allocating passive tree"
@@ -1194,6 +1205,39 @@ function BuildGeneratorClass:AscendancyRecheck()
 end
 
 -- Removes every allocated ascendancy / bloodline passive (start nodes stay)
+-- Main skill supports chosen again for the finished build (they were chosen
+-- for the gear and tree of stage 6); kept if the build is better
+function BuildGeneratorClass:FinalSupports()
+	local group = self.mainGroup
+	if not group then return 0 end
+	self:Recalculate()
+	local before = self:FullScore()
+	local saved = { }
+	for i, g in ipairs(group.gemList) do saved[i] = g end
+	local savedLog = #self.log
+	local function names()
+		local list = { }
+		for i = 2, #group.gemList do t_insert(list, data.gems[group.gemList[i].gemId].name) end
+		return table.concat(list, ", ")
+	end
+	local old = names()
+	self:ChooseSupports(5)
+	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+	self:AutoConfigure()
+	self:Recalculate()
+	local after = self:FullScore()
+	if after > before + 0.005 and names() ~= old then
+		self:Note(string.format("Supports chosen again for the finished build: %s (was %s), score %+.3f", names(), old, after - before))
+		return after - before
+	end
+	for i = #group.gemList, 1, -1 do group.gemList[i] = nil end
+	for i, g in ipairs(saved) do group.gemList[i] = g end
+	self.build.skillsTab:ProcessSocketGroup(group)
+	self:AutoConfigure()
+	self:Recalculate()
+	return 0
+end
+
 function BuildGeneratorClass:ClearAscendancy()
 	local spec = self.build.spec
 	local list = { }
@@ -1584,22 +1628,43 @@ function BuildGeneratorClass:RefineTree(count)
 	self:Recalculate()
 	local before = self:FullScore()
 	local undo = spec:CreateUndoState()
-	for _ = 1, count or 8 do
+	-- leaf passives measured once per batch, the cheapest few removed (each
+	-- one checked to still be a leaf), then measured again: a quarter of the
+	-- calculations of one measurement per removal
+	local function removable(node)
+		local holdsJewel = node.type == "Socket" and (spec.jewels[node.id] or 0) ~= 0
+		local protected = self.protectedNodes and self.protectedNodes[node.id]
+		return node.alloc and not node.ascendancyName and not holdsJewel and not protected and node.type ~= "ClassStart" and node.type ~= "Mastery"
+			and node.depends and #node.depends <= 1
+	end
+	local left = count or 8
+	local batch = self.options.refineBatch or 4
+	while left > 0 do
 		local current = self:Score()
-		local best, bestLoss
+		local list = { }
 		for _, node in pairs(spec.allocNodes) do
-			local holdsJewel = node.type == "Socket" and (spec.jewels[node.id] or 0) ~= 0
-			local protected = self.protectedNodes and self.protectedNodes[node.id]
-			if not node.ascendancyName and not holdsJewel and not protected and node.type ~= "ClassStart" and node.type ~= "Mastery" and node.depends and #node.depends <= 1 then
-				local loss = current - self:Score({ removeNodes = { [node] = true } })
-				if not bestLoss or loss < bestLoss then best, bestLoss = node, loss end
+			if removable(node) then
+				t_insert(list, { node = node, loss = current - self:Score({ removeNodes = { [node] = true } }) })
 			end
 		end
-		if not best then break end
-		spec:DeallocNode(best)
+		if #list == 0 then break end
+		t_sort(list, function(a, b)
+			if a.loss ~= b.loss then return a.loss < b.loss end
+			return a.node.id < b.node.id
+		end)
+		local removed = 0
+		for _, entry in ipairs(list) do
+			if removed >= m_min(batch, left) then break end
+			if removable(entry.node) then
+				spec:DeallocNode(entry.node)
+				removed = removed + 1
+			end
+		end
+		if removed == 0 then break end
+		left = left - removed
 	end
 	self:Recalculate()
-	self:AllocateTree(true)
+	self:AllocateTree(true, false, true)
 	local after = self:FullScore()
 	if after < before then
 		spec:RestoreUndoState(undo)
@@ -1727,6 +1792,7 @@ function BuildGeneratorClass:ChooseTimelessJewel()
 		build = self.build,
 		score = function(override) return (self:Score(override)) end,
 		fullScore = function() return (self:FullScore()) end,
+		quickScore = function() self:Recalculate() return (self:Score()) end,
 		equip = function(item, slotName) return self:Equip(item, slotName) end,
 		tick = function() self:Tick() end,
 	})
@@ -1770,6 +1836,7 @@ function BuildGeneratorClass:ChooseMetaJewels()
 	local finder = new("MetaJewelFinder"):MetaJewelFinder({
 		build = self.build,
 		fullScore = function() return (self:FullScore()) end,
+		quickScore = function() self:Recalculate() return (self:Score()) end,
 		equip = function(item, slotName) return self:Equip(item, slotName) end,
 		tick = function() self:Tick() end,
 	})
@@ -1837,6 +1904,7 @@ function BuildGeneratorClass:ChooseClusterJewels(maxJewels)
 		build = self.build,
 		score = function(override) return (self:Score(override)) end,
 		fullScore = function() return (self:FullScore()) end,
+		quickScore = function() self:Recalculate() return (self:Score()) end,
 		equip = function(item, slotName) return self:Equip(item, slotName) end,
 		tick = function() self:Tick() end,
 	})
@@ -1924,6 +1992,7 @@ function BuildGeneratorClass:ChooseArchetypeJewels()
 	local finder = new("MetaJewelFinder"):MetaJewelFinder({
 		build = self.build,
 		fullScore = function() return (self:FullScore()) end,
+		quickScore = function() self:Recalculate() return (self:Score()) end,
 		equip = function(item, slotName) return self:Equip(item, slotName) end,
 		tick = function() self:Tick() end,
 	})
@@ -2221,6 +2290,72 @@ function BuildGeneratorClass:ChooseMetaUniques()
 	end
 end
 
+-- Socket groups and the main link state, to undo a move
+function BuildGeneratorClass:SaveGroups()
+	local skillsTab = self.build.skillsTab
+	local saved = { list = { }, main = self.build.mainSocketGroup, limit = self.mainLinkLimit, mainSlot = self.mainGroup and self.mainGroup.slot, log = { } }
+	for i, group in ipairs(skillsTab.socketGroupList) do
+		local gems = { }
+		for j, g in ipairs(group.gemList) do gems[j] = g end
+		saved.list[i] = { group = group, gems = gems, slot = group.slot }
+	end
+	for i, l in ipairs(self.log) do saved.log[i] = l end
+	return saved
+end
+function BuildGeneratorClass:RestoreGroups(saved)
+	local skillsTab = self.build.skillsTab
+	local list = skillsTab.socketGroupList
+	for i = #list, 1, -1 do list[i] = nil end
+	for i, entry in ipairs(saved.list) do
+		local group = entry.group
+		for j = #group.gemList, 1, -1 do group.gemList[j] = nil end
+		for j, g in ipairs(entry.gems) do group.gemList[j] = g end
+		group.slot = entry.slot
+		list[i] = group
+		skillsTab:ProcessSocketGroup(group)
+	end
+	self.build.mainSocketGroup = saved.main
+	self.mainLinkLimit = saved.limit
+	for i = #self.log, 1, -1 do self.log[i] = nil end
+	for i, l in ipairs(saved.log) do self.log[i] = l end
+end
+
+-- The main skill moved out of the body armour (for a body armour without
+-- sockets, like Kaom's Heart): into the 4-link of the helmet, gloves or boots
+-- whose own gems matter least, supports chosen again for the smaller link,
+-- then the utility setups again around it
+function BuildGeneratorClass:RelocateMainLink()
+	local group = self.mainGroup
+	local skillsTab = self.build.skillsTab
+	local setup = new("GemSetup"):GemSetup(self)
+	local best, bestSockets, bestGems
+	for _, slotName in ipairs({ "Helmet", "Gloves", "Boots" }) do
+		local sockets = setup:SlotSockets(slotName)
+		local gems = 0
+		for _, g in ipairs(skillsTab.socketGroupList) do
+			if g ~= group and g.slot == slotName then gems = gems + #g.gemList end
+		end
+		if sockets >= 3 and (not best or sockets > bestSockets or (sockets == bestSockets and gems < bestGems)) then
+			best, bestSockets, bestGems = slotName, sockets, gems
+		end
+	end
+	if not best then return false end
+	local list = skillsTab.socketGroupList
+	for i = #list, 1, -1 do
+		if list[i] ~= group and list[i].slot == best then t_remove(list, i) end
+	end
+	for i, g in ipairs(list) do
+		if g == group then self.build.mainSocketGroup = i end
+	end
+	group.slot = best
+	self.mainLinkLimit = bestSockets - 1
+	self:Recalculate()
+	self:ChooseSupports(5)
+	self:ChooseUtilityGems()
+	self:Note(string.format("Main skill linked in the %s (%d sockets): the body armour has none", best, bestSockets))
+	return true
+end
+
 -- Every affordable unique in every gear slot, without poe.ninja: the game's
 -- whole unique list is screened with the quick score (one calculation each),
 -- the best few are equipped for real and kept when the full score agrees.
@@ -2263,11 +2398,13 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 		local equipped = slot and self.itemsTab.items[slot.selItemId]
 		if slot and not (self.lockedSlots and self.lockedSlots[slotName]) then
 			for _, item in ipairs(candidates) do
+				-- (no sockets where the main skill is: it moves to a 4-link, scored when tried)
+				local relocate = noSockets(item) and self.mainGroup and self.mainGroup.slot == slotName and slotName == "Body Armour"
 				if self.itemsTab:IsItemValidForSlot(item, slotName) and not (equipped and equipped.title == item.title)
-					and not (groupSlots[slotName] and noSockets(item)) and not changesHands(item, slotName) then
+					and (relocate or not (groupSlots[slotName] and noSockets(item))) and not changesHands(item, slotName) then
 					local score = self:Score({ repSlotName = slotName, repItem = item })
 					if score > current + 0.01 then
-						t_insert(gains, { item = item, slot = slotName, gain = score - current })
+						t_insert(gains, { item = item, slot = slotName, gain = score - current, relocate = relocate })
 					end
 				end
 			end
@@ -2291,8 +2428,11 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 			local previous = slot.selItemId
 			local newItem = finder:Equip(entry.item, entry.slot, true)
 			self.itemsTab:PopulateSlots()
+			local savedGroups = entry.relocate and self:SaveGroups()
+			local moved = entry.relocate and self:RelocateMainLink()
 			self:Recalculate()
-			local after = self:FullScore()
+			local after = (not entry.relocate or moved) and self:FullScore() or before
+			if self.options.debugTiming then ConPrintf("[uniques] tried %s in %s%s: %.3f -> %.3f", entry.item.title or entry.item.name, entry.slot, entry.relocate and " (main link moved)" or "", before, after) end
 			if after > before + 0.005 then
 				usedSlots[entry.slot] = true
 				usedItems[title] = true
@@ -2302,6 +2442,7 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 				self.costs = self.costs or { }
 				t_insert(self.costs, price or false)
 			else
+				if savedGroups then self:RestoreGroups(savedGroups) end
 				slot:SetSelItemId(previous)
 				self.itemsTab:DeleteItem(newItem, true)
 				self.itemsTab:PopulateSlots()
@@ -2666,6 +2807,10 @@ function BuildGeneratorClass:Run()
 	end
 	self.stage = "Optimizing the passive tree"
 	if opts.ascendancyRecheck ~= false then self:AscendancyRecheck() end
+	if opts.finalSupports ~= false then
+		-- (new supports can want other passives: a short tree round when they change)
+		if self:FinalSupports() > 0 then self:RefineTree(10) end
+	end
 	self:PairAilments()
 	self:OptimizeTree()
 
@@ -2739,7 +2884,7 @@ function BuildGeneratorClass:Run()
 			"Main skill in a 6-link body armour, utility setups in the helmet, gloves, boots and weapon sockets; gems at their normal maximum level with 20% quality",
 			"Abyss jewels are not used; cluster jewels are Large ones with 8 passives",
 			"Configuration set automatically for: " .. ((opts.configScenario and opts.configScenario.label) or "Pinnacle boss") .. ", see the changes below",
-			"Rares use " .. ((opts.quality and opts.quality.label) or "tier 2-3, average rolls"),
+			"Rares use " .. ((opts.quality and opts.quality.label) or "tier 2-3, average rolls") .. (opts.crafts ~= false and ", with up to one crafting bench mod" or ""),
 		},
 	}
 end

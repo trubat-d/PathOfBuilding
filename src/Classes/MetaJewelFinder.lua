@@ -84,7 +84,7 @@ function MetaJewelFinderClass:CountJewel(title)
 end
 
 -- Socket jewels for real ({ { node, item } }), score, then restore
-function MetaJewelFinderClass:TryJewels(placements, keep)
+function MetaJewelFinderClass:TryJewels(placements, keep, quick)
 	local spec = self.spec
 	local itemsTab = self.build.itemsTab
 	local undo = spec:CreateUndoState()
@@ -104,7 +104,10 @@ function MetaJewelFinderClass:TryJewels(placements, keep)
 		p.distance = p.node.distanceToClassStart
 	end
 	local points = spec:CountAllocNodes() - usedBefore
-	local score = self.ctx.fullScore() - points * self.pointValue
+	-- (quick: one calculation with the flask uptimes of the last full score,
+	-- for screening many placements; the best ones are then scored in full)
+	local scoreFunc = quick and self.ctx.quickScore or self.ctx.fullScore
+	local score = scoreFunc() - points * self.pointValue
 	if keep then
 		itemsTab:PopulateSlots()
 		spec:AddUndoState()
@@ -252,14 +255,21 @@ function MetaJewelFinderClass:UniqueJewel(baseScore, title, preferredStat, limit
 	else
 		t_insert(options, { db.defaultVariant or (#list > 0 and #list or nil) })
 	end
-	local best
+	-- variants screened quickly, the best three scored in full
+	local quick = self.ctx.quickScore ~= nil
+	local tried = { }
 	for _, opt in ipairs(options) do
 		local item = variantItem(db, opt[1], opt[2])
 		local placement = { node = sockets[1].node, item = item }
-		local score = self:TryJewels({ placement })
-		if not best or score > best.score then
-			best = { score = score, placements = { placement }, label = title .. (opt.label and (" (" .. opt.label .. ")") or "") }
-		end
+		local score = self:TryJewels({ placement }, false, quick)
+		t_insert(tried, { score = score, placements = { placement }, label = title .. (opt.label and (" (" .. opt.label .. ")") or "") })
+	end
+	table.sort(tried, function(a, b) return a.score > b.score end)
+	local best
+	for i = 1, quick and math.min(3, #tried) or #tried do
+		local entry = tried[i]
+		if quick then entry.score = self:TryJewels(entry.placements) end
+		if not best or entry.score > best.score then best = entry end
 	end
 	if not best then return nil end
 	-- jewels that grow with the passives between their socket and the class
@@ -269,14 +279,22 @@ function MetaJewelFinderClass:UniqueJewel(baseScore, title, preferredStat, limit
 	if title == "Split Personality" then
 		local item = best.placements[1].item
 		local candidates = self:Sockets(8, true)
+		local quick = self.ctx.quickScore ~= nil
+		local base = quick and self:TryJewels(best.placements, false, true) or best.score
+		local found = { }
 		for i = 1, math.min(#candidates, 16) do
 			local node = candidates[i].node
 			if node ~= best.placements[1].node then
 				local placement = { node = node, item = item }
-				local score = self:TryJewels({ placement })
-				if score > best.score then
-					best.score, best.placements = score, { placement }
-				end
+				local score = self:TryJewels({ placement }, false, quick)
+				if score > base then t_insert(found, { score = score, placement = placement }) end
+			end
+		end
+		table.sort(found, function(a, b) return a.score > b.score end)
+		for i = 1, quick and math.min(3, #found) or #found do
+			local score = quick and self:TryJewels({ found[i].placement }) or found[i].score
+			if score > best.score then
+				best.score, best.placements = score, { found[i].placement }
 			end
 		end
 		local placement = best.placements[1]

@@ -1,7 +1,7 @@
 -- Profiling: where does a generation spend its time? Times every method of
 -- the generator classes (inclusive time, so nested methods count in both)
 -- and counts calculator runs.
--- From the src folder: luajit ../bench/profile_gen.lua "<Skill>" "<Ascendancy>" <investment> <quick|full>
+-- From the src folder: [ARCH=<archetype id>] luajit ../bench/profile_gen.lua "<Skill>" "<Ascendancy>" <investment> <quick|full>
 io.stdout:setvbuf("no")
 local skillName, ascName, investmentId, mode = arg[1], arg[2], arg[3] or "MID", arg[4] or "quick"
 local benchDir = arg[0]:match("^(.*)[/\\]") or "."
@@ -70,9 +70,14 @@ local investment
 for _, level in ipairs(new("PriceSource"):PriceSource().levels) do if level.id == investmentId then investment = level end end
 local focus
 for _, f in ipairs(new("BuildScorer"):BuildScorer(build).focusList) do if f.id == (os.getenv("FOCUS") or "DPS_FLOOR") then focus = f end end
+-- ARCH=<archetype id>: the generator commits to that archetype
+local archetype
+for _, a in ipairs(new("BuildArchetypes"):BuildArchetypes().ForSkill(data.gems[gemId], nil)) do
+	if a.id == os.getenv("ARCH") then archetype = a end
+end
 local gen = new("BuildGenerator"):BuildGenerator(build, {
 	gemId = gemId, classId = asc.classId, ascendClassId = asc.ascendClassId, level = 92,
-	investment = investment, focus = focus, quick = mode == "quick", synergies = false, yieldEvery = 1e9,
+	investment = investment, focus = focus, quick = mode == "quick", synergies = false, yieldEvery = 1e9, archetype = archetype,
 })
 local t0 = clock()
 local co = coroutine.create(function() return gen:Run() end)
