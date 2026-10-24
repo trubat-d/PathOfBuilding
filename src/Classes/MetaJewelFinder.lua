@@ -37,12 +37,16 @@ end
 
 -- Jewel sockets usable for new jewels: empty or holding a generated rare jewel,
 -- allocated or a few points away, cheapest first
-function MetaJewelFinderClass:Sockets(maxPath)
+-- (anywhere: also sockets on cluster jewels and outer cluster sockets that
+-- don't hold a cluster jewel - for jewels that like distance)
+function MetaJewelFinderClass:Sockets(maxPath, anywhere)
 	local itemsTab = self.build.itemsTab
 	local list = { }
 	for id, node in pairs(self.spec.nodes) do
 		local slot = itemsTab.slots["Jewel " .. id]
-		if node.type == "Socket" and slot and not node.expansionJewel and not node.ascendancyName then
+		local holder = itemsTab.items[self.spec.jewels[id] or 0]
+		local clusterOk = anywhere and not (holder and holder.clusterJewel)
+		if node.type == "Socket" and slot and (not node.expansionJewel or clusterOk) and not node.ascendancyName then
 			local current = itemsTab.items[self.spec.jewels[id] or 0]
 			local free = not current or (isGeneratedRare(current) and node.alloc)
 			local cost = node.alloc and 0 or (node.path and #node.path or 99)
@@ -66,6 +70,17 @@ function MetaJewelFinderClass:HasJewel(title)
 		if item and item.title == title and self.spec.allocNodes[nodeId] then return true end
 	end
 	return false
+end
+
+-- How many jewels with this title are socketed in allocated sockets
+function MetaJewelFinderClass:CountJewel(title)
+	local itemsTab = self.build.itemsTab
+	local n = 0
+	for nodeId, itemId in pairs(self.spec.jewels) do
+		local item = itemsTab.items[itemId]
+		if item and item.title == title and self.spec.allocNodes[nodeId] then n = n + 1 end
+	end
+	return n
 end
 
 -- Socket jewels for real ({ { node, item } }), score, then restore
@@ -214,9 +229,9 @@ end
 -- A unique jewel by title (e.g. an archetype's Split Personality / Healthy Mind),
 -- in the nearest free socket. Jewels with stat variants (Split Personality) try
 -- the preferred stat with every second stat. Returns { score, gain, label, placements } or nil
-function MetaJewelFinderClass:UniqueJewel(baseScore, title, preferredStat)
+function MetaJewelFinderClass:UniqueJewel(baseScore, title, preferredStat, limit)
 	local db = dbItem(title)
-	if not db or self:HasJewel(title) then return nil end
+	if not db or self:CountJewel(title) >= (limit or 1) then return nil end
 	local sockets = self:Sockets()
 	if not sockets[1] then return nil end
 	local options = { }
@@ -243,6 +258,25 @@ function MetaJewelFinderClass:UniqueJewel(baseScore, title, preferredStat)
 		end
 	end
 	if not best then return nil end
+	-- jewels that grow with the passives between their socket and the class
+	-- start (Split Personality): the same jewel in every socket within reach,
+	-- far ones included (long paths and sockets deep in cluster jewels), the
+	-- points a path costs counted against it
+	if title == "Split Personality" then
+		local item = best.placements[1].item
+		local candidates = self:Sockets(8, true)
+		for i = 1, math.min(#candidates, 16) do
+			local node = candidates[i].node
+			if node ~= best.placements[1].node then
+				local score = self:TryJewels({ { node = node, item = item } })
+				if score > best.score then
+					best.score, best.placements = score, { { node = node, item = item } }
+				end
+			end
+		end
+		local node = best.placements[1].node
+		best.label = best.label .. string.format(" in a socket %d passives from the class start", node.distanceToClassStart or 0)
+	end
 	best.gain = best.score - baseScore
 	return best
 end

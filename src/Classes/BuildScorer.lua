@@ -109,8 +109,10 @@ end
 -- Survivability and clear bonuses added to the score
 function BuildScorerClass:ExtraTerms(output)
 	if not output then return 0 end
-	local ratio = m_max(0, self:RecoveryRatio(output))
-	local extra = self.focus.ehp * 0.6 * m_log(1 + 10 * ratio)
+	-- (recovering 15% of the pool per second is plenty: more isn't worth a
+	-- 6-link support slot, which a big recovery weight made Life Leech take)
+	local ratio = m_min(0.15, m_max(0, self:RecoveryRatio(output)))
+	local extra = self.focus.ehp * 0.4 * m_log(1 + 10 * ratio)
 	extra = extra + (self.focus.clear or 0) * self:ClearTerm(output)
 	return extra
 end

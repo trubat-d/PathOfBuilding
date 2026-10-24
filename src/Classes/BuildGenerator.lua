@@ -1389,12 +1389,18 @@ function BuildGeneratorClass:ChooseMetaJewels()
 	local prices = GetPriceSource()
 	local kinds = { "forbidden" }
 	if investment.exceptionalGems then t_insert(kinds, "watcher") end
+	-- Split Personality (cheap, limited to 2): stronger the further its socket
+	-- is from the class start, so long paths and cluster sockets are tried
+	t_insert(kinds, "split")
+	t_insert(kinds, "split")
 	for _, kind in ipairs(kinds) do
 		self:Recalculate()
 		local base = self:FullScore()
 		local result
 		if kind == "forbidden" then
 			result = finder:ForbiddenPair(base)
+		elseif kind == "split" then
+			result = finder:UniqueJewel(base, "Split Personality", nil, 2)
 		else
 			result = finder:WatchersEye(base, investment.awakenedGems and 3 or 2)
 		end
@@ -1412,6 +1418,8 @@ function BuildGeneratorClass:ChooseMetaJewels()
 			if kind == "forbidden" then
 				local a, b = prices.uniques["Forbidden Flame"], prices.uniques["Forbidden Flesh"]
 				price = a and b and (a + b) or nil
+			elseif kind == "split" then
+				price = prices.uniques["Split Personality"]
 			else
 				price = prices.uniques["Watcher's Eye"]
 			end
