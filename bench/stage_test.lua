@@ -1,6 +1,6 @@
 -- Test: runs one generator step on a saved generated build and prints what
 -- it did, so a step can be checked without a whole generation.
--- From the src folder: OURS=<build .xml> STEP=<flasks|flaskenchant|clusters|popular|learn|uniquejewels|aurastack|metajewels|uniquesweep|uniqueflasks|fillmain|finalrares|ascendancy|supports|refine|swap|rares> INVEST=ENDGAME luajit ../bench/stage_test.lua
+-- From the src folder: OURS=<build .xml> STEP=<skillprofile|flasks|flaskenchant|clusters|popular|learn|uniquejewels|aurastack|metajewels|uniquesweep|uniqueflasks|fillmain|finalrares|ascendancy|supports|refine|swap|rares> INVEST=ENDGAME luajit ../bench/stage_test.lua
 io.stdout:setvbuf("no")
 local benchDir = arg and arg[0] and arg[0]:match("^(.*)[/\\]") or "../bench"
 dofile("HeadlessWrapper.lua")
@@ -24,6 +24,8 @@ for _, g in ipairs(build.skillsTab.socketGroupList) do
 	if g == build.skillsTab.socketGroupList[build.mainSocketGroup] then gen.mainGroup = g end
 end
 gen.mainGem = gen.mainGroup and gen.mainGroup.gemList[1] and data.gems[gen.mainGroup.gemList[1].gemId]
+-- (skillprofile: the build as saved first, then with the main skill's profile)
+if os.getenv("STEP") == "skillprofile" then gen.options.skillProfiles = false end
 gen:AutoConfigure()
 local before, r0 = gen:FullScore()
 print(string.format("BEFORE score %.3f dps %.0f", before, r0.dps))
@@ -113,6 +115,13 @@ elseif step == "snapdebug" then
 	local branches = gen:TreeBranches()
 	print("BRANCHES", #branches)
 	for i = 1, math.min(5, #branches) do print("BR", #branches[i].nodes, branches[i].perPoint, branches[i].nodes[1].dn) end
+elseif step == "skillprofile" then
+	gen.options.skillProfiles = nil
+	local first = gen.mainGroup.gemList[1]
+	print("PART BEFORE", first.skillPart, gen.mainGem.grantedEffect.parts and gen.mainGem.grantedEffect.parts[first.skillPart or 1] and gen.mainGem.grantedEffect.parts[first.skillPart or 1].name)
+	local _, r = gen:FullScore()
+	print("PART AFTER", first.skillPart, gen.mainGem.grantedEffect.parts and gen.mainGem.grantedEffect.parts[first.skillPart or 1] and gen.mainGem.grantedEffect.parts[first.skillPart or 1].name, "hitScale", tostring(gen.scorer.hitScale))
+	print("NOTE", tostring(gen.skillProfileNote))
 elseif step == "cross" then
 	gen:CrossIdeasMove(1)
 elseif step == "explain" then

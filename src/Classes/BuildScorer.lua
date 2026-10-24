@@ -198,7 +198,7 @@ function BuildScorerClass:GetDPS(output)
 	else
 		dps = (output.CombinedDPS or 0) + (output.Minion and output.Minion.CombinedDPS or 0)
 	end
-	-- skills whose parts add up on one target (BuildGenerator combinedParts)
+	-- skills whose parts add up on one target (SkillProfiles combine)
 	if self.hitScale and output.TotalDPS then
 		dps = dps + (self.hitScale - 1) * output.TotalDPS
 	end
