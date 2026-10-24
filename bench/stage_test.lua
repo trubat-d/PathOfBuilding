@@ -140,6 +140,19 @@ elseif step == "script" then
 elseif step == "pearl" then
 	print("GAIN", gen:PearlMove())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
+elseif step == "fillsockets" then
+	-- (FREE=n: n allocated sockets emptied first)
+	local n = tonumber(os.getenv("FREE") or "1")
+	for _, slot in ipairs(build.itemsTab.orderedSlots) do
+		if n > 0 and slot.nodeId and build.spec.allocNodes[slot.nodeId] and slot.selItemId ~= 0 then
+			local item = build.itemsTab.items[slot.selItemId]
+			if item and item.rarity == "RARE" then print("EMPTIED", slot.slotName) slot:SetSelItemId(0) n = n - 1 end
+		end
+	end
+	gen:Recalculate()
+	print("BEFORE-FILL", gen:FullScore())
+	print("DONE", gen:FillEmptySockets())
+	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
 elseif step == "prune" then
 	print("REMOVED", gen:PruneUselessGems())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end

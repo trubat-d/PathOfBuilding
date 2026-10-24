@@ -2266,6 +2266,67 @@ function BuildGeneratorClass:AddJewels(maxJewels)
 	end
 end
 
+-- Allocated jewel sockets left empty (a jewel taken out by a later step, a
+-- socket the tree passed through): each gets the best rare jewel for it; one
+-- that can't take a jewel worth having (a cluster jewel's own socket) is
+-- given back if nothing depends on it
+function BuildGeneratorClass:FillEmptySockets()
+	local spec = self.build.spec
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local generator = finder.rareGenerator
+	self:Recalculate()
+	local empty = { }
+	for _, node in ipairs(nodesById(spec.allocNodes)) do
+		if node.type == "Socket" and (spec.jewels[node.id] or 0) == 0 and self.itemsTab.slots["Jewel " .. node.id] then t_insert(empty, node) end
+	end
+	if #empty == 0 then return 0 end
+	local scorer, ratio = self.scorer, self.ratio
+	local measure = function(output) return scorer:ScoreOutput(output, ratio) end
+	local filled, freed = 0, 0
+	local jewelText
+	for _, node in ipairs(empty) do
+		-- (the sockets a Large Cluster Jewel adds take cluster jewels)
+		local clusterSocket = node.expansionJewel and node.expansionJewel.parent ~= nil
+		local done = false
+		if not clusterSocket then
+			self:Recalculate()
+			local baseOutput = self.calcFunc({ })
+			local ctx = {
+				calcFunc = self.calcFunc, baseOutput = baseOutput, basePower = measure(baseOutput),
+				measure = measure, tick = function() self:Tick() end,
+				opts = { quality = self.options.quality, levelOnly = true, keepResists = false, keepAttributes = false, keepLife = false },
+			}
+			local best
+			for _, baseName in ipairs({ "Crimson Jewel", "Viridian Jewel", "Cobalt Jewel" }) do
+				if data.itemBases[baseName] then
+					local blank = new("Item"):Item("Rarity: NORMAL\n" .. baseName)
+					blank:BuildModList()
+					local result = generator:GenerateForSlotWith("Jewel " .. node.id, blank, ctx, nil)
+					if result and (not best or result.power > best.power) then best = result end
+				end
+			end
+			if best then
+				self:Equip(best.item, "Jewel " .. node.id)
+				self.itemsTab:PopulateSlots()
+				filled = filled + 1
+				done = true
+				local mods = { }
+				for _, l in ipairs(best.item.explicitModLines) do t_insert(mods, l.line) end
+				jewelText = table.concat(mods, ", ")
+			end
+		end
+		if not done and node.alloc and not node.ascendancyName and node.depends and #node.depends <= 1 then
+			spec:DeallocNode(node)
+			freed = freed + 1
+		end
+	end
+	spec:BuildAllDependsAndPaths()
+	self:Recalculate()
+	if filled > 0 then self:Note(string.format("Empty jewel sockets filled: %d (%s)", filled, jewelText)) end
+	if freed > 0 then self:Note(string.format("Empty jewel sockets given back: %d point%s", freed, freed == 1 and "" or "s")) end
+	return filled + freed
+end
+
 -- Frees the least useful passives and lets the allocator spend them again
 -- (after something changed what passives are worth, e.g. a timeless jewel)
 function BuildGeneratorClass:RefineTree(count)
@@ -4096,7 +4157,9 @@ function BuildGeneratorClass:ChooseAnoint()
 	local best = extras:CanAnoint(amulet) and self:BestAnoints(extras, amulet, current) or nil
 	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
 	local filter = { obtainableOnly = true, levelOnly = true, investment = self.options.investment }
-	for _, item in pairs(main.uniqueDB.list) do
+	-- (an amulet the build is built around stays: only anointed)
+	local locked = self.lockedSlots and self.lockedSlots["Amulet"]
+	for _, item in pairs(locked and { } or main.uniqueDB.list) do
 		if item.type == "Amulet" and extras.AnointSlots(item) > 1 and extras:CanAnoint(item) and finder:IsItemAllowed(item, filter) then
 			local bare = new("Item"):Item(item:BuildRaw())
 			bare:BuildAndParseRaw()
@@ -4514,6 +4577,11 @@ function BuildGeneratorClass:Run()
 	end
 	-- hard requirements (resistances, attributes) fixed with bench crafts
 	if opts.requirements ~= false then self:RequirementsMove() end
+	-- (no allocated jewel socket left empty)
+	do
+		local ok, err = pcall(function() self:FillEmptySockets() end)
+		if not ok then ConPrintf("Filling jewel sockets failed: %s", tostring(err)) end
+	end
 	self:RemoveUnusedItems()
 	-- (last check: every gem setup fits its item's sockets)
 	if self:FitSockets() then self:Note("Gem setups packed again to fit the items' sockets") end
