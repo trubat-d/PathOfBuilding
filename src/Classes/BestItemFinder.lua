@@ -260,6 +260,7 @@ function BestItemFinderClass:RunRares(options)
 	}
 	for _, slotName in ipairs(slotNames) do
 		slotIndex = slotIndex + 1
+		if opts.onSlot then opts.onSlot(slotIndex, #slotNames) end
 		local slot = itemsTab.slots[slotName]
 		local current = slot and itemsTab.items[slot.selItemId]
 		local slotReport = { current = current and current.name or nil, results = { } }

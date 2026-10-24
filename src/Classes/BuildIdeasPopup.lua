@@ -14,6 +14,7 @@ local t_insert = table.insert
 local t_remove = table.remove
 local m_min = math.min
 local m_floor = math.floor
+local m_max = math.max
 
 ---@class BuildIdeasPopup
 local BuildIdeasPopupClass = newClass("BuildIdeasPopup")
@@ -538,6 +539,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 			return
 		end
 		state.confirmDiscard = false
+		state.progress = nil
 		local entry = controls.archetype.list[controls.archetype.selIndex]
 		if entry and entry.auto then
 			-- scan first; the scan sorts the list best first, then this runs again
@@ -565,8 +567,10 @@ function BuildIdeasPopupClass:OpenGenerator()
 			if not waited then waited = true return end
 			local build = main.modes["BUILD"]
 			local generator = new("BuildGenerator"):BuildGenerator(build, options)
-			options.onProgress = function(stage, index, count)
-				state.status = string.format("^7Step %d of %d: %s...", index, count, stage)
+			state.progress = 0
+			options.onProgress = function(stage, index, count, sub)
+				state.progress = ((index - 1) + (sub or 0)) / m_max(1, count)
+				state.status = string.format("^7Step %d of %d (%d%%): %s...", index, count, m_floor(state.progress * 100), stage)
 			end
 			runInBackground("BuildGenerator", popup, function() return generator:Run() end, function(result)
 				state.running = false
@@ -631,6 +635,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 		local t0 = GetTime()
 		main.onFrameFuncs["BuildParallelStatus"] = function()
 			if not state.running then main.onFrameFuncs["BuildParallelStatus"] = nil return end
+			state.progress = doneCount / m_max(1, #jobs)
 			state.status = string.format("^7Building %d archetype%s at once (up to %d threads): %d running, %d done, %d s...",
 				#jobs, #jobs == 1 and "" or "s", pg.MaxWorkers(), runningCount, doneCount, m_floor((GetTime() - t0) / 1000))
 		end
@@ -748,8 +753,10 @@ function BuildIdeasPopupClass:OpenGenerator()
 				options.meta = meta
 				local generator = new("BuildGenerator"):BuildGenerator(build, options)
 				local planning = archetype == standard
-				options.onProgress = function(stage)
-					state.status = string.format("^7Building %d of %d (%s): %s...", built, total, archetype.label, stage)
+				options.onProgress = function(stage, index, count, sub)
+					local inBuild = ((index or 1) - 1 + (sub or 0)) / m_max(1, count or 1)
+					state.progress = ((built - 1) + inBuild) / m_max(1, built + #queue)
+					state.status = string.format("^7Building %d of %d (%s, %d%%): %s...", built, built + #queue, archetype.label, m_floor(inBuild * 100), stage)
 				end
 				runInBackground("BuildGenerator", popup, function()
 					local result = generator:Run()
@@ -945,6 +952,10 @@ function BuildIdeasPopupClass:OpenGenerator()
 	end
 
 	controls.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {128, 164, 0, 16}, function() return state.status end)
+	-- how far the running generation / scan is
+	controls.progress = new("ProgressBarControl"):ProgressBarControl({"TOPLEFT",nil,"TOPLEFT"}, {128, 182, 776, 8}, function()
+		return state.running and state.progress or nil
+	end)
 	addPriceControls(controls, 16, 464, idle)
 	controls.close = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {824, 464, 80, 20}, "Close", function()
 		main.onFrameFuncs["BuildGenerator"] = nil

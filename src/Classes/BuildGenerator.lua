@@ -124,11 +124,25 @@ function BuildGeneratorClass:Tick()
 	local opts = self.options
 	if opts.yieldEvery and GetTime() - (self.lastYield or 0) > opts.yieldEvery then
 		if opts.onProgress then
-			opts.onProgress(self.stage or "", self.stageIndex or 0, self.stageCount or 1)
+			opts.onProgress(self.stage or "", self.stageIndex or 0, self.stageCount or 1, self.subProgress or 0)
 		end
 		coroutine.yield()
 		self.lastYield = GetTime()
 	end
+end
+
+-- Progress within the current stage (0 to 1), for the window's progress bar:
+-- Move(i, n) starts the i-th of n steps of the stage, Inner(f) is how far
+-- the running step is (only ever moves forward)
+function BuildGeneratorClass:Move(index, count, label)
+	self.moveFrom, self.moveTo = (index - 1) / count, index / count
+	self.subProgress = m_max(self.subProgress or 0, self.moveFrom)
+	if label then self.stage = label end
+end
+function BuildGeneratorClass:Inner(fraction)
+	local from, to = self.moveFrom or 0, self.moveTo or 1
+	local p = from + (to - from) * m_max(0, m_min(1, fraction or 0))
+	if p > (self.subProgress or 0) then self.subProgress = p end
 end
 
 function BuildGeneratorClass:Note(text)
@@ -527,7 +541,8 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 	local forcedCount = #group.gemList - 1
 	self.build.skillsTab:ProcessSocketGroup(group)
 	local current = self:Score()
-	for _ = 1, maxSupports - forcedCount do
+	for pick = 1, maxSupports - forcedCount do
+		self:Inner((pick - 1) / m_max(1, maxSupports - forcedCount))
 		local best, bestScore
 		for _, gemId in ipairs(supports) do
 			if not inGroup(gemId) then
@@ -995,10 +1010,13 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly, warm)
 			prev = self.treePrev
 			refreshCount = 1
 		end
+		local startLeft
 		while true do
 			local used, ascUsed = spec:CountAllocNodes()
 			local left = ascendancy and (ascBudget - ascUsed) or (budget - used)
 			if left <= 0 then break end
+			startLeft = startLeft or left
+			if not ascendancy and startLeft > 0 then self:Inner(1 - left / startLeft) end
 			if sinceRefresh >= refreshEvery then
 				queue = { }
 				refreshCount = refreshCount + 1
@@ -1062,14 +1080,19 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly, warm)
 		end
 		if not ascendancy then self.treePrev = prev end
 	end
+	-- (labels only for the tree stages themselves: inside a named step the
+	-- window keeps showing that step)
+	local savedStage = self.stage
+	local label = (self.moveFrom or 0) == 0 and (self.moveTo or 1) == 1
 	if not ascendancyOnly then
-		self.stage = "Allocating passive tree"
+		if label then self.stage = "Allocating passive tree" end
 		run(false)
 	end
-	self.stage = "Allocating ascendancy"
+	if label then self.stage = "Allocating ascendancy" end
 	self:SearchAscendancy()
 	current = self:Score()
 	run(true) -- spend any point left after the notables
+	if not label then self.stage = savedStage end
 	spec:AddUndoState()
 	local used, ascUsed = spec:CountAllocNodes()
 	local masteries = 0
@@ -1552,9 +1575,12 @@ function BuildGeneratorClass:MakeRares(withInfluences)
 		self:Recalculate()
 	end
 	-- two passes: the second one adapts to what the first one did elsewhere
-	for pass = 1, (self.options.quick and 1 or 2) do
+	local passes = self.options.quick and 1 or 2
+	for pass = 1, passes do
 		self:Recalculate()
+		options.onSlot = function(i, n) self:Inner(((pass - 1) + (i - 1) / n) / passes) end
 		local report = self:RunRaresParallel(finder, options)
+		options.onSlot = nil
 		local count = finder:EquipAll(report)
 		self:Tick()
 		if count == 0 then break end
@@ -2541,7 +2567,9 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 		return false
 	end
 	local gains = { }
-	for _, slotName in ipairs(finder:GetActiveSlots()) do
+	local sweepSlots = finder:GetActiveSlots()
+	for slotIndex, slotName in ipairs(sweepSlots) do
+		self:Inner((slotIndex - 1) / #sweepSlots * 0.7)
 		local slot = self.itemsTab.slots[slotName]
 		local equipped = slot and self.itemsTab.items[slot.selItemId]
 		if slot and not (self.lockedSlots and self.lockedSlots[slotName]) then
@@ -3020,7 +3048,7 @@ function BuildGeneratorClass:Run()
 	self.startClock = os.clock()
 	self.overlap = nil
 	self.costs = { }
-	self.stageCount = 11
+	self.stageCount = opts.quick and 7 or 12
 	local function stage(index, label)
 		-- big searches leave a lot of garbage: free it between stages when it
 		-- piled up (a full collection of the game data takes a second)
@@ -3030,6 +3058,7 @@ function BuildGeneratorClass:Run()
 			ConPrintf("[stage] before %d: score %.3f dps %.0f ehp %.0f lua %.0f MB t=%.0fs", index, r.score, r.dps, r.ehp, collectgarbage("count") / 1024, os.clock() - (self.startClock or 0))
 		end
 		self.stageIndex, self.stage = index, label
+		self.subProgress, self.moveFrom, self.moveTo = 0, 0, 1
 		self:Tick()
 	end
 	-- Investment level decides rare quality and influences unless set
@@ -3078,8 +3107,11 @@ function BuildGeneratorClass:Run()
 	self:ResetTree()
 	self:AutoConfigure()
 	self:FullScore()
+	if opts.quick then self.moveFrom, self.moveTo = 0, 0.6 end
 	self:AllocateTree()
 	if opts.quick then
+		self:Move(2, 2, "Trying uniques, a Watcher's Eye and the supports again")
+		self.moveFrom = 0.6
 		-- archetype scan: a first version of the build, enough to compare archetypes
 		-- (aura stacking needs its tree move to show what it's worth)
 		if opts.archetype and opts.archetype.maxAuras then self:AuraStackMove() end
@@ -3115,79 +3147,97 @@ function BuildGeneratorClass:Run()
 
 	stage(9, "Choosing gem setups, jewels, anoint and tattoos")
 	self:FullScore()
+	self:Move(1, 10, "Choosing gem setups")
 	self:ChooseUtilityGems()
+	self:Move(2, 10, "Uniques players of the skill use")
 	self:ChooseMetaUniques()
 	if opts.uniqueSweep ~= false then
-		self.stage = "Trying every affordable unique"
+		self:Move(3, 10, "Trying every affordable unique")
 		self:UniqueSweep()
 	end
+	self:Move(4, 10, "Archetype jewels")
 	self:ChooseArchetypeJewels()
+	self:Move(5, 10, "Rare jewels")
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'ChooseMetaUniques', r.score, r.dps, r.ehp) end
 	if opts.jewels ~= false then self:AddJewels(opts.maxJewels or 4) end
 	if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'AddJewels', r.score, r.dps, r.ehp) end
+	self:Move(6, 10, "Timeless jewel")
 	if opts.timeless ~= false then self:ChooseTimelessJewel() end
+	self:Move(7, 10, "Forbidden, Watcher's Eye, Split Personality and other unique jewels")
 	if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'ChooseTimelessJewel', r.score, r.dps, r.ehp) end
 	if opts.metaJewels ~= false then self:ChooseMetaJewels() end
 	if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'ChooseMetaJewels', r.score, r.dps, r.ehp) end
+	self:Move(8, 10, "Cluster jewels")
 	if opts.clusterJewels ~= false then self:ChooseClusterJewels(opts.maxClusterJewels or 2) end
 	if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'ChooseClusterJewels', r.score, r.dps, r.ehp) end
 	-- spend any points the jewel stages freed
+	self:Move(9, 10, "Passive points freed by the jewels")
 	self:Recalculate()
 	self:AllocateTree(true)
+	self:Move(10, 10, "Anoint and tattoos")
 	if opts.allowAnoints ~= false then self:ChooseAnoint() end
 	if opts.allowTattoos ~= false then self:ChooseTattoos() end
 
 	stage(10, "Choosing flasks, pantheon and bandit")
 	self.scorer.useChecklist = true
 	self:FullScore()
+	self:Move(1, 6, "Flasks")
 	self:MakeFlasks()
 	if opts.uniqueSweep ~= false then self:UniqueFlaskSweep() end
 	if opts.permanentFlasks ~= false then self:PermanentFlaskMove() end
+	self:Move(2, 6, "Pantheon and bandit")
 	self:ChoosePantheonAndBandit()
 	if opts.auraStacking ~= false then
-		self.stage = "Trying aura stacking"
+		self:Move(3, 6, "Trying aura stacking")
 		self:AuraStackMove()
 	end
 	if opts.fillMainLink ~= false then
-		self.stage = "Filling the main link"
+		self:Move(4, 6, "Filling the main link")
 		self:FillMainLinkMove()
 	end
 	if opts.finalRares ~= false then
-		self.stage = "Making the rares again for the finished build"
+		self:Move(5, 6, "Making the rares again for the finished build")
 		self:FinalRares()
 	end
 
+	stage(11, "Looking for unique items, synergies and the top players' gear")
 	if opts.synergies ~= false then
-		stage(11, "Looking for unique items and synergies")
+		self:Move(1, 3, "Looking for unique items and synergies")
 		self:ApplySynergies(opts.synergyRounds or 1)
 	end
 	if opts.jointMoves ~= false then
-		self.stage = "Trying packages from top players"
+		self:Move(2, 3, "Trying packages from top players")
 		self:JointMoves(opts.jointMoveRounds or 2)
 	end
 	if opts.learnFromTop ~= false then
-		self.stage = "Trying the top players' gear and links"
+		self:Move(3, 3, "Trying the top players' gear and links")
 		local ok, err = pcall(function() self:LearnFromTopBuilds() end)
 		if not ok then ConPrintf("Learning from top builds failed: %s", tostring(err)) end
 	end
-	self.stage = "Optimizing the passive tree"
+	stage(12, "Finishing: ascendancy, supports and passive tree")
+	self:Move(1, 6, "Choosing the ascendancy again")
 	if opts.ascendancyRecheck ~= false then self:AscendancyRecheck() end
 	if opts.finalSupports ~= false then
+		self:Move(2, 6, "Choosing the supports again")
 		-- (new supports can want other passives: a short tree round when they change)
 		if self:FinalSupports() > 0 then self:RefineTree(10) end
 	end
+	self:Move(3, 6, "Ailments the build can inflict")
 	self:PairAilments()
+	self:Move(4, 6, "Optimizing the passive tree")
 	self:OptimizeTree()
 	-- a second, cheap round: the rebuilt tree can want other supports or
 	-- ascendancy notables (and those other passives)
 	if opts.polishRound ~= false then
 		local gain = 0
 		-- (auras again: the finished tree and gear can pay for more of them)
+		self:Move(5, 6, "Aura stacking on the finished build")
 		if opts.auraStacking ~= false then self:AuraStackMove() end
+		self:Move(6, 6, "Supports and ascendancy once more")
 		if opts.finalSupports ~= false then gain = gain + self:FinalSupports() end
 		if opts.ascendancyRecheck ~= false then gain = gain + self:AscendancyRecheck() end
 		if gain > 0 then
