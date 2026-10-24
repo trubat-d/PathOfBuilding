@@ -56,6 +56,7 @@ local gen = new("BuildGenerator"):BuildGenerator(build, {
 	gemId = gemId, classId = asc.classId, ascendClassId = asc.ascendClassId, level = 92,
 	investment = investment, focus = focus,
 	quick = mode == "quick", synergies = os.getenv("SYNERGIES") == "1", archetype = archetype, yieldEvery = 1e9,
+	debugTiming = os.getenv("DEBUG_TIMING") == "1",
 })
 local t0 = os.clock()
 local co = coroutine.create(function() return gen:Run() end)

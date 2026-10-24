@@ -918,6 +918,17 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly, warm)
 		end
 		spec:AllocNode(node)
 	end
+	-- (values compared to 1e-9: the calculator's sums run in table order, which
+	-- changes from run to run, so equal gains differ in the last bits; ties go
+	-- to the lower node id, so the same build comes out every time)
+	local function byValue(a, b)
+		local va, vb = a.value, b.value
+		local qa = va == -math.huge and va or m_floor(va * 1e9 + 0.5)
+		local qb = vb == -math.huge and vb or m_floor(vb * 1e9 + 0.5)
+		if qa ~= qb then return qa > qb end
+		if a.node.id ~= b.node.id then return a.node.id < b.node.id end
+		return (tonumber(a.effect and a.effect.id) or 0) < (tonumber(b.effect and b.effect.id) or 0)
+	end
 	local function run(ascendancy)
 		local refreshEvery = 12
 		local sinceRefresh = refreshEvery
@@ -971,7 +982,7 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly, warm)
 				end
 				sinceRefresh = 0
 			end
-			t_sort(queue, function(a, b) return a.value > b.value end)
+			t_sort(queue, byValue)
 			-- lazy greedy: re-check the best few against the current tree
 			for i = 1, m_min(8, #queue) do
 				local entry = queue[i]
@@ -982,7 +993,7 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly, warm)
 					if self.treeStats then self.treeStats.recheck = self.treeStats.recheck + 1 end
 				end
 			end
-			t_sort(queue, function(a, b) return a.value > b.value end)
+			t_sort(queue, byValue)
 			local picked = queue[1]
 			if not picked or picked.value <= 0 or picked.value == -math.huge then
 				if sinceRefresh > 0 then
