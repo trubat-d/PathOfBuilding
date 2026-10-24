@@ -418,6 +418,12 @@ function AutoConfigClass:Run()
 		if hasGem["Frost Bomb"] then
 			setIfUsed("conditionEnemyColdExposure", true, "Frost Bomb applies cold exposure")
 		end
+		-- states the build gives itself from its own lines (Elusive, Onslaught,
+		-- Unholy Might...: Classes/UniqueComboFinder), when something uses them
+		local comboFinder = new("UniqueComboFinder"):UniqueComboFinder({ build = self.build, itemsTab = self.build.itemsTab, options = { } })
+		for _, state in ipairs(comboFinder.SelfBuffs(lines, hitRate, boss)) do
+			setIfUsed(state.var, state.on, state.reason)
+		end
 
 		-- leech and life
 		local leech = (output.LifeLeechRate or 0) + (output.ManaLeechRate or 0) + (output.EnergyShieldLeechRate or 0)

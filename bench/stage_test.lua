@@ -124,6 +124,8 @@ elseif step == "skillprofile" then
 	local _, r = gen:FullScore()
 	print("PART AFTER", first.skillPart, gen.mainGem.grantedEffect.parts and gen.mainGem.grantedEffect.parts[first.skillPart or 1] and gen.mainGem.grantedEffect.parts[first.skillPart or 1].name, "hitScale", tostring(gen.scorer.hitScale))
 	print("NOTE", tostring(gen.skillProfileNote))
+elseif step == "combos" then
+	gen:UniqueCombosMove(1)
 elseif step == "cross" then
 	gen:CrossIdeasMove(1)
 elseif step == "explain" then

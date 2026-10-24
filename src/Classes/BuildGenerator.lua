@@ -2801,6 +2801,23 @@ function BuildGeneratorClass:CrossIdeasMove(rounds)
 	end, { threshold = 1.0, tries = 3 })
 end
 
+-- Two-piece unique combos (Classes/UniqueComboFinder): pairs that gain more
+-- together than apart, and uniques granting a state (Elusive, Onslaught...)
+-- with the ones paying off in it; tried as packages with the build adapted
+function BuildGeneratorClass:UniqueCombosMove(rounds)
+	if not self.mainGem then return end
+	local combo = new("UniqueComboFinder"):UniqueComboFinder(self)
+	local packages = combo:Find({ perSlot = self.options.comboPerSlot, maxPairs = self.options.comboPairs })
+	if self.options.debugTiming then
+		ConPrintf("[combos] %d pairs scored, %d packages", combo.pairsTried or 0, #packages)
+		for _, p in ipairs(packages) do ConPrintf("  %s: %s", p.label, p.reason) end
+	end
+	if #packages == 0 then return end
+	self:EvaluatePackages(packages, rounds, function(best, gain, overAdaptation)
+		return string.format("Unique combo: %s (%s), with passives and supports adapted: score %+.3f (%+.3f more than adapting them without it)", best.label, best.reason, gain, overAdaptation)
+	end, { threshold = 1.0, tries = 3, baseline = true })
+end
+
 -- Packages (uniques and / or a keystone) screened with the quick score,
 -- the most promising applied for real with the build adapted around them
 -- (passives trimmed and refined, supports again), the best one kept per round
@@ -2883,6 +2900,16 @@ function BuildGeneratorClass:EvaluatePackages(moves, rounds, describe, opts)
 		end
 		local savedLog = #self.log
 		local best, bestScore
+		-- (opts.baseline: the same adaptation with no package first; a package
+		-- must beat it, so what the adaptation alone gains isn't credited to it)
+		local bar = base
+		if opts.baseline then
+			local state = apply({ placement = { }, label = "(adaptation alone)" })
+			bar = m_max(base, (self:FullScore()))
+			revert(state)
+			for j = #self.log, savedLog + 1, -1 do t_remove(self.log, j) end
+			if self.options.debugTiming then ConPrintf("[packages] adaptation alone: %.3f (base %.3f)", bar, base) end
+		end
 		for i = 1, math.min(opts.tries or self.options.jointMoveTries or 5, #moves) do
 			local move = moves[i]
 			if self.options.debugTiming then ConPrintf("[packages] %s: quick %+.3f", move.label, move.quick - current) end
@@ -2892,14 +2919,14 @@ function BuildGeneratorClass:EvaluatePackages(moves, rounds, describe, opts)
 				if self.options.debugTiming then ConPrintf("[packages] %s applied and adapted: %.3f (base %.3f)", move.label, score, base) end
 				revert(state)
 				for j = #self.log, savedLog + 1, -1 do t_remove(self.log, j) end
-				if score > base + 0.01 and (not bestScore or score > bestScore + 1e-9) then best, bestScore = move, score end
+				if score > bar + 0.01 and (not bestScore or score > bestScore + 1e-9) then best, bestScore = move, score end
 			end
 			self:Tick()
 		end
 		if not best then break end
 		apply(best)
 		local after = self:FullScore()
-		self:Note(describe(best, after - base))
+		self:Note(describe(best, after - base, after - bar))
 		for _, p in ipairs(best.placement) do
 			local price = GetPriceSource():UniquePrice(p.item)
 			self.costs = self.costs or { }
@@ -4058,6 +4085,11 @@ function BuildGeneratorClass:Run()
 	if opts.jointMoves ~= false then
 		self:Move(2, 3, "Trying packages from top players")
 		self:JointMoves(opts.jointMoveRounds or 2)
+	end
+	if opts.uniqueCombos ~= false then
+		self:Move(3, 3, "Trying unique combos")
+		local ok, err = pcall(function() self:UniqueCombosMove(1) end)
+		if not ok then ConPrintf("Unique combos failed: %s", tostring(err)) end
 	end
 	if opts.crossIdeas ~= false then
 		self:Move(3, 3, "Trying the ideas of the other archetypes")
