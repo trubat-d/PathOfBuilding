@@ -37,6 +37,18 @@ runs save each generated build as `results/<label>/<case>.xml` for this.
 for skills with saved top-player builds; `cases_pro_arch2.txt` uses the
 archetypes the players use (impale, Hatred, crit).
 
+Saved poe.ninja data (packs a browser saved: one JSON per skill with the
+search answer in base64, the player list and the top characters, plus
+`dicts.json` with the dictionaries) become what the app downloads with:
+
+```
+NINJA_DIR=<folder with the packs> OUT=<folder> luajit ../bench/ninja_import.lua
+```
+
+It writes `BuildIdeasMetaCache.json` (the app's meta cache: copy it next to
+the app's settings to use it offline) and `details_<skill>.json` for
+`META_DETAILS=`.
+
 ## Other tools
 
 * `profile_gen.lua "<Skill>" "<Ascendancy>" <investment> <quick|full>` (`ARCH=`): time per
