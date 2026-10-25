@@ -2877,6 +2877,7 @@ function BuildGeneratorClass:AddJewels(maxJewels, maxPath)
 			self:Recalculate()
 			self:TrimTree()
 			local after = self:FullScore()
+			if self.options.debugTiming then ConPrintf("[jewels] socket %d (path %d): %.3f -> %.3f%s", node.id, node.path and #node.path or 0, before, after, node.alloc and "" or " (trimmed away)") end
 			if after > before + 0.002 and node.alloc then
 				added = added + 1
 			else
@@ -3472,6 +3473,7 @@ function BuildGeneratorClass:ChooseClusterJewels(maxJewels)
 	if investment.timeless == false then return end
 	local gen = new("ClusterJewelGenerator"):ClusterJewelGenerator({
 		build = self.build,
+		innerJewel = self.options.clusterInnerJewels ~= false and function() return self.rareJewel end or nil,
 		score = function(override) return (self:Score(override)) end,
 		fullScore = function() return (self:FullScore()) end,
 		quickScore = function() self:Recalculate() return (self:Score()) end, noQuick = self.options.jewelQuick == false,
@@ -3493,6 +3495,19 @@ function BuildGeneratorClass:ChooseClusterJewels(maxJewels)
 		if self:FullScore() <= base + 0.002 then
 			slot:SetSelItemId(0)
 			if jewel then self.itemsTab:DeleteItem(jewel, true) end
+			-- (and the rare jewels put in its sockets)
+			for _, sg in pairs(spec.subGraphs or { }) do
+				if sg.parentSocket and sg.parentSocket.id == result.socket.node.id then
+					for _, n in ipairs(sg.nodes) do
+						local innerSlot = n.type == "Socket" and self.itemsTab.slots["Jewel " .. n.id]
+						if innerSlot and innerSlot.selItemId ~= 0 then
+							local it = self.itemsTab.items[innerSlot.selItemId]
+							innerSlot:SetSelItemId(0)
+							if it then self.itemsTab:DeleteItem(it, true) end
+						end
+					end
+				end
+			end
 			spec:RestoreUndoState(undo)
 			spec:BuildClusterJewelGraphs()
 			self.itemsTab:PopulateSlots()

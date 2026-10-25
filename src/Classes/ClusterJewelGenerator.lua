@@ -154,12 +154,39 @@ function ClusterJewelGeneratorClass:TryReal(socket, item, keep)
 		end
 	end
 	spec:BuildAllDependsAndPaths()
+	-- the jewel sockets the cluster adds hold the build's rare jewel (top
+	-- Winter Orbs put four crit multiplier jewels in two Large clusters'
+	-- sockets): a Large cluster is worth its notables and those jewels
+	local inner = { }
+	local innerItem = self.ctx.innerJewel and self.ctx.innerJewel()
+	if innerItem then
+		itemsTab:PopulateSlots()
+		for _, subGraph in pairs(spec.subGraphs or { }) do
+			if subGraph.parentSocket and subGraph.parentSocket.id == socket.node.id then
+				for _, node in ipairs(subGraph.nodes) do
+					local n = spec.nodes[node.id]
+					local innerSlot = n and itemsTab.slots["Jewel " .. n.id]
+					if n and n.type == "Socket" and innerSlot and (spec.jewels[n.id] or 0) == 0 then
+						if not n.alloc and n.path then spec:AllocNode(n) end
+						if n.alloc then
+							t_insert(inner, { slot = innerSlot, item = self.ctx.equip(innerItem, "Jewel " .. n.id) })
+						end
+					end
+				end
+			end
+		end
+		spec:BuildAllDependsAndPaths()
+	end
 	local points = spec:CountAllocNodes() - usedBefore
 	local score = self.ctx.fullScore() - points * self.pointValue
 	if keep then
 		itemsTab:PopulateSlots()
 		spec:AddUndoState()
 		return score, points
+	end
+	for i = #inner, 1, -1 do
+		inner[i].slot:SetSelItemId(0)
+		itemsTab:DeleteItem(inner[i].item, true)
 	end
 	slot:SetSelItemId(0)
 	itemsTab:DeleteItem(equipped, true)
