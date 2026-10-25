@@ -107,13 +107,19 @@ local function layerList(mode)
 			-- reach 99% chance and x8)
 			commit = { "+4% to Critical Strike Chance", "500% increased Critical Strike Chance", "+250% to Critical Strike Multiplier" }, commitCost = 30,
 			drop = { "Elemental Overload", "Resolute Technique" } },
-		{ id = "speed", label = mode.attack and "Attack speed" or "Cast speed", hitOnly = not (mode.main == "poison"), lines = { "15% increased Attack and Cast Speed" }, cost = 3.5 },
+		{ id = "speed", label = mode.attack and "Attack speed" or "Cast speed", hitOnly = not (mode.main == "poison"), lines = { "15% increased Attack and Cast Speed" }, cost = 3.5,
+			commit = { "60% increased Attack and Cast Speed" }, commitCost = 14 },
 		{ id = "penetration", label = e .. " penetration (hits only)", hitOnly = true, lines = { "Damage Penetrates 15% " .. e .. " Resistance" }, cost = 4,
 			skip = e == "Physical" },
+		-- (the enemy layer committed: a curse, exposure, penetration jewels /
+		-- support for hits, a damage taken source; worth x2.5 on top Winter Orbs)
 		{ id = "resistance", label = "Enemy " .. e:lower() .. " resistance (curse, exposure)", lines = { "Nearby Enemies have -15% to " .. e .. " Resistance" }, cost = 5,
-			skip = e == "Physical" },
+			commit = isHit and { "Nearby Enemies have -40% to " .. e .. " Resistance", "Damage Penetrates 30% " .. e .. " Resistance", "Nearby Enemies take 25% increased Damage" }
+				or { "Nearby Enemies have -40% to " .. e .. " Resistance", "Nearby Enemies take 25% increased Damage" },
+			commitCost = isHit and 16 or 12, skip = e == "Physical" },
 		{ id = "taken", label = "Damage taken by the enemy (shock, wither, Vulnerability...)", lines = { "Nearby Enemies take 15% increased Damage" }, cost = 5 },
-		{ id = "dotmulti", label = "Damage over time multiplier", dotOnly = true, lines = { "+25% to Damage over Time Multiplier" }, cost = 3 },
+		{ id = "dotmulti", label = "Damage over time multiplier", dotOnly = true, lines = { "+25% to Damage over Time Multiplier" }, cost = 3,
+			commit = { "+120% to Damage over Time Multiplier" }, commitCost = 14 },
 		{ id = "duration", label = "Ailment duration (stacking poison)", modes = { poison = true }, lines = { "30% increased Duration of Ailments on Enemies" }, cost = 3 },
 		{ id = "gemlevel", label = "Gem levels", lines = { "+1 to Level of all Skill Gems" }, cost = 3 },
 		{ id = "flat", label = "Flat added " .. e:lower() .. " damage (x the skill's effectiveness)", notModes = { dot = true },
@@ -124,7 +130,8 @@ local function layerList(mode)
 		{ id = "life", label = "Maximum life (the base of life-scaled skills)", pool = "Life", lines = { "10% more maximum Life" }, cost = 6 },
 		{ id = "es", label = "Maximum energy shield", pool = "EnergyShield", lines = { "10% more maximum Energy Shield" }, cost = 6 },
 		{ id = "mana", label = "Maximum mana", pool = "Mana", lines = { "10% more maximum Mana" }, cost = 6 },
-		{ id = "power", label = "Maximum power charges", lines = { "+1 to Maximum Power Charges" }, cost = 4 },
+		{ id = "power", label = "Maximum power charges", lines = { "+1 to Maximum Power Charges" }, cost = 4,
+			commit = { "+5 to Maximum Power Charges" }, commitCost = 18 },
 	}
 	local out = { }
 	for _, l in ipairs(list) do
@@ -454,6 +461,38 @@ function BuildDoctorClass:Plans()
 			t_insert(plans, { id = "mom_auras", label = "drop Mind over Matter for auras", reason = "the mana it keeps unreserved can hold auras instead",
 				drop = { "Mind Over Matter" }, auras = true, refine = 8, value = average })
 		end
+	end
+	-- every other layer whose full commitment pays clearly more per point than
+	-- the build's layers do on average (from the math alone: no targets)
+	local have_ = { }
+	for _, p in ipairs(plans) do have_[p.id] = p end
+	local function commitPlan(id, entryId, make)
+		local e = byId[entryId]
+		if e and e.commitRatio and e.commitRatio >= 1.4 and e.commitPerPoint > average * 1.3 and not have_[id] then
+			local p = make(e)
+			p.reason = string.format("a full commitment gives x%.2f (%.1f%% per point, the build's layers average %.1f%%)", e.commitRatio,
+				(math.exp(e.commitPerPoint) - 1) * 100, (math.exp(average) - 1) * 100)
+			p.value = e.commitPerPoint
+			t_insert(plans, p)
+			have_[id] = p
+		end
+	end
+	do
+		local element = r.mode.element
+		commitPlan("resistance", "resistance", function()
+			return { id = "resistance", label = "lower the enemy's " .. element:lower() .. " resistance and raise its damage taken",
+				lens = r.mode.main == "hit" and { func = function(o) return o[element .. "EffMult"] or 1 end, base = 0.5, label = element .. " damage multiplier against the enemy", weight = 0.6 } or nil,
+				rares = true, refine = 16, utility = true }
+		end)
+		commitPlan("speed", "speed", function()
+			return { id = "speed", label = "more attack / cast speed", lens = { stat = "Speed", base = 1, label = "Speed", weight = 0.4 }, rares = true, refine = 16 }
+		end)
+		commitPlan("power", "power", function()
+			return { id = "power", label = "more power charges", lens = { stat = "PowerChargesMax", base = 3, label = "Maximum power charges", weight = 0.4 }, rares = true, refine = 16 }
+		end)
+		commitPlan("dotmulti", "dotmulti", function()
+			return { id = "dotmulti", label = "more damage over time multiplier", rares = true, refine = 16 }
+		end)
 	end
 	-- the layers clearly below the skill's top players: a plan for each, even
 	-- when a test dose looks small (the players show the layer pays off)
