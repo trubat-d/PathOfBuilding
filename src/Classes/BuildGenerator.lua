@@ -633,7 +633,9 @@ function BuildGeneratorClass:ChooseSupports(maxSupports, restrict)
 			tryList = { }
 			local skipped = 0
 			for _, gemId in ipairs(supports) do
-				if model.SkipSupport(data.gems[gemId].name, self.mainGem, context) then skipped = skipped + 1 else t_insert(tryList, gemId) end
+				-- (never one that turns charges or a buff on: logs from before they were
+				-- measured with them undervalue it)
+				if #self:SupportSwitches(data.gems[gemId]) == 0 and model.SkipSupport(data.gems[gemId].name, self.mainGem, context) then skipped = skipped + 1 else t_insert(tryList, gemId) end
 			end
 			self.modelSkipped = (self.modelSkipped or 0) + skipped
 		end
