@@ -60,3 +60,24 @@ What carries the build without them:
 - Those sources pay off only inside the right design basin: power charge stacking (Tulfall + Ralakesh's Impatience), crit (chance and multiplier), one defence pool (Chaos Inoculation and energy shield). A one-at-a-time search can't reach a basin that needs several commitments at once, and patching a finished build can't rebuild it.
 - `BuildDoctor:PredictCombos` finds the basin from the math and the game data: each idea tested in its full form on a build (a stacking idea with the payoff and enabler lines of its best uniques), combinations scored as the product of their parts. Winter Orb: power charges with Tulfall + Ralakesh's Impatience x1.96, crit x1.91, together x3.75. The automatic mode builds the best combinations from scratch.
 - Commitment lenses steer, they must not decide: three lenses at full weight made a build that looked like 17.3 and was 14.9; forced crit supports pushed the main link's more multipliers out (x2.3 vs x10.6). Lenses now fade (half after the second rares, gone before the finishing steps), and plans and moves are judged on the real score.
+
+#### Where the remaining gap was (Winter Orb, measured by hybrid builds)
+Hybrids of our best pure build and the top player's (tree + tree jewels, gear,
+gem links, level swapped in every combination; Shapley shares of log DPS, the
+player's hand-set shock removed): the player x2.4, of which gear x1.74, tree
+x1.33, links x1.01. Item by item, the gear share is Tulfall (adds cold damage
+per power charge, frenzy charge on reaching maximum; x0.58 without it) and
+Badge of the Brotherhood (frenzy charges = power charges; x0.68 without it);
+in the tree, six rare jewels of four crit multiplier mods (x1.06 each), Bitter
+Frost (x1.21: chill effect as cold damage taken), +1 maximum power charge
+notables (x1.21 each, since every charge feeds Tulfall, Badge, Malachai's Loop).
+What hid them from the generator (all fixed):
+- **Couplings through the configuration**: charges an item generates were only
+  switched on when AutoConfig ran, so pieces were tested without them.
+- **A binding constraint as a hard cut**: a build at the edge of its mana saw
+  speed (frenzy charges) as a loss and mana recovery as worthless until
+  something needed it. While the build is made, the shortfall is priced at the
+  cost of the recovery (a Lagrangian relaxation); the end judges on the cut.
+- **Values that grow with the build**: chill (and Bitter Frost) scale with the
+  hit size, so the keystone was worthless early, and timeless jewels conquered
+  it before it paid; jewels made for the half-built tree.
