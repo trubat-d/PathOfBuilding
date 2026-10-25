@@ -3729,6 +3729,11 @@ local specialModList = {
 	["enemies ignited by an attack burn (%d+)%% faster"] = function(num) return { mod("IgniteBurnFaster", "INC", num, nil, ModFlag.Attack) } end,
 	["ignites you inflict with attacks deal damage (%d+)%% faster"] = function(num) return { mod("IgniteBurnFaster", "INC", num, nil, ModFlag.Attack) } end,
 	["ignites you inflict deal damage (%d+)%% faster"] = function(num) return { mod("IgniteBurnFaster", "INC", num) } end,
+	-- (ignite spread: no effect on one target, counted by the build generator's clear speed)
+	["ignites you inflict spread to other enemies within ([%d%.]+) metres?"] = function(num) return { mod("IgniteSpreadRadius", "BASE", num * 10) } end,
+	["ignites you inflict spread to other enemies within a radius of ([%d%.]+) metres?"] = function(num) return { mod("IgniteSpreadRadius", "BASE", num * 10) } end,
+	["ignites you inflict with this weapon spread to other enemies within ([%d%.]+) metres?"] = function(num) return { mod("IgniteSpreadRadius", "BASE", num * 10) } end,
+	["ignites you inflict during effect spread to other enemies within ([%d%.]+) metres?"] = function(num) return { mod("IgniteSpreadRadius", "BASE", num * 10, { type = "Condition", var = "UsingFlask" }) } end,
 	["(%d+)%% chance for ignites inflicted with lightning strike or frost blades to deal (%d+)%% more damage"] = function(num, _, more) return {
 		mod("Damage", "MORE", tonumber(more) * num / 100, nil, 0, KeywordFlag.Ignite, { type = "SkillName", skillNameList = { "Lightning Strike", "Frost Blades" }, includeTransfigured = true }),
 	} end,

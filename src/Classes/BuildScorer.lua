@@ -114,6 +114,17 @@ function BuildScorerClass:DegenDeficit(output)
 	return 0, degen
 end
 
+-- Is the main skill linked to this support gem? (cached per main socket group contents)
+function BuildScorerClass:SupportedBy(name)
+	local build = self.build
+	local group = build and build.skillsTab and build.skillsTab.socketGroupList[build.mainSocketGroup]
+	if not group then return false end
+	for _, gem in ipairs(group.gemList or { }) do
+		if gem.enabled ~= false and gem.gemData and gem.gemData.name == name then return true end
+	end
+	return false
+end
+
 -- Clear speed term: movement speed, area or projectiles, explosions on kill
 function BuildScorerClass:ClearTerm(output)
 	local ms = m_max(0.2, output.EffectiveMovementSpeedMod or 1)
@@ -122,7 +133,16 @@ function BuildScorerClass:ClearTerm(output)
 	local projectiles = (output.ProjectileCount or 1) - 1 + 0.5 * m_min(4, output.PierceCount or 0) + 0.7 * m_min(4, output.ChainMax or 0)
 	local projFactor = 1 + 0.25 * m_max(0, projectiles)
 	local explode = output.ClearExplodeValue or 0
-	local term = 0.6 * m_log(ms) + 0.25 * m_log(areaFactor * projFactor) + m_log(1 + 3 * explode)
+	-- ignites that spread to other enemies (Fan the Flames, glove implicits,
+	-- Ignite Proliferation Support): a build whose damage is mostly ignite
+	-- reaches the whole pack with it, like a bigger area
+	local spreadFactor = 1
+	local igniteShare = (output.IgniteDPS or 0) / m_max(1, output.CombinedDPS or 0)
+	if igniteShare > 0.1 then
+		local spread = (output.IgniteSpreadRadius or 0) > 0 or self:SupportedBy("Ignite Proliferation")
+		if spread then spreadFactor = 1 + 2 * m_min(1, igniteShare) end
+	end
+	local term = 0.6 * m_log(ms) + 0.25 * m_log(areaFactor * projFactor * spreadFactor) + m_log(1 + 3 * explode)
 	-- Headhunter while clearing: the stolen rare modifiers (a typical set: 20%
 	-- movement speed, 40% damage, 20% speed - the configuration's "Headhunter"
 	-- switch counts them in PoB's numbers; when it's off, as against a boss,

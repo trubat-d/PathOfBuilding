@@ -6172,6 +6172,14 @@ function BuildGeneratorClass:Run()
 			if opts.metaJewels ~= false then self:ChooseMetaJewels({ "watcher" }) end
 			self:FinalSupports()
 		end
+		-- the tree tidied: the greedy allocation takes cheap one-point passives
+		-- before clusters that only pay off at their notables (small passives
+		-- traded for notables, then the least useful freed and spent again).
+		-- On quick Endgame builds: Boneshatter 14.5 -> 16.5, Cyclone 13.4 -> 14.9
+		if opts.quickRefine ~= false then
+			self:SwapForNotables(6)
+			for _, n in ipairs(opts.quickRefineRounds or { 8, 12 }) do self:RefineTree(n) end
+		end
 		self:AutoConfigure()
 		self:Recalculate()
 		if self.skillProfileNote then self:Note("Main skill as used in a fight: " .. self.skillProfileNote) end

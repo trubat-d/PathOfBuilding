@@ -5239,6 +5239,9 @@ function calcs.offence(env, actor, activeSkill)
 						}
 					end
 				end
+				-- (ignites spreading to other enemies: Fan the Flames, gloves... no single
+				-- target damage, the build generator's clear speed counts it)
+				globalOutput.IgniteSpreadRadius = m_max(globalOutput.IgniteSpreadRadius or 0, skillModList:Sum("BASE", dotCfg, "IgniteSpreadRadius"))
 				globalOutput.IgniteDamage = output.IgniteDPS * globalOutput.IgniteDuration
 				if skillFlags.igniteCanStack then
 					output.IgniteDamage = output.IgniteDPS * globalOutput.IgniteDuration
