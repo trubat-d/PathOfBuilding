@@ -54,10 +54,10 @@ def settings(trial):
         "refineBatch": trial.suggest_int("refineBatch", 2, 8),
         "swapDistance": trial.suggest_int("swapDistance", 4, 10),
         "ascendancyTargets": trial.suggest_int("ascendancyTargets", 5, 14),
-        "treeSolverRounds": trial.suggest_int("treeSolverRounds", 1, 5),
+        "treeSolverRounds": trial.suggest_int("treeSolverRounds", 0, 4),
         "treeSolverStay": stays,
         "quickRefineRounds": f"{r1}|{r2}" if r2 > 0 else f"{r1}|0",
-    }
+    } | ({"treeSolver": "false"} if trial.params.get("treeSolverRounds") == 0 else {})
 
 
 def main():
