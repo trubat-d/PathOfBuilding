@@ -196,3 +196,27 @@ function BuildReviewClass.ApplyLearned(focus, data)
 	table.sort(parts)
 	return scaledFocus(focus, factors, ""), "Learnt from your reviews: " .. table.concat(parts, ", ")
 end
+
+-- A choice between variations of a build (the window's "Variations"): the
+-- picked one's stats against each other one's; every stat where the pick is
+-- clearly higher moves its factor up 5%, clearly lower down 5%.
+-- stats: { dps, maxhit, move, speed } (the weights they move: dps, ehp, move, speed)
+local choiceStats = { dps = "dps", maxhit = "ehp", move = "move", speed = "speed" }
+function BuildReviewClass.LearnChoice(data, picked, others)
+	data.factors = data.factors or { }
+	data.choices = (data.choices or 0) + 1
+	for _, other in ipairs(others) do
+		for stat, k in pairs(choiceStats) do
+			local a, b = picked[stat], other[stat]
+			if a and b and a > 0 and b > 0 then
+				local r = m_log(a / b)
+				if math.abs(r) > 0.05 then
+					local f = data.factors[k] or 1
+					f = r > 0 and f * 1.05 or f / 1.05
+					data.factors[k] = m_max(1 / 3, m_min(3, f))
+				end
+			end
+		end
+	end
+	return data.factors
+end

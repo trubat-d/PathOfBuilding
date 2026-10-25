@@ -57,7 +57,9 @@ local gen = new("BuildGenerator"):BuildGenerator(build, {
 	debugTiming = os.getenv("DEBUG_TIMING") == "1",
 })
 local t0 = os.clock()
-local co = coroutine.create(function() return gen:Upgrade() end)
+-- VARIATION=damage|tank|speed|cheaper: the window's "Variations" instead of an upgrade
+local variation = os.getenv("VARIATION")
+local co = coroutine.create(function() if variation then return gen:Variation(variation) end return gen:Upgrade() end)
 local ok, res = coroutine.resume(co)
 while ok and coroutine.status(co) ~= "dead" do ok, res = coroutine.resume(co) end
 local result = { build = path, investment = investment and investment.id }
@@ -67,6 +69,7 @@ else
 	result.score, result.dps, result.ehp = res.final.score, res.final.dps, res.final.ehp
 	result.beforeScore, result.beforeDps, result.beforeEhp = res.before.score, res.before.dps, res.before.ehp
 	result.log = res.log
+	result.stats = res.stats
 	result.cost = (gen:BuildCost())
 	local save = os.getenv("SAVE")
 	if save and save ~= "" then

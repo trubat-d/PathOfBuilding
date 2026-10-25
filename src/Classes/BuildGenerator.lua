@@ -5494,6 +5494,67 @@ function BuildGeneratorClass:Combine(others)
 	return { log = self.log, final = final, before = beforeResult, gain = gain }
 end
 
+-- A variation of the open build leaning one way (the window's "Variations"):
+-- "damage", "tank", "speed" (movement and attack / cast speed) with the
+-- focus weights moved that way, or "cheaper" (the build fitted under half its
+-- cost); then its supports, rares and tree made again for that. Returns what
+-- Run returns, plus .before.
+BuildGeneratorClass.variationKinds = {
+	{ id = "damage", label = "More damage", factors = { dps = 2, ehp = 0.4, avoid = 0.6 } },
+	{ id = "tank", label = "Tankier", factors = { dps = 0.5, ehp = 4, avoid = 2 } },
+	{ id = "speed", label = "Faster", factors = { dps = 0.7, move = 4, speed = 2.5 } },
+	{ id = "cheaper", label = "Half the cost" },
+}
+function BuildGeneratorClass:Variation(kindId)
+	local opts = self.options
+	local kind
+	for _, k in ipairs(self.variationKinds) do if k.id == kindId then kind = k end end
+	if not kind then error("unknown variation " .. tostring(kindId)) end
+	self.lastYield = GetTime()
+	self.startClock = os.clock()
+	self.costs = { }
+	self.stageCount = 1
+	self.stageIndex, self.stage = 1, kind.label
+	self.subProgress, self.moveFrom, self.moveTo = 0, 0, 1
+	self:PrepareOptions()
+	if kind.factors then
+		local review = new("BuildReview"):BuildReview()
+		opts.focus = review.ScaledFocus(opts.focus or new("BuildScorer"):BuildScorer({ }).focusList[1], kind.factors, " (" .. kind.label:lower() .. ")")
+	end
+	self:InitFromOpenBuild()
+	self:AutoConfigure()
+	local _, before = self:FullScore()
+	if kind.id == "cheaper" then
+		opts.totalBudget = m_max(1, (self:BuildCost()) * 0.5)
+		self:FitTotalBudget()
+	end
+	self:Move(1, 5, "Supports")
+	self:FinalSupports()
+	-- (a third of the passives freed and spent again for the new weights)
+	self:Move(2, 5, "Passive tree")
+	local used = self.build.spec:CountAllocNodes()
+	self:RefineTree(m_max(10, m_floor(used / 3)))
+	self:OptimizeTree()
+	self:Move(3, 5, "Uniques")
+	if opts.uniqueSweep ~= false then self:UniqueSweep(4) end
+	self:Move(4, 5, "Rares")
+	if opts.finalRares ~= false then self:FinalRares() end
+	self:Move(5, 5, "Rebuilding parts of the build")
+	self:RepairSearch(4)
+	self:RequirementsMove()
+	self:RemoveUnusedItems()
+	if self:FitSockets() then self:Note("Gem setups packed again to fit the items' sockets") end
+	self:AutoConfigure()
+	self:Recalculate()
+	local final = self.scorer:Evaluate(self.calcFunc, { })
+	self.final = final
+	self.build.buildFlag = true
+	local output = self.build.calcsTab.mainOutput
+	return { log = self.log, final = final, before = before, kind = kind.id, label = kind.label,
+		stats = { dps = final.dps, ehp = final.ehp, maxhit = (self.scorer:MinMaxHit(output)), move = output.EffectiveMovementSpeedMod,
+			speed = output.Speed, cost = (self:BuildCost()) } }
+end
+
 -- Upgrades the open build instead of making one: its main skill, class,
 -- tree, gear and gems are the start, and the late steps of a generation run
 -- on it within the investment level (or total budget), each change kept only

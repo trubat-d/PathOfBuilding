@@ -1624,7 +1624,114 @@ function BuildIdeasPopupClass:OpenGenerator()
 		tooltip:AddLine(16, "^7opens as a new, unsaved build with every change, its gain and cost, and what to buy first.")
 		tooltip:AddLine(16, "^7The skill, ascendancy and archetype choices above are not used.")
 	end
-	controls.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {366, 164, 0, 16}, function() return state.status end)
+	-- Variations of the open build, each leaning one way (BuildGenerator:Variation):
+	-- built one after the other, then offered side by side; the one picked opens
+	-- and the choice teaches the generator's weights (BuildReview.LearnChoice)
+	local function openVariations(base, results)
+		local vcontrols = { }
+		vcontrols.intro = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 20, 0, 14}, "^7Which one do you prefer? It opens, and your choice teaches the generator what you value.")
+		local headers = { "Build", "DPS", "Max hit", "EHP", "Move", "Cost" }
+		local xs = { 16, 200, 310, 400, 490, 560 }
+		for i, h in ipairs(headers) do vcontrols["h" .. i] = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {xs[i], 44, 0, 16}, "^xC0C0C0" .. h) end
+		local rows = { base }
+		for _, r in ipairs(results) do t_insert(rows, r) end
+		local y = 66
+		local function num(v) return formatNumSep(string.format("%.0f", v or 0)) end
+		for i, r in ipairs(rows) do
+			local st = r.stats or { }
+			local cells = { r.label, num(st.dps), num(st.maxhit), num(st.ehp), string.format("%d%%", (st.move or 0) * 100), GetPriceSource().FormatPrice(st.cost) }
+			for j, text in ipairs(cells) do vcontrols["c" .. i .. "_" .. j] = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {xs[j], y + 2, 0, 16}, "^7" .. text) end
+			vcontrols["open" .. i] = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {650, y, 90, 20}, "This one", function()
+				local review = new("BuildReview"):BuildReview()
+				local data = review.Load()
+				local others = { }
+				for k, o in ipairs(rows) do if k ~= i then t_insert(others, o.stats or { }) end end
+				review.LearnChoice(data, r.stats or { }, others)
+				review.Save(data)
+				pcall(function()
+					local opts = { }
+					for k, o in ipairs(rows) do opts[k] = { label = o.label, stats = o.stats } end
+					LoadModule("Modules/GeneratorKnowledge").AppendLine({ type = "choice", time = os.time(), picked = i, options = opts })
+				end)
+				main:ClosePopup()
+				main:SetMode("BUILD", false, r.name, r.xml)
+				state.status = "^7Opened: " .. r.label .. ". Use Save As to keep it."
+			end)
+			y = y + 26
+		end
+		vcontrols.close = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {650, y + 6, 90, 20}, "Close", function() main:ClosePopup() end)
+		main:OpenPopup(760, y + 40, "Variations of the build", vcontrols, nil, nil, "close")
+	end
+	controls.variations = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {364, 162, 100, 20}, "Variations...", function()
+		local current = main.modes["BUILD"]
+		if main.mode ~= "BUILD" or not current or not current.calcsTab then
+			state.status = "^7Open a build first."
+			return
+		end
+		local options = makeOptions()
+		local baseXml = current:SaveDB("code")
+		local baseName = current.buildName or "build"
+		-- the open build's own numbers
+		local base = { label = "As it is", xml = baseXml, name = baseName, stats = { } }
+		pcall(function()
+			local g = new("BuildGenerator"):BuildGenerator(current, options)
+			g:PrepareOptions()
+			g:InitFromOpenBuild()
+			local _, r = g:FullScore()
+			local o = current.calcsTab.mainOutput
+			base.stats = { dps = r.dps, ehp = r.ehp, maxhit = (g.scorer:MinMaxHit(o)), move = o.EffectiveMovementSpeedMod, speed = o.Speed, cost = (g:BuildCost()) }
+		end)
+		local kinds = new("BuildGenerator"):BuildGenerator({ }, { }).variationKinds
+		local results, index = { }, 0
+		state.running = true
+		local nextVariation
+		nextVariation = function()
+			index = index + 1
+			local kind = kinds[index]
+			if not kind or not state.running then
+				state.running = false
+				main:SetMode("BUILD", false, baseName, baseXml)
+				state.status = "^7Variations ready."
+				local waited = false
+				main.onFrameFuncs["BuildVariations"] = function()
+					if not waited then waited = true return end
+					main.onFrameFuncs["BuildVariations"] = nil
+					openVariations(base, results)
+				end
+				return
+			end
+			main:SetMode("BUILD", false, baseName .. " (" .. kind.label:lower() .. ")", baseXml)
+			local waited = false
+			main.onFrameFuncs["BuildGenerator"] = function()
+				if not waited then waited = true return end
+				local build = main.modes["BUILD"]
+				local opts = { }
+				for k, v in pairs(options) do opts[k] = v end
+				opts.onProgress = function(stage, i, count, sub)
+					state.progress = ((index - 1) + (sub or 0)) / #kinds
+					state.status = string.format("^7Variation %d of %d: %s (%d%%)...", index, #kinds, kind.label, m_floor((sub or 0) * 100))
+				end
+				local generator = new("BuildGenerator"):BuildGenerator(build, opts)
+				runInBackground("BuildGenerator", popup, function() return generator:Variation(kind.id) end, function(result)
+					t_insert(results, { label = kind.label, stats = result.stats, xml = build:SaveDB("code"), name = baseName .. " (" .. kind.label:lower() .. ")" })
+					nextVariation()
+				end, function(err)
+					ConPrintf("Variation %s failed: %s", kind.id, tostring(err))
+					nextVariation()
+				end)
+			end
+		end
+		nextVariation()
+	end)
+	controls.variations.enabled = idle
+	controls.variations.tooltipFunc = function(tooltip)
+		tooltip:Clear()
+		tooltip:AddLine(16, "^7Makes four variations of the open build, one after the other: more damage, tankier, faster,")
+		tooltip:AddLine(16, "^7and half the cost (supports, rares and passives made again for each). They are then shown")
+		tooltip:AddLine(16, "^7side by side with the build as it is; the one you pick opens, and your choice slowly teaches")
+		tooltip:AddLine(16, "^7the generator what you value (like reviews).")
+	end
+	controls.status = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {472, 164, 0, 16}, function() return state.status end)
 	-- how far the running generation / scan is
 	controls.progress = new("ProgressBarControl"):ProgressBarControl({"TOPLEFT",nil,"TOPLEFT"}, {128, 182, 776, 8}, function()
 		return state.running and state.progress or nil
