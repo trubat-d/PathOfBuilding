@@ -58,9 +58,9 @@
     "Valyrium": 0.5
    },
    "supports": [
+    "Physical to Lightning",
     "Deadly Ailments",
     "Unbound Ailments",
-    "Physical to Lightning",
     "Added Fire Damage",
     "Cast when Stunned",
     "Increased Critical Damage"
@@ -116,9 +116,9 @@
    },
    "supports": [
     "Swift Affliction",
-    "Infused Channelling",
-    "Controlled Destruction",
     "Void Manipulation",
+    "Controlled Destruction",
+    "Infused Channelling",
     "Arcane Surge"
    ],
    "uniques": [
@@ -175,10 +175,10 @@
     "The Primordial Chain": 1.0
    },
    "supports": [
-    "Brutality",
-    "Swift Affliction",
     "Vaal Reap of Butchery",
+    "Brutality",
     "Eclipse",
+    "Swift Affliction",
     "Awakened Empower"
    ],
    "uniques": [
@@ -204,10 +204,10 @@
     "Zealot's Oath": 0.5
    },
    "supports": [
-    "Cast On Critical Strike",
     "Greater Volley",
     "Cooldown Recovery",
-    "Forbidden Rite of Soul Sacrifice"
+    "Forbidden Rite of Soul Sacrifice",
+    "Cast On Critical Strike"
    ],
    "uniques": [
     "Mageblood",
@@ -259,8 +259,8 @@
    "supports": [
     "Cruelty",
     "Cast when Stunned",
-    "Efficacy",
     "Unbound Ailments",
+    "Efficacy",
     "Fire Penetration",
     "Combustion"
    ],
@@ -352,8 +352,8 @@
     "The Taming": 0.67
    },
    "supports": [
-    "Trinity",
     "Elemental Damage with Attacks",
+    "Trinity",
     "Increased Critical Damage",
     "Invert the Rules",
     "Inspiration"
@@ -383,10 +383,10 @@
     "Zealot's Oath": 1.0
    },
    "supports": [
-    "Swift Affliction",
-    "Efficacy",
-    "Controlled Destruction",
     "Void Manipulation",
+    "Swift Affliction",
+    "Controlled Destruction",
+    "Efficacy",
     "Empower"
    ],
    "uniques": [
@@ -427,20 +427,20 @@
    ]
   },
   "Ethereal Knives of the Massacre": {
-   "builds": 6,
+   "builds": 5,
    "keystones": [
     "Elemental Overload",
     "Pain Attunement"
    ],
    "shares": {
     "Elemental Overload": 1.0,
-    "Grace of the Goddess": 0.83,
-    "Headhunter": 0.83,
+    "Grace of the Goddess": 0.8,
+    "Headhunter": 0.8,
     "Lost Unity": 1.0,
-    "Pain Attunement": 0.5,
-    "Polaric Devastation": 0.83,
-    "Replica Dragonfang's Flight": 0.83,
-    "Servant of Decay": 0.5,
+    "Pain Attunement": 0.6,
+    "Polaric Devastation": 1.0,
+    "Replica Dragonfang's Flight": 0.8,
+    "Servant of Decay": 0.6,
     "Svalinn": 1.0
    },
    "supports": [
@@ -450,9 +450,9 @@
    ],
    "uniques": [
     "Svalinn",
+    "Polaric Devastation",
     "Lost Unity",
     "Grace of the Goddess",
-    "Polaric Devastation",
     "Replica Dragonfang's Flight",
     "Headhunter",
     "Servant of Decay"
@@ -506,11 +506,11 @@
     "Zealot's Oath": 1.0
    },
    "supports": [
-    "Greater Spell Echo",
     "Pinpoint",
-    "Intensify",
+    "Greater Spell Echo",
     "Power Charge On Critical",
-    "Void Manipulation"
+    "Void Manipulation",
+    "Intensify"
    ],
    "uniques": [
     "Whispers of Infinity",
@@ -542,9 +542,9 @@
    },
    "supports": [
     "Volatility",
+    "Void Manipulation",
     "Greater Multistrike",
     "Increased Critical Damage",
-    "Void Manipulation",
     "Ruthless"
    ],
    "uniques": [
@@ -617,9 +617,9 @@
    },
    "supports": [
     "Greater Volley",
+    "Ballista Totem",
     "Increased Critical Damage",
     "Less Duration",
-    "Ballista Totem",
     "Invert the Rules"
    ],
    "uniques": [
@@ -654,20 +654,18 @@
    ]
   },
   "Lightning Arrow": {
-   "builds": 6,
+   "builds": 5,
    "keystones": [],
    "shares": {
     "Headhunter": 1.0,
     "Nimis": 1.0
    },
    "supports": [
-    "Trinity",
     "Invert the Rules",
+    "Trinity",
     "Elemental Damage with Attacks",
     "Increased Critical Damage",
-    "Inspiration",
-    "Vicious Projectiles",
-    "Mirage Archer"
+    "Inspiration"
    ],
    "uniques": [
     "Nimis",
@@ -740,13 +738,13 @@
    ]
   },
   "Raise Spectre": {
-   "builds": 10,
+   "builds": 9,
    "keystones": [],
    "shares": {
-    "Bitterbind Point": 0.5,
-    "Doryani's Prototype": 0.4,
-    "Mageblood": 0.6,
-    "The Dark Monarch": 0.4
+    "Bitterbind Point": 0.44,
+    "Doryani's Prototype": 0.44,
+    "Mageblood": 0.67,
+    "The Dark Monarch": 0.44
    },
    "supports": [],
    "uniques": [
@@ -771,10 +769,10 @@
     "The Primordial Chain": 0.83
    },
    "supports": [
-    "Brutality",
-    "Swift Affliction",
     "Awakened Empower",
+    "Brutality",
     "Eclipse",
+    "Swift Affliction",
     "Corrupting Fever"
    ],
    "uniques": [
@@ -806,8 +804,8 @@
    },
    "supports": [
     "Swift Affliction",
-    "Elemental Focus",
-    "Lifetap"
+    "Lifetap",
+    "Elemental Focus"
    ],
    "uniques": [
     "Mageblood",
@@ -832,10 +830,10 @@
     "Unwavering Stance": 0.5
    },
    "supports": [
-    "Multiple Totems",
     "Lifetap",
-    "Spell Totem",
+    "Multiple Totems",
     "Controlled Destruction",
+    "Spell Totem",
     "Empower",
     "Burning Damage"
    ],
@@ -926,9 +924,9 @@
    },
    "supports": [
     "Void Manipulation",
-    "Close Combat",
     "Volatility",
-    "Greater Multistrike"
+    "Greater Multistrike",
+    "Close Combat"
    ],
    "uniques": [
     "Crown of Eyes",
@@ -958,8 +956,8 @@
     "Roiling Tempest": 0.5
    },
    "supports": [
-    "Increased Critical Damage",
     "More Duration",
+    "Increased Critical Damage",
     "Spell Totem"
    ],
    "uniques": [
@@ -1002,8 +1000,8 @@
    },
    "supports": [
     "Vicious Projectiles",
-    "Efficacy",
     "Void Manipulation",
+    "Efficacy",
     "More Duration",
     "Empower"
    ],
@@ -1064,8 +1062,8 @@
     "Whispers of Infinity": 1.0
    },
    "supports": [
-    "Melee Physical Damage",
     "Nightblade",
+    "Melee Physical Damage",
     "Swift Affliction",
     "Deadly Ailments",
     "Damage on Full Life"
@@ -1090,10 +1088,10 @@
     "Versatile Combatant": 1.0
    },
    "supports": [
-    "Melee Physical Damage",
     "Brutality",
-    "Pulverise",
     "Infused Channelling",
+    "Pulverise",
+    "Melee Physical Damage",
     "Cyclone of Tumult"
    ],
    "uniques": [
@@ -1124,9 +1122,9 @@
     "Willclash": 1.0
    },
    "supports": [
+    "Focused Channelling",
     "Power Charge On Critical",
     "Infused Channelling",
-    "Focused Channelling",
     "Inspiration"
    ],
    "uniques": [

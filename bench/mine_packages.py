@@ -18,7 +18,11 @@ import itertools
 import json
 import os
 import re
+import sys
 import zlib
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import playable  # (showcase builds left out: bench/playable.py)
 
 # items every kind of build uses (their pairs say nothing about a package)
 COMMON = {"Mageblood", "Headhunter", "Watcher's Eye", "Forbidden Flame", "Forbidden Flesh", "Impossible Escape",
@@ -58,9 +62,13 @@ def main():
     ap.add_argument("--out", default="src/Data/GeneratorUniquePackages.json")
     ap.add_argument("--min-builds", type=int, default=3)
     ap.add_argument("--min-lift", type=float, default=8.0)
+    ap.add_argument("--keep-showcase", action="store_true", help="keep builds bench/playable.py flags as showcases")
     args = ap.parse_args()
     builds = []
+    showcases = {} if args.keep_showcase else playable.showcase_set(args.codes)
     for path in sorted(glob.glob(os.path.join(args.codes, "*.txt"))):
+        if os.path.basename(path) in showcases:
+            continue
         skill = os.path.basename(path).rsplit("__", 1)[0].replace("_", " ")
         try:
             builds.append((skill, gear_uniques(decode(path))))

@@ -1,7 +1,7 @@
 {
  "version": 1,
  "source": "poe.ninja top players",
- "players": 264,
+ "players": 261,
  "packages": [
   {
    "uniques": [
@@ -377,17 +377,6 @@
   },
   {
    "uniques": [
-    "Azadi Crest",
-    "Lori's Lantern",
-    "Valyrium"
-   ],
-   "builds": 3,
-   "skills": {
-    "Detonate Dead of Scavenging": 3
-   }
-  },
-  {
-   "uniques": [
     "Carnage Heart",
     "Circle of Guilt",
     "Woespike"
@@ -512,6 +501,16 @@
    "builds": 3,
    "skills": {
     "Flicker Strike": 3
+   }
+  },
+  {
+   "uniques": [
+    "Lori's Lantern",
+    "Valyrium"
+   ],
+   "builds": 3,
+   "skills": {
+    "Detonate Dead of Scavenging": 3
    }
   },
   {

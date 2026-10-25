@@ -85,6 +85,22 @@ end
 local own = evaluate("own configuration")
 local normalized
 if not os.getenv("KEEP_CONFIG") then
+	-- (from a blank configuration, as for a generated build: conditions held
+	-- by hand - an enemy shocked for 30% by nothing in the build, buffs from
+	-- a party - are a player's choice to show, not what the build does;
+	-- AutoConfig then switches on what the build itself keeps up.
+	-- PLAYER_CONFIG=1: on top of the player's configuration instead)
+	if not os.getenv("PLAYER_CONFIG") then
+		-- (the build's states and the enemy's: conditions, multipliers, buffs,
+		-- charges and counts held by hand; pantheon, bandit and the like kept)
+		local input = build.configTab.input
+		for k in pairs(input) do
+			if k:match("^condition") or k:match("^multiplier") or k:match("^buff") or k:match("^override") or k:match("^use%a+Charges$") then input[k] = nil end
+		end
+		build.configTab:BuildModList()
+		build.buildFlag = true
+		runCallback("OnFrame")
+	end
 	local ac = new("AutoConfig"):AutoConfig(build)
 	ac:Run()
 	runCallback("OnFrame")

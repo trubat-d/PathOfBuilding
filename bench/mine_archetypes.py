@@ -17,7 +17,11 @@ import glob
 import json
 import os
 import re
+import sys
 import zlib
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import playable  # (showcase builds left out: bench/playable.py)
 
 GEAR = ("Helmet", "Body Armour", "Gloves", "Boots", "Amulet", "Ring 1", "Ring 2", "Belt", "Weapon 1", "Weapon 2")
 
@@ -72,10 +76,14 @@ def main():
     ap.add_argument("--keystone", type=float, default=0.5)
     ap.add_argument("--unique", type=float, default=0.4)
     ap.add_argument("--support", type=float, default=0.5)
+    ap.add_argument("--keep-showcase", action="store_true", help="keep builds bench/playable.py flags as showcases")
     args = ap.parse_args()
     keystones = keystone_ids(args.tree)
     by_skill = collections.defaultdict(list)
+    showcases = {} if args.keep_showcase else playable.showcase_set(args.codes)
     for path in sorted(glob.glob(os.path.join(args.codes, "*.txt"))):
+        if os.path.basename(path) in showcases:
+            continue
         skill = os.path.basename(path).rsplit("__", 1)[0].replace("_", " ")
         try:
             by_skill[skill].append(parse(decode(path), skill, keystones))

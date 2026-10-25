@@ -55,7 +55,10 @@ function UniqueComboFinderClass.SelfBuffs(lines, hitRate, boss)
 		local best, source = 0, nil
 		for _, line in ipairs(lines) do
 			for _, pattern in ipairs(state.enable) do
-				if line:find(pattern, 1, true) and not line:find("enemies", 1, true) and not line:find("allies", 1, true) then
+				-- (not a line that triggers on the state: "24% chance to lose a power
+				-- charge when you gain elusive" gives no Elusive)
+				if line:find(pattern, 1, true) and not line:find("enemies", 1, true) and not line:find("allies", 1, true)
+					and not line:find("when you " .. pattern, 1, true) and not line:find("on " .. pattern, 1, true) and not line:find("lose", 1, true) then
 					local chance, onKill = enablerChance(line)
 					if not (onKill and boss) then
 						local p = m_min(1, chance / 100)
@@ -141,7 +144,10 @@ local function itemStates(item)
 	for _, line in ipairs(lowerLines(item)) do
 		for _, state in ipairs(UniqueComboFinderClass.states) do
 			for _, pattern in ipairs(state.enable) do
-				if line:find(pattern, 1, true) and not line:find("enemies", 1, true) and not line:find("allies", 1, true) then enables[state] = true end
+				-- (not a line that triggers on the state: "24% chance to lose a power
+				-- charge when you gain elusive" gives no Elusive)
+				if line:find(pattern, 1, true) and not line:find("enemies", 1, true) and not line:find("allies", 1, true)
+					and not line:find("when you " .. pattern, 1, true) and not line:find("on " .. pattern, 1, true) and not line:find("lose", 1, true) then enables[state] = true end
 			end
 			for _, pattern in ipairs(state.payoff) do
 				if line:find(pattern, 1, true) then pays[state] = true end

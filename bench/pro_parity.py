@@ -26,6 +26,9 @@ import sys
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import playable
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CODES = os.environ.get("CODES", "/home/claude/ninja/codes")
 DEFAULT_SKILLS = ["Boneshatter", "Tornado Shot", "Righteous Fire", "Cyclone", "Toxic Rain", "Lightning Arrow",
@@ -133,6 +136,13 @@ def generate_auto(src, skill, asc, budget, save_dir, top, jobs):
 def run_skill(args, skill):
     src = args.src
     files = sorted(f for f in os.listdir(CODES) if f.startswith(skill.replace(" ", "_") + "__") and f.endswith(".txt"))
+    # (showcase builds - a DPS number with no defences - aren't a target: bench/playable.py)
+    if not getattr(args, "keep_showcase", False):
+        bad = playable.showcase_set(CODES)
+        for f in files:
+            if f in bad:
+                print(f"   {f} left out (showcase: {', '.join(bad[f])})")
+        files = [f for f in files if f not in bad]
     files = sorted(files, key=lambda f: int(f.rsplit("__", 1)[1][:-4]))[: args.pros * 2]
     pros = []
     for f in files:
@@ -194,6 +204,7 @@ def main():
     ap.add_argument("--pros", type=int, default=3)
     ap.add_argument("--jobs", type=int, default=2)
     ap.add_argument("--src", default=os.path.join(ROOT, "src"))
+    ap.add_argument("--keep-showcase", action="store_true", help="keep builds bench/playable.py flags as showcases")
     ap.add_argument("--auto", type=int, default=0, help="as the app's automatic mode: scan every archetype, full builds of the best N")
     args = ap.parse_args()
     skills = [s.strip() for s in args.skills.split(",") if s.strip()]

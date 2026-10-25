@@ -9,8 +9,12 @@ build is clearly below its skill's target.
     python3 bench/layer_targets.py <profile outputs...> [--out src/Data/GeneratorLayerTargets.json]
 """
 import json
+import os
 import statistics
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import playable  # (showcase builds left out: bench/playable.py)
 from collections import defaultdict, Counter
 
 KEYS = ["crit", "speed", "enemy", "increased", "more", "dotMulti", "gemLevel", "power", "frenzy", "endurance", "life", "es", "mana", "dps"]
@@ -23,12 +27,15 @@ def main():
         i = args.index("--out")
         out = args[i + 1]
         args = args[:i] + args[i + 2:]
+    keep = "--keep-showcase" in args
+    args = [a for a in args if a != "--keep-showcase"]
+    showcases = {} if keep else playable.showcase_set(os.environ.get("CODES", "/home/claude/ninja/codes"))
     by_skill = defaultdict(list)
     for path in args:
         for line in open(path):
             if line.startswith("PROFILE "):
                 p = json.loads(line[8:])
-                if p.get("dps", 0) > 0:
+                if p.get("dps", 0) > 0 and p.get("file") not in showcases:
                     by_skill[p["skill"]].append(p)
     targets = {}
     for skill, rows in sorted(by_skill.items()):
