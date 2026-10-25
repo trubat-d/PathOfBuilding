@@ -167,19 +167,23 @@ end
 -- model knows, as when a player generates one; only skills seen in two
 -- builds of the training part are skipped for): per threshold, how many
 -- measurements would be skipped and how many of them mattered
-function M.Validate(rows, tick)
+function M.Validate(rows, tick, repeats)
 	local runIds, index = { }, { }
 	for _, r in ipairs(rows) do
 		local id = r.run or "?"
 		if not index[id] then index[id] = true runIds[#runIds + 1] = id end
 	end
 	table.sort(runIds)
-	local fold = { }
-	for i, id in ipairs(runIds) do fold[id] = i % FOLDS end
-	local skills = 0
-	for _ in pairs(familiarSkills(rows)) do skills = skills + 1 end
 	local stats = { }
 	for _, t in ipairs(THRESHOLDS) do stats[t] = { skipped = 0, missed = 0 } end
+	-- (several splits of the builds: a threshold must be safe in all of them)
+	for rep = 1, repeats or 2 do
+	local fold = { }
+	local rng = rep * 7919
+	for i, id in ipairs(runIds) do
+		rng = (rng * 1103515245 + 12345) % 2147483648
+		fold[id] = rep == 1 and i % FOLDS or rng % FOLDS
+	end
 	for k = 0, FOLDS - 1 do
 		local trainRows, testRows = { }, { }
 		for _, r in ipairs(rows) do
@@ -202,6 +206,10 @@ function M.Validate(rows, tick)
 			end
 		end
 	end
+	end
+	local skills = 0
+	for _ in pairs(familiarSkills(rows)) do skills = skills + 1 end
+	-- (skipped counts are summed over the splits: per split, divide by repeats)
 	return stats, skills
 end
 
@@ -223,7 +231,7 @@ function M.Run(tick, logPath, outPath)
 	local f = io.open(outPath or M.ModelPath(), "w")
 	if f then f:write(dkjson.encode(out)) f:close() end
 	return out, string.format("Candidate model trained on %d support measurements from %d skills: %s", #rows, skills,
-		chosen > 0 and string.format("supports below %.1f%% chance are skipped (%d%% of the measurements in the check, none that mattered)", chosen * 100, math.floor(100 * stats[chosen].skipped / #rows + 0.5))
+		chosen > 0 and string.format("supports below %.1f%% chance are skipped (%d%% of the measurements in the check, none that mattered in two splits of the builds)", chosen * 100, math.floor(100 * stats[chosen].skipped / 2 / #rows + 0.5))
 			or "no skip threshold was safe yet, so it only ranks")
 end
 
