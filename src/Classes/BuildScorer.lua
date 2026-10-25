@@ -137,11 +137,26 @@ function BuildScorerClass:ClearTerm(output)
 	-- Ignite Proliferation Support): a build whose damage is mostly ignite
 	-- reaches the whole pack with it, like a bigger area
 	local spreadFactor = 1
-	local igniteShare = (output.IgniteDPS or 0) / m_max(1, output.CombinedDPS or 0)
+	local combined = m_max(1, output.CombinedDPS or 0)
+	local igniteShare = (output.IgniteDPS or 0) / combined
 	if igniteShare > 0.1 then
-		local spread = (output.IgniteSpreadRadius or 0) > 0 or self:SupportedBy("Ignite Proliferation")
-		if spread then spreadFactor = 1 + 2 * m_min(1, igniteShare) end
+		if (output.IgniteSpreadRadius or 0) > 0 or self:SupportedBy("Ignite Proliferation") then
+			spreadFactor = spreadFactor * (1 + 2 * m_min(1, igniteShare))
+		elseif output.IgniteSpreadOnKill then
+			-- (only from kills: the pack is reached once the first one dies)
+			spreadFactor = spreadFactor * (1 + m_min(1, igniteShare))
+		end
 	end
+	local poisonShare = (output.PoisonDPS or 0) / combined
+	if poisonShare > 0.1 and output.PoisonSpreadOnKill then spreadFactor = spreadFactor * (1 + m_min(1, poisonShare)) end
+	local impaleShare = (output.ImpaleDPS or 0) / combined
+	if impaleShare > 0.1 and output.ImpaleSpread then spreadFactor = spreadFactor * (1 + 0.5 * m_min(1, impaleShare)) end
+	-- (shock / chill / freeze spreading: the pack takes more damage or is slowed)
+	local function onHit(name)
+		return m_max(output[name .. "ChanceOnHit"] or 0, output.MainHand and output.MainHand[name .. "ChanceOnHit"] or 0)
+	end
+	if (output.ShockSpreadRadius or 0) > 0 and onHit("Shock") >= 20 then spreadFactor = spreadFactor * 1.15 end
+	if ((output.FreezeSpreadRadius or 0) > 0 and onHit("Freeze") >= 20) or ((output.ChillSpreadRadius or 0) > 0) then spreadFactor = spreadFactor * 1.05 end
 	local term = 0.6 * m_log(ms) + 0.25 * m_log(areaFactor * projFactor * spreadFactor) + m_log(1 + 3 * explode)
 	-- Headhunter while clearing: the stolen rare modifiers (a typical set: 20%
 	-- movement speed, 40% damage, 20% speed - the configuration's "Headhunter"

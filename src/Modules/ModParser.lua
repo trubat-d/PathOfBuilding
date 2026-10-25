@@ -3734,6 +3734,12 @@ local specialModList = {
 	["ignites you inflict spread to other enemies within a radius of ([%d%.]+) metres?"] = function(num) return { mod("IgniteSpreadRadius", "BASE", num * 10) } end,
 	["ignites you inflict with this weapon spread to other enemies within ([%d%.]+) metres?"] = function(num) return { mod("IgniteSpreadRadius", "BASE", num * 10) } end,
 	["ignites you inflict during effect spread to other enemies within ([%d%.]+) metres?"] = function(num) return { mod("IgniteSpreadRadius", "BASE", num * 10, { type = "Condition", var = "UsingFlask" }) } end,
+	["freezes you inflict spread to other enemies within ([%d%.]+) metres?"] = function(num) return { mod("FreezeSpreadRadius", "BASE", num * 10) } end,
+	["shocks you inflict spread to other enemies within ([%d%.]+) metres?"] = function(num) return { mod("ShockSpreadRadius", "BASE", num * 10) } end,
+	["non%-damaging elemental ailments you inflict spread to nearby enemies within ([%d%.]+) metres?"] = function(num) return { mod("ShockSpreadRadius", "BASE", num * 10), mod("ChillSpreadRadius", "BASE", num * 10) } end,
+	["when you kill an ignited enemy, inflict an equivalent ignite on each nearby enemy"] = { flag("IgniteSpreadOnKill") },
+	["when you kill a poisoned enemy during any flask effect, enemies within ([%d%.]+) metres are poisoned"] = { flag("PoisonSpreadOnKill") },
+	["when your hits impale enemies, also impale other enemies near them"] = { flag("ImpaleSpread") },
 	["(%d+)%% chance for ignites inflicted with lightning strike or frost blades to deal (%d+)%% more damage"] = function(num, _, more) return {
 		mod("Damage", "MORE", tonumber(more) * num / 100, nil, 0, KeywordFlag.Ignite, { type = "SkillName", skillNameList = { "Lightning Strike", "Frost Blades" }, includeTransfigured = true }),
 	} end,
