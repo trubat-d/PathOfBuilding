@@ -112,6 +112,7 @@ def chance(entry, tags):
 
 
 FOLDS = 5
+HAS_CONTEXT = False
 FAMILIAR_RUNS = 2  # the model only skips for skills it has seen in this many builds
 
 
@@ -164,6 +165,10 @@ def validate(rows):
                 continue
             if r["name"] not in useless.get(r["skill"], ()):
                 continue
+            # checked as used: the generator always gives the build's situation,
+            # so measurements logged before it was recorded are only trained on
+            if HAS_CONTEXT and not any(f.startswith("c:") for f in r["tags"]):
+                continue
             p = chance(e, r["tags"])
             for t in THRESHOLDS:
                 if p < t:
@@ -188,6 +193,8 @@ def main():
     rows = load(args)
     skills = {r["skill"] for r in rows}
     print(f"{len(rows)} support measurements, {len(skills)} skills")
+    global HAS_CONTEXT
+    HAS_CONTEXT = any(f.startswith("c:") for r in rows for f in r["tags"])
     stats, total = validate(rows)
     chosen = 0
     for t in THRESHOLDS:

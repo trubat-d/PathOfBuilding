@@ -97,8 +97,9 @@ function M.ReadRows(path, tick)
 					for _, c in ipairs(ctx) do feats[#feats + 1] = "c:" .. c end
 					M.hasContext = true
 				end
+				local hasContext = ctx ~= nil
 				feats[#feats + 1] = "s:" .. skill
-				rows[#rows + 1] = { name = r.n, gain = r.g, skill = skill, feats = feats, run = r.run }
+				rows[#rows + 1] = { name = r.n, gain = r.g, skill = skill, feats = feats, run = r.run, hasContext = hasContext }
 			end
 		end
 	end
@@ -223,7 +224,10 @@ function M.Validate(rows, tick, repeats)
 			local familiar = familiarSkills(trainRows)
 			local useless = uselessPairs(trainRows)
 			for _, r in ipairs(testRows) do
-				local e = model[r.name]
+				-- (checked as used: the generator always gives the build's
+				-- situation, so measurements logged before it was recorded are
+				-- only trained on)
+				local e = (r.hasContext or not M.hasContext) and model[r.name]
 				if e and e.n >= MIN_SEEN and (familiar[r.skill] or 0) >= FAMILIAR_RUNS and useless[r.skill] and useless[r.skill][r.name] then
 					local p = chance(e, r.feats)
 					for _, t in ipairs(THRESHOLDS) do
