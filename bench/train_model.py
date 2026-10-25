@@ -63,8 +63,11 @@ def load(paths):
                         # the build's situation at that choice (BuildGenerator:SupportContext)
                         for c in contexts.get((r.get("run"), r.get("cx")), []):
                             feats.append("c:" + c)
+                        # the skill itself: what a support does for it is learnt per skill,
+                        # the rest of the features carry the build's situation
+                        feats.append("s:" + run.get("skill", "?"))
                         rows.append({"name": r["n"], "gain": r["g"], "skill": run.get("skill"), "tags": feats,
-                                     "investment": run.get("investment"), "pick": r.get("pick")})
+                                     "investment": run.get("investment"), "pick": r.get("pick"), "run": r.get("run")})
     return rows
 
 
@@ -109,27 +112,37 @@ def chance(entry, tags):
 
 
 FOLDS = 5
+FAMILIAR_RUNS = 2  # the model only skips for skills it has seen in this many builds
+
+
+def familiar_skills(rows):
+    runs = defaultdict(set)
+    for r in rows:
+        runs[r["skill"]].add(r["run"])
+    return {s: len(v) for s, v in runs.items()}
 
 
 def validate(rows):
-    """Skills split in FOLDS groups, each left out in turn (every skill is
-    judged by a model that never saw it); per threshold: measurements
+    """Builds split in FOLDS groups, each left out in turn: every build is
+    judged by a model that never saw it (a new build of a skill it knows, as
+    when a player generates one); the model only skips for skills seen in
+    FAMILIAR_RUNS builds of the training part. Per threshold: measurements
     skipped, real misses."""
-    skills = sorted({r["skill"] for r in rows})
-    fold_of = {s: i % FOLDS for i, s in enumerate(skills)}
+    run_ids = sorted({r["run"] for r in rows})
+    fold_of = {rid: i % FOLDS for i, rid in enumerate(run_ids)}
     stats = {t: {"skipped": 0, "missed": 0, "worst": []} for t in THRESHOLDS}
     total = 0
     for k in range(FOLDS):
-        skill = k
-        train_rows = [r for r in rows if fold_of[r["skill"]] != k]
-        test_rows = [r for r in rows if fold_of[r["skill"]] == k]
+        train_rows = [r for r in rows if fold_of[r["run"]] != k]
+        test_rows = [r for r in rows if fold_of[r["run"]] == k]
         if not train_rows or not test_rows:
             continue
         model = train(train_rows)
+        familiar = familiar_skills(train_rows)
         for r in test_rows:
             total += 1
             e = model.get(r["name"])
-            if not e or e["n"] < MIN_SEEN:
+            if not e or e["n"] < MIN_SEEN or familiar.get(r["skill"], 0) < FAMILIAR_RUNS:
                 continue
             p = chance(e, r["tags"])
             for t in THRESHOLDS:
@@ -169,7 +182,8 @@ def main():
     model = train(rows)
     with open(out, "w") as f:
         has_context = any(f.startswith("c:") for r in rows for f in r["tags"])
-        json.dump({"version": 3, "helps": HELPS, "skipBelow": chosen, "minSeen": MIN_SEEN, "typeFeatures": bool(GEMS), "contextFeatures": has_context,
+        json.dump({"version": 4, "helps": HELPS, "skipBelow": chosen, "minSeen": MIN_SEEN, "typeFeatures": bool(GEMS), "contextFeatures": has_context,
+                   "skillFeatures": True, "familiarRuns": FAMILIAR_RUNS, "familiar": familiar_skills(rows),
                    "skills": len(skills), "support": model}, f, indent=0, sort_keys=True)
     print(f"written {out}: {len(model)} supports")
 

@@ -84,16 +84,16 @@ function M.ReadRows(path, tick)
 			local ok, r = pcall(dkjson.decode, line)
 			local skill = ok and r and runs[r.run]
 			if skill and r.g and features[skill] then
-				local feats = features[skill]
-				-- (the build's situation at that choice: "c:" features)
+				local feats = { }
+				for _, x in ipairs(features[skill]) do feats[#feats + 1] = x end
+				-- (the build's situation at that choice: "c:" features; the skill itself: "s:")
 				local ctx = r.cx and contexts[r.run .. "#" .. r.cx]
 				if ctx then
-					feats = { }
-					for _, x in ipairs(features[skill]) do feats[#feats + 1] = x end
 					for _, c in ipairs(ctx) do feats[#feats + 1] = "c:" .. c end
 					M.hasContext = true
 				end
-				rows[#rows + 1] = { name = r.n, gain = r.g, skill = skill, feats = feats }
+				feats[#feats + 1] = "s:" .. skill
+				rows[#rows + 1] = { name = r.n, gain = r.g, skill = skill, feats = feats, run = r.run }
 			end
 		end
 	end
@@ -142,26 +142,50 @@ local function chance(entry, feats)
 	return 1 / (1 + math.exp(-z))
 end
 
--- Skills split in groups, each left out in turn: per threshold, how many
+-- Skills seen in how many builds: { [skill] = builds }
+local FAMILIAR_RUNS = 2
+local function familiarSkills(rows)
+	local runs, out = { }, { }
+	for _, r in ipairs(rows) do
+		runs[r.skill] = runs[r.skill] or { }
+		runs[r.skill][r.run or "?"] = true
+	end
+	for skill, set in pairs(runs) do
+		local n = 0
+		for _ in pairs(set) do n = n + 1 end
+		out[skill] = n
+	end
+	return out
+end
+
+-- Builds split in groups, each left out in turn (a new build of a skill the
+-- model knows, as when a player generates one; only skills seen in two
+-- builds of the training part are skipped for): per threshold, how many
 -- measurements would be skipped and how many of them mattered
 function M.Validate(rows, tick)
-	local skills, index = { }, { }
-	for _, r in ipairs(rows) do if not index[r.skill] then index[r.skill] = true skills[#skills + 1] = r.skill end end
-	table.sort(skills)
+	local runIds, index = { }, { }
+	for _, r in ipairs(rows) do
+		local id = r.run or "?"
+		if not index[id] then index[id] = true runIds[#runIds + 1] = id end
+	end
+	table.sort(runIds)
 	local fold = { }
-	for i, s in ipairs(skills) do fold[s] = i % FOLDS end
+	for i, id in ipairs(runIds) do fold[id] = i % FOLDS end
+	local skills = 0
+	for _ in pairs(familiarSkills(rows)) do skills = skills + 1 end
 	local stats = { }
 	for _, t in ipairs(THRESHOLDS) do stats[t] = { skipped = 0, missed = 0 } end
 	for k = 0, FOLDS - 1 do
 		local trainRows, testRows = { }, { }
 		for _, r in ipairs(rows) do
-			if fold[r.skill] == k then testRows[#testRows + 1] = r else trainRows[#trainRows + 1] = r end
+			if fold[r.run or "?"] == k then testRows[#testRows + 1] = r else trainRows[#trainRows + 1] = r end
 		end
 		if #trainRows > 0 and #testRows > 0 then
 			local model = train(trainRows, tick)
+			local familiar = familiarSkills(trainRows)
 			for _, r in ipairs(testRows) do
 				local e = model[r.name]
-				if e and e.n >= MIN_SEEN then
+				if e and e.n >= MIN_SEEN and (familiar[r.skill] or 0) >= FAMILIAR_RUNS then
 					local p = chance(e, r.feats)
 					for _, t in ipairs(THRESHOLDS) do
 						if p < t then
@@ -173,7 +197,7 @@ function M.Validate(rows, tick)
 			end
 		end
 	end
-	return stats, #skills
+	return stats, skills
 end
 
 -- Trains and writes the model; returns a summary line
@@ -184,7 +208,8 @@ function M.Run(tick, logPath, outPath)
 	local chosen = 0
 	for _, t in ipairs(THRESHOLDS) do if stats[t].missed == 0 then chosen = t end end
 	local model = train(rows, tick)
-	local out = { version = 3, helps = HELPS, skipBelow = chosen, minSeen = MIN_SEEN, typeFeatures = true, contextFeatures = M.hasContext or false, skills = skills, runs = runs,
+	local out = { version = 4, helps = HELPS, skipBelow = chosen, minSeen = MIN_SEEN, typeFeatures = true, contextFeatures = M.hasContext or false,
+		skillFeatures = true, familiarRuns = FAMILIAR_RUNS, familiar = familiarSkills(rows), skills = skills, runs = runs,
 		measurements = #rows, trainedAt = os.time(), validation = { }, support = model }
 	for _, t in ipairs(THRESHOLDS) do out.validation[tostring(t)] = stats[t] end
 	-- unique pairs: their mean synergy (ranks the pairs worth a calculation: UniqueComboFinder)

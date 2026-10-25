@@ -67,11 +67,19 @@ function M.SkipSupport(name, gem, context)
 	M.featureCache = M.featureCache or { }
 	local feats = M.featureCache[gem]
 	if not feats then feats = M.Features(gem) M.featureCache[gem] = feats end
-	-- (the build's situation: BuildGenerator:SupportContext, "c:" features)
-	if context and model.contextFeatures then
+	-- (only for skills the model has seen in enough builds: what a support
+	-- does for a skill it never saw can't be trusted)
+	if model.familiar then
+		if not gem or (model.familiar[gem.name] or 0) < (model.familiarRuns or 2) then return false end
+	end
+	-- (the build's situation: BuildGenerator:SupportContext, "c:" features; the skill: "s:")
+	if (context and model.contextFeatures) or model.skillFeatures then
 		local all = { }
 		for k in pairs(feats) do all[k] = true end
-		for _, c in ipairs(context) do all["c:" .. c] = true end
+		if context and model.contextFeatures then
+			for _, c in ipairs(context) do all["c:" .. c] = true end
+		end
+		if model.skillFeatures and gem then all["s:" .. gem.name] = true end
 		feats = all
 	end
 	local p, n = M.SupportChance(name, feats)
