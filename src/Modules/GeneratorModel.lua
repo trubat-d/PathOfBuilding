@@ -4,20 +4,20 @@
 -- The candidate model trained from the generator's decision logs
 -- (bench/train_model.py -> Data/GeneratorModel.json): for each support gem,
 -- the chance that it helps a main skill with given gem tags and skill types
--- (a logistic regression). The generator skips the supports the model is
--- sure can't help (below "skipBelow", seen at least "minSeen" times), so the
--- calculations go to the ones that can. PoB's calculator still decides
--- between the supports that are tried. The trainer only sets a threshold
--- when, leaving each skill out in turn, nothing worth more than 0.02 score
--- would have been skipped: with the first 56 skills it found none (Lifetap,
--- trigger supports, minion supports surprise), so nothing is skipped yet.
+-- (a logistic regression), and the supports that never helped each skill in
+-- two builds or more. The generator skips a support only when both agree
+-- (chance below "skipBelow", seen at least "minSeen" times, a skill seen in
+-- "familiarRuns" builds), so the calculations go to the ones that can help.
+-- PoB's calculator still decides between the supports that are tried. The
+-- trainer only sets a threshold when, leaving builds out in turn, nothing
+-- worth more than 0.02 score would have been skipped.
 --
 local dkjson = require "dkjson"
 local M = { }
 
 function M.Load(force)
 	if M.loaded and not force then return M.model end
-	M.model, M.featureCache = nil, nil
+	M.model, M.featureCache, M.uselessSets = nil, nil, nil
 	M.loaded = true
 	local base = (GetScriptPath and GetScriptPath() or ".") .. "/Data/GeneratorModel.json"
 	-- (the one trained on this computer, Modules/GeneratorModelTrainer, or
@@ -84,6 +84,20 @@ function M.SkipSupport(name, gem, context)
 		end
 		if model.skillFeatures and gem then all["s:" .. gem.name] = true end
 		feats = all
+	end
+	-- (and only supports that never helped this skill in two builds or more:
+	-- the model alone misses supports whose use depends on the situation)
+	if model.historyRule then
+		if not M.uselessSets then
+			M.uselessSets = { }
+			for skill, list in pairs(model.useless or { }) do
+				local set = { }
+				for _, n in ipairs(list) do set[n] = true end
+				M.uselessSets[skill] = set
+			end
+		end
+		local set = gem and M.uselessSets[gem.name]
+		if not set or not set[name] then return false end
 	end
 	local p, n = M.SupportChance(name, feats)
 	return p ~= nil and n >= (model.minSeen or 30) and p < model.skipBelow

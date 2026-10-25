@@ -5,8 +5,10 @@
 -- computer's decision log (GeneratorDecisions.jsonl, Modules/GeneratorKnowledge),
 -- the way bench/train_model.py does: for each support gem, a logistic
 -- regression on the main skill's gem tags and skill types giving the chance
--- it helps. It is checked before it is used: the skills are split in five
--- groups, each group left out in turn, and the skip threshold kept is the
+-- it helps, and the supports that never helped each skill in two builds or
+-- more (a support is skipped only when both agree). It is checked before it
+-- is used: the builds are split in five groups (twice, differently), each
+-- group left out in turn, and the skip threshold kept is the
 -- highest at which no left-out support worth more than 0.02 score would have
 -- been skipped (none: the model only ranks, skipping nothing). The result
 -- goes to the user folder's GeneratorModel.json, which the generator reads
@@ -163,6 +165,33 @@ local function familiarSkills(rows)
 	return out
 end
 
+-- Supports measured for a skill in two builds or more and that never helped
+-- it: { [skill] = { [support] = true } }. The model only skips a support when
+-- this history agrees: a model alone misses the supports whose use depends on
+-- the build's situation (Lifetap when mana is short...), a history alone too;
+-- both together missed nothing in the checks (bench/train_model.py)
+local function uselessPairs(rows)
+	local seen = { }
+	for _, r in ipairs(rows) do
+		local bySkill = seen[r.skill]
+		if not bySkill then bySkill = { } seen[r.skill] = bySkill end
+		local e = bySkill[r.name]
+		if not e then e = { runs = { }, count = 0, best = -1e9 } bySkill[r.name] = e end
+		if not e.runs[r.run or "?"] then e.runs[r.run or "?"] = true e.count = e.count + 1 end
+		if r.gain > e.best then e.best = r.gain end
+	end
+	local out = { }
+	for skill, bySkill in pairs(seen) do
+		for name, e in pairs(bySkill) do
+			if e.count >= FAMILIAR_RUNS and e.best <= HELPS then
+				out[skill] = out[skill] or { }
+				out[skill][name] = true
+			end
+		end
+	end
+	return out
+end
+
 -- Builds split in groups, each left out in turn (a new build of a skill the
 -- model knows, as when a player generates one; only skills seen in two
 -- builds of the training part are skipped for): per threshold, how many
@@ -192,9 +221,10 @@ function M.Validate(rows, tick, repeats)
 		if #trainRows > 0 and #testRows > 0 then
 			local model = train(trainRows, tick)
 			local familiar = familiarSkills(trainRows)
+			local useless = uselessPairs(trainRows)
 			for _, r in ipairs(testRows) do
 				local e = model[r.name]
-				if e and e.n >= MIN_SEEN and (familiar[r.skill] or 0) >= FAMILIAR_RUNS then
+				if e and e.n >= MIN_SEEN and (familiar[r.skill] or 0) >= FAMILIAR_RUNS and useless[r.skill] and useless[r.skill][r.name] then
 					local p = chance(e, r.feats)
 					for _, t in ipairs(THRESHOLDS) do
 						if p < t then
@@ -229,7 +259,15 @@ function M.Run(tick, logPath, outPath)
 	local chosen = 0
 	for _, t in ipairs(THRESHOLDS) do if stats[t].missed == 0 then chosen = t end end
 	local model = train(rows, tick)
-	local out = { version = 4, helps = HELPS, skipBelow = chosen, minSeen = MIN_SEEN, typeFeatures = true, contextFeatures = M.hasContext or false,
+	-- (the history, as lists of support names per skill)
+	local useless = { }
+	for skill, set in pairs(uselessPairs(rows)) do
+		local list = { }
+		for name in pairs(set) do list[#list + 1] = name end
+		table.sort(list)
+		useless[skill] = list
+	end
+	local out = { version = 5, historyRule = true, useless = useless, helps = HELPS, skipBelow = chosen, minSeen = MIN_SEEN, typeFeatures = true, contextFeatures = M.hasContext or false,
 		skillFeatures = true, familiarRuns = FAMILIAR_RUNS, familiar = familiarSkills(rows), skills = skills, runs = runs,
 		measurements = #rows, trainedAt = os.time(), validation = { }, support = model }
 	for _, t in ipairs(THRESHOLDS) do out.validation[tostring(t)] = stats[t] end

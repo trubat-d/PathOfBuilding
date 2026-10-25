@@ -122,6 +122,23 @@ def familiar_skills(rows):
     return {s: len(v) for s, v in runs.items()}
 
 
+def useless_pairs(rows):
+    """Supports measured for a skill in FAMILIAR_RUNS builds or more that never
+    helped it: {skill: set(support)}. A support is only skipped when this
+    history and the model agree (either alone misses situational supports
+    such as Lifetap when mana is short)."""
+    runs, best = defaultdict(set), {}
+    for r in rows:
+        key = (r["skill"], r["name"])
+        runs[key].add(r["run"])
+        best[key] = max(best.get(key, -1e9), r["gain"])
+    out = defaultdict(set)
+    for key, rs in runs.items():
+        if len(rs) >= FAMILIAR_RUNS and best[key] <= HELPS:
+            out[key[0]].add(key[1])
+    return out
+
+
 def validate(rows):
     """Builds split in FOLDS groups, each left out in turn: every build is
     judged by a model that never saw it (a new build of a skill it knows, as
@@ -139,10 +156,13 @@ def validate(rows):
             continue
         model = train(train_rows)
         familiar = familiar_skills(train_rows)
+        useless = useless_pairs(train_rows)
         for r in test_rows:
             total += 1
             e = model.get(r["name"])
             if not e or e["n"] < MIN_SEEN or familiar.get(r["skill"], 0) < FAMILIAR_RUNS:
+                continue
+            if r["name"] not in useless.get(r["skill"], ()):
                 continue
             p = chance(e, r["tags"])
             for t in THRESHOLDS:
@@ -182,7 +202,8 @@ def main():
     model = train(rows)
     with open(out, "w") as f:
         has_context = any(f.startswith("c:") for r in rows for f in r["tags"])
-        json.dump({"version": 4, "helps": HELPS, "skipBelow": chosen, "minSeen": MIN_SEEN, "typeFeatures": bool(GEMS), "contextFeatures": has_context,
+        useless = {k: sorted(v) for k, v in useless_pairs(rows).items()}
+        json.dump({"version": 5, "historyRule": True, "useless": useless, "helps": HELPS, "skipBelow": chosen, "minSeen": MIN_SEEN, "typeFeatures": bool(GEMS), "contextFeatures": has_context,
                    "skillFeatures": True, "familiarRuns": FAMILIAR_RUNS, "familiar": familiar_skills(rows),
                    "skills": len(skills), "measurements": len(rows), "support": model}, f, indent=0, sort_keys=True)
     print(f"written {out}: {len(model)} supports")
