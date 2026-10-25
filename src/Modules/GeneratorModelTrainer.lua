@@ -57,7 +57,7 @@ function M.ReadRows(path, tick)
 	-- (one log, or several: a list of paths)
 	local paths = type(path) == "table" and path or { path or LoadModule("Modules/GeneratorKnowledge").DecisionsPath() }
 	local features = gemFeatures()
-	local contexts = { }
+	local contexts, featCache = { }, { }
 	local n = 0
 	for _, onePath in ipairs(paths) do
 	local f = io.open(onePath, "r")
@@ -90,16 +90,21 @@ function M.ReadRows(path, tick)
 			local ok, r = pcall(dkjson.decode, line)
 			local skill = ok and r and runs[r.run]
 			if skill and r.g and features[skill] then
-				local feats = { }
-				for _, x in ipairs(features[skill]) do feats[#feats + 1] = x end
-				-- (the build's situation at that choice: "c:" features; the skill itself: "s:")
-				local ctx = r.cx and contexts[r.run .. "#" .. r.cx]
-				if ctx then
-					for _, c in ipairs(ctx) do feats[#feats + 1] = "c:" .. c end
-					M.hasContext = true
+				-- (the build's situation at that choice: "c:" features; the skill itself: "s:";
+				-- one list shared by every support measured at that choice)
+				local ctxKey = r.cx and (r.run .. "#" .. r.cx)
+				local ctx = ctxKey and contexts[ctxKey]
+				local featKey = skill .. "|" .. (ctx and ctxKey or "")
+				local feats = featCache[featKey]
+				if not feats then
+					feats = { }
+					for _, x in ipairs(features[skill]) do feats[#feats + 1] = x end
+					for _, c in ipairs(ctx or { }) do feats[#feats + 1] = "c:" .. c end
+					feats[#feats + 1] = "s:" .. skill
+					featCache[featKey] = feats
 				end
+				if ctx then M.hasContext = true end
 				local hasContext = ctx ~= nil
-				feats[#feats + 1] = "s:" .. skill
 				rows[#rows + 1] = { name = r.n, gain = r.g, skill = skill, feats = feats, run = r.run, hasContext = hasContext, cx = r.cx, pick = r.pick }
 			end
 		end
