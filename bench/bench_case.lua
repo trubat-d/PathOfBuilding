@@ -105,6 +105,8 @@ for pair in (os.getenv("GEN_OPTS") or ""):gmatch("[^,]+") do
 		gen.options[k] = v
 	end
 end
+-- (the archetype library's player knowledge follows the option set above)
+new("BuildArchetypes"):BuildArchetypes().SetPlayerKnowledge(gen.options.playerKnowledge ~= false)
 -- DECISION_LOG=<file>: every choice measured appended as JSON lines (Modules/GeneratorKnowledge, bench/train_model.py)
 gen.options.decisionLog = os.getenv("DECISION_LOG")
 local t0 = os.clock()

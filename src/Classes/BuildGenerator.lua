@@ -3584,7 +3584,8 @@ function BuildGeneratorClass:CrossIdeasMove(rounds)
 	end
 	local moves = { }
 	for _, a in ipairs(archetypes.ForSkill(self.mainGem, self.options.meta)) do
-		if a.id ~= current and not a.playstyle and not a.trigger then
+		-- (the top players' archetype only with player knowledge on)
+		if a.id ~= current and not a.playstyle and not a.trigger and not (a.id == "PLAYERS" and self.options.playerKnowledge == false) then
 			local move = { label = a.label, uniques = { }, share = 0, idea = a }
 			for _, item in ipairs(archetypes.UniqueCandidates(a)) do
 				if #move.uniques < 2 and finder:IsItemAllowed(item, filter) and not equipped(item.title or item.name) then
@@ -6458,6 +6459,11 @@ function BuildGeneratorClass:Run()
 	if opts.allowAnoints ~= false then self:ChooseAnoint() end
 	if opts.allowTattoos ~= false then self:ChooseTattoos() end
 
+	-- (commitment lenses steer the tree, gear and jewels; the finishing
+	-- choices - auras, flasks, the rares made again - are made on the real
+	-- score: at half weight, three lenses of a combination still traded three
+	-- quarters of the defences for damage there)
+	if opts.lensFade ~= false then self:FadeLenses(0) end
 	stage(10, "Choosing flasks, pantheon and bandit")
 	self.scorer.useChecklist = true
 	self:FullScore()
