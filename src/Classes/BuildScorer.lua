@@ -319,7 +319,10 @@ end
 -- as worthless until something needed it: neither could come first.
 function BuildScorerClass:SustainFactor(output)
 	local fraction, resource = self:SkillSustain(output)
-	if not self.softSustain or not resource or fraction >= 0.999 then return fraction, resource end
+	-- (soft only for a shortfall recovery can close: below a fifth of the
+	-- cost paid for, the hard cut - a degenerate build with an absurd hit rate
+	-- and cost would otherwise keep its absurd DPS)
+	if not self.softSustain or not resource or fraction >= 0.999 or fraction < 0.2 then return fraction, resource end
 	local rate = self:SustainableRate(output, resource)
 	local missing = rate * (1 / math.max(fraction, 0.05) - 1)
 	local soft = math.exp(-(self.sustainPointValue or 0.015) * missing / (self.sustainPerPoint or 12))
@@ -340,6 +343,17 @@ function BuildScorerClass:GetDPS(output)
 	end
 	if self.overlap then
 		dps = self.overlap:AdjustDPS(output, dps)
+	end
+	-- (no real build deals this: a calculation broken by an extreme value -
+	-- speed reduced past -100%, a negative multiplier - scores nothing)
+	if dps ~= dps or dps < 0 or dps > 1e11 then
+		if os.getenv("DEBUG_ABSURD") and not self.absurdShown then
+			self.absurdShown = true
+			local keys = { }
+			for _, k in ipairs({ "Speed", "HitTime", "HitSpeed", "AverageHit", "AverageDamage", "TotalDPS", "CombinedDPS", "FullDPS", "CritChance", "CritMultiplier", "ManaCost", "ManaPerSecondCost", "ColdHitAverage", "PowerCharges", "FrenzyCharges", "EnemyCurseLimit" }) do t_insert(keys, k .. "=" .. tostring(output[k])) end
+			ConPrintf("[absurd dps] %s", table.concat(keys, " "))
+		end
+		return 0
 	end
 	-- a skill you can't pay for doesn't deal its DPS for long
 	if self.resourceSustain ~= false and not self.ignoreCosts then
