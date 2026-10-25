@@ -126,7 +126,7 @@ function BuildGeneratorClass:BuildGenerator(build, options)
 	-- a total budget (divines for the whole build) picks the investment level
 	-- and caps one item at half of it; the finished build is fitted under it
 	if self.options.totalBudget and self.options.totalBudget > 0 then
-		self.options.investment = new("PriceSource"):PriceSource().ForBudget(self.options.totalBudget)
+		self.options.investment = new("PriceSource"):PriceSource().ForBudget(self.options.totalBudget, self.options.raresPerBuild)
 	end
 	self.log = { }
 	return self

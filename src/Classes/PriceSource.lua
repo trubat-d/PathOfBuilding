@@ -67,10 +67,10 @@ PriceSourceClass.scarceUniques = {
 -- best rather than left over: by the old "budget up to" limits, 449 divines
 -- made 8-divine rares and a 117-divine Cyclone next to players' 450-divine builds
 local RARES_PER_BUILD = 12
-function PriceSourceClass.ForBudget(total)
+function PriceSourceClass.ForBudget(total, raresPerBuild)
 	local chosen
 	for _, level in ipairs(PriceSourceClass.levels) do
-		if chosen and (level.rarePrice or 0) * RARES_PER_BUILD > total then break end
+		if chosen and (level.rarePrice or 0) * (raresPerBuild or RARES_PER_BUILD) > total then break end
 		chosen = level
 	end
 	local level = copyTable(chosen, true)
