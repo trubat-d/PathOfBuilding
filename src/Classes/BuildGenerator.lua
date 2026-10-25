@@ -447,21 +447,33 @@ end
 -- Power Charge on Critical...) with those charges counted: the configuration
 -- only switches them on once the build has a source, so one-at-a-time picking
 -- would never see what the support is for
+-- The Configuration switches a support turns on for the main skill: its
+-- charges (only when the build can meet the gem's condition: Endurance Charge
+-- on Melee Stun needs a melee skill, Power Charge On Critical needs crits) and
+-- the buffs it grants (AutoConfig.supportStates: Fortify's fortification,
+-- Lifetap...). A list of config variables
+function BuildGeneratorClass:SupportSwitches(gem)
+	local vars = { }
+	local mainTypes = self.mainGem and self.mainGem.grantedEffect.skillTypes or { }
+	local chargesOk = not (gem.name:find("Melee", 1, true) and not mainTypes[SkillType.Melee])
+	if chargesOk and gem.name:find("Critical", 1, true) then
+		local output = self.build.calcsTab.mainOutput or { }
+		local crit = output.CritChance or (output.MainHand and output.MainHand.CritChance) or 0
+		if crit < 20 then chargesOk = false end
+	end
+	for _, kind in ipairs(chargesOk and { "Power", "Frenzy", "Endurance" } or { }) do
+		if gem.name:find(kind .. " Charge", 1, true) then t_insert(vars, "use" .. kind .. "Charges") end
+	end
+	self.autoConfigClass = self.autoConfigClass or new("AutoConfig"):AutoConfig({ })
+	for _, state in ipairs(self.autoConfigClass.SupportStatesOf(gem.name, mainTypes)) do t_insert(vars, state.var) end
+	return vars
+end
+
 function BuildGeneratorClass:WithChargesOf(gem, fn)
 	local input = self.build.configTab.input
 	local changed = { }
-	-- only when the build can meet the gem's condition (Endurance Charge on
-	-- Melee Stun needs a melee skill, Power Charge On Critical needs crits)
-	local mainTypes = self.mainGem and self.mainGem.grantedEffect.skillTypes or { }
-	if gem.name:find("Melee", 1, true) and not mainTypes[SkillType.Melee] then return fn() end
-	if gem.name:find("Critical", 1, true) then
-		local output = self.build.calcsTab.mainOutput or { }
-		local crit = output.CritChance or (output.MainHand and output.MainHand.CritChance) or 0
-		if crit < 20 then return fn() end
-	end
-	for _, kind in ipairs({ "Power", "Frenzy", "Endurance" }) do
-		local var = "use" .. kind .. "Charges"
-		if gem.name:find(kind .. " Charge", 1, true) and not input[var] then
+	for _, var in ipairs(self:SupportSwitches(gem)) do
+		if not input[var] then
 			input[var] = true
 			t_insert(changed, var)
 		end
@@ -668,12 +680,9 @@ function BuildGeneratorClass:ChooseSupports(maxSupports, restrict)
 		t_insert(group.gemList, { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = best })
 		self:Decision("support", gem.name, bestScore - current, true, { pick = pick, cx = contextId })
 		current = bestScore
-		-- a charge support: switch its charges on for the rest of the choice
-		local mainTypes = self.mainGem and self.mainGem.grantedEffect.skillTypes or { }
-		local usable = not (gem.name:find("Melee", 1, true) and not mainTypes[SkillType.Melee])
-		for _, kind in ipairs(usable and { "Power", "Frenzy", "Endurance" } or { }) do
-			local var = "use" .. kind .. "Charges"
-			if gem.name:find(kind .. " Charge", 1, true) and not self.build.configTab.input[var] then
+		-- a charge or buff support: its switches on for the rest of the choice
+		for _, var in ipairs(self:SupportSwitches(gem)) do
+			if not self.build.configTab.input[var] then
 				self.build.configTab.input[var] = true
 				self.supportChargeVars = self.supportChargeVars or { }
 				self.supportChargeVars[var] = true

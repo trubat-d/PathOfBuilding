@@ -35,6 +35,33 @@ local chargeSkills = {
 	Frenzy = { "Frenzy", "Blood Rage", "Poacher's Mark" },
 	Endurance = { "Enduring Cry", "Warlord's Mark" },
 }
+-- Buffs a support grants the skill it supports, which PoB only counts with a
+-- Configuration switch (Fortify's fortification, Lifetap's buff...): on when
+-- the support is linked to the main skill and that skill can produce it.
+-- Also used while the generator measures supports (BuildGenerator:WithChargesOf),
+-- so a support is valued with what it really grants (Fortify's defence)
+AutoConfigClass.supportStates = {
+	{ gem = "Fortify", var = "buffFortification", needs = "Melee", label = "fortification from the main skill's melee hits (Fortify Support)" },
+	{ gem = "Lifetap", var = "buffLifetap", label = "Lifetap from the main skill's life cost (Lifetap Support)" },
+	{ gem = "Arcane Surge", var = "buffArcaneSurge", needs = "Spell", label = "Arcane Surge from the main skill's mana spent (Arcane Surge Support)" },
+	{ gem = "Close Combat", var = "closeCombatCombatRush", label = "Combat Rush (Close Combat Support)" },
+	{ gem = "Feeding Frenzy", var = "feedingFrenzyFeedingFrenzyActive", label = "Feeding Frenzy (Feeding Frenzy Support)" },
+	{ gem = "Fresh Meat", var = "freshMeatBuffs", label = "Fresh Meat (Fresh Meat Support)" },
+	{ gem = "Infused Channelling", var = "infusedChannellingInfusion", needs = "Channel", label = "Infusion while channelling (Infused Channelling Support)" },
+}
+
+-- The support states a support gem grants a main skill with these skill
+-- types: { state, ... }
+function AutoConfigClass.SupportStatesOf(gemName, skillTypes)
+	local list = { }
+	for _, state in ipairs(AutoConfigClass.supportStates) do
+		if state.gem == gemName and (not state.needs or (skillTypes and skillTypes[SkillType[state.needs]])) then
+			t_insert(list, state)
+		end
+	end
+	return list
+end
+
 -- base durations (seconds) used when PoB gives none, to estimate uptime
 local ailments = {
 	{ ailment = "Shock", var = "conditionEnemyShocked", cond = "Shocked", duration = 2 },
@@ -304,6 +331,16 @@ function AutoConfigClass:Run()
 		local function setIfUsed(var, value, reason)
 			local option = self.optionByVar[var]
 			if option and self:IsUsed(option) then self:Set(var, value, reason) end
+		end
+		-- buffs the supports linked to the main skill grant it
+		local mainGroup = self.build.skillsTab.socketGroupList[self.build.mainSocketGroup]
+		local mainTypes = skill and skill.skillTypes
+		for _, gem in ipairs(mainGroup and mainGroup.enabled ~= false and mainGroup.gemList or { }) do
+			if gem.enabled ~= false and gem.gemData then
+				for _, state in ipairs(AutoConfigClass.SupportStatesOf(gem.gemData.name, mainTypes)) do
+					self:Set(state.var, true, state.label)
+				end
+			end
 		end
 		setIfUsed("conditionUsedSkillRecently", true, "you use your main skill")
 		setIfUsed("conditionAttackedRecently", flags.attack and true or false, flags.attack and "main skill is an attack" or "main skill is not an attack")
