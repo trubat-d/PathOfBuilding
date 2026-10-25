@@ -700,7 +700,11 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 		end
 		return on
 	end
-	local function measure(lines)
+	-- (what an idea is worth: the score it adds, as a ratio - for damage alone
+	-- the same as the DPS ratio, and it also counts what a commitment does to
+	-- the defences: Chaos Inoculation's pool adds no damage but doubles the
+	-- hits the build takes)
+	local function measure(lines, extraNodes)
 		local on = chargesFrom(lines)
 		local changed = next(on) ~= nil
 		if changed then
@@ -709,13 +713,14 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 			gen:Recalculate()
 		end
 		local override = { addNodes = { [probeNode(spec.tree, lines)] = true } }
-		local _, res = gen:Score(override)
+		for _, node in ipairs(extraNodes or { }) do override.addNodes[node] = true end
+		local score = gen:Score(override)
 		if changed then
 			for kind in pairs(on) do input["use" .. kind .. "Charges"] = nil end
 			self.build.configTab:BuildModList()
 			gen:Recalculate()
 		end
-		return m_max(1e-9, (res.dps or 0) / baseDps)
+		return math.exp(score - baseScore)
 	end
 	-- the payoff lines of an archetype's uniques: the ones mentioning damage
 	-- among those matching its patterns, best two items by their own test
@@ -777,6 +782,9 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 		if stat then table.remove(out, 1) end
 		return out, names
 	end
+	local function allocatedName(name)
+		for _, node in pairs(spec.allocNodes) do if node.dn == name then return node end end
+	end
 	local options = { }
 	local life = byId.life
 	local damageFollowsLife = life and life.ratio >= 1.04
@@ -791,8 +799,12 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 		elseif a.id == "CI" then
 			-- (Chaos Inoculation: energy shield as the pool; never for a skill
 			-- whose damage follows life)
-			local es = byId.es
-			if es and not damageFollowsLife then ratio, why = math.exp(m_log(es.ratio) / m_log(1.1) * m_log(3)), "energy shield pool" end
+			-- tested as the keystone with the pool tripled (the life passives
+			-- and gear turned into energy shield), on the whole score
+			local ci = not damageFollowsLife and not allocatedName("Chaos Inoculation") and lib.NodeByName(spec, "Chaos Inoculation")
+			if ci then
+				ratio, why = measure({ "200% more maximum Energy Shield" }, { ci }), "energy shield pool with Chaos Inoculation"
+			end
 		elseif a.id == "LIFE" and life and damageFollowsLife then
 			ratio, why = math.exp(m_log(life.ratio) / m_log(1.1) * m_log(3)), "life pool the damage follows"
 		elseif a.lens and stackLines[a.lens.stat] then
