@@ -20,14 +20,17 @@ function M.Load(force)
 	M.model, M.featureCache = nil, nil
 	M.loaded = true
 	local base = (GetScriptPath and GetScriptPath() or ".") .. "/Data/GeneratorModel.json"
-	-- (the one trained on this computer first: Modules/GeneratorModelTrainer)
+	-- (the one trained on this computer, Modules/GeneratorModelTrainer, or
+	-- the shipped one: whichever learnt from more measurements)
 	local own = (main and main.userPath or "") .. "GeneratorModel.json"
 	for _, path in ipairs({ own, base, "Data/GeneratorModel.json" }) do
 		local f = io.open(path, "r")
 		if f then
 			local ok, value = pcall(dkjson.decode, f:read("*a"))
 			f:close()
-			if ok and type(value) == "table" and value.support then M.model = value break end
+			if ok and type(value) == "table" and value.support then
+				if not M.model or (value.measurements or 0) > (M.model.measurements or 0) then M.model = value end
+			end
 		end
 	end
 	return M.model

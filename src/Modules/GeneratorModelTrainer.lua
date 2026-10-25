@@ -51,11 +51,14 @@ function M.ReadRows(path, tick)
 	local rows, runs, runCount = { }, { }, 0
 	M.pairs = { }
 	M.hasContext = false
-	local f = io.open(path or LoadModule("Modules/GeneratorKnowledge").DecisionsPath(), "r")
-	if not f then return rows, 0 end
+	-- (one log, or several: a list of paths)
+	local paths = type(path) == "table" and path or { path or LoadModule("Modules/GeneratorKnowledge").DecisionsPath() }
 	local features = gemFeatures()
 	local contexts = { }
 	local n = 0
+	for _, onePath in ipairs(paths) do
+	local f = io.open(onePath, "r")
+	if f then
 	for line in f:lines() do
 		n = n + 1
 		if n % 2000 == 0 and tick then tick() end
@@ -98,6 +101,8 @@ function M.ReadRows(path, tick)
 		end
 	end
 	f:close()
+	end
+	end
 	return rows, runCount
 end
 

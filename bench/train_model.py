@@ -184,7 +184,7 @@ def main():
         has_context = any(f.startswith("c:") for r in rows for f in r["tags"])
         json.dump({"version": 4, "helps": HELPS, "skipBelow": chosen, "minSeen": MIN_SEEN, "typeFeatures": bool(GEMS), "contextFeatures": has_context,
                    "skillFeatures": True, "familiarRuns": FAMILIAR_RUNS, "familiar": familiar_skills(rows),
-                   "skills": len(skills), "support": model}, f, indent=0, sort_keys=True)
+                   "skills": len(skills), "measurements": len(rows), "support": model}, f, indent=0, sort_keys=True)
     print(f"written {out}: {len(model)} supports")
 
 
