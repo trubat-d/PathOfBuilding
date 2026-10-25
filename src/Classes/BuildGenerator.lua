@@ -3805,6 +3805,81 @@ function BuildGeneratorClass:JointMoves(rounds)
 	end)
 end
 
+-- The build's own idea completed: the uniques the combination designer
+-- chose together for each stacking part of the archetype (Tulfall + Badge of
+-- the Brotherhood + Ralakesh's Impatience for power charges on Winter Orb),
+-- applied as one package and adapted. The archetype's unique step picks one
+-- piece at a time on the half-built build, where the pieces that only pay
+-- together lose to ones that pay alone (Shimmeron, The Ephemeral Bond).
+function BuildGeneratorClass:PackageMove(rounds)
+	local archetype = self.options.archetype
+	if not archetype or not self.mainGem then return end
+	local lib = new("BuildArchetypes"):BuildArchetypes()
+	local doctor = new("BuildDoctor"):BuildDoctor(self)
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local filter = { obtainableOnly = true, levelOnly = true, investment = self.options.investment }
+	local byTitle = { }
+	for _, item in pairs(main.uniqueDB.list) do byTitle[item.title or item.name] = byTitle[item.title or item.name] or item end
+	local equipped = { }
+	for _, slot in pairs(self.itemsTab.slots) do
+		local item = self.itemsTab.items[slot.selItemId]
+		if item and item.title then equipped[item.title] = true end
+	end
+	local moves = { }
+	for id in archetype.id:gmatch("[^+]+") do
+		local part = lib.ById(self.mainGem, id, self.options.meta)
+		local ok, names = pcall(function() return part and doctor:Package(part) end)
+		if ok and names then
+			local uniques, labels, missing = { }, { }, 0
+			-- (one piece per kind of slot - two rings - as the virtual test can't tell)
+			local kinds = { }
+			for _, name in ipairs(names) do
+				local item = byTitle[name]
+				local kind = item and (item.type == "Ring" and "Ring" or item.base and item.base.weapon and "Weapon" or item.type)
+				local room = kind and ((kinds[kind] or 0) < (kind == "Ring" and 2 or 1))
+				if item and room and finder:IsItemAllowed(item, filter) then
+					kinds[kind] = (kinds[kind] or 0) + 1
+					if not equipped[name] then t_insert(uniques, item) end
+					t_insert(labels, name)
+				else
+					missing = missing + 1
+				end
+			end
+			if #uniques > 0 then
+				t_insert(moves, { label = (part.label or id) .. ": " .. table.concat(labels, " + "), uniques = uniques, share = 0, idea = part })
+			end
+		end
+	end
+	-- packages from the scaling graph: stats several affordable uniques
+	-- consume, with what feeds them (not limited to the archetypes' ideas)
+	local okG, graphPackages = pcall(function()
+		return doctor:GraphPackages(function(item) return finder:IsItemAllowed(item, filter) end, self.options.graphVectors or 6)
+	end)
+	if okG and graphPackages then
+		local have = { }
+		for _, m in ipairs(moves) do have[m.label] = true end
+		for i = 1, m_min(self.options.graphPackages or 3, #graphPackages) do
+			local gp = graphPackages[i]
+			if gp.ratio >= 1.1 then
+				local uniques = { }
+				for _, name in ipairs(gp.names) do
+					local item = byTitle[name]
+					if item and not equipped[name] then t_insert(uniques, item) end
+				end
+				local label = string.format("%s stacked (scaling graph, x%.2f as a test): %s", gp.stat, gp.ratio, table.concat(gp.names, " + "))
+				if #uniques > 0 and not have[label] then t_insert(moves, { label = label, uniques = uniques, share = 0 }) end
+			end
+		end
+	elseif not okG then ConPrintf("Graph packages failed: %s", tostring(graphPackages)) end
+	if self.options.debugTiming then for _, m in ipairs(moves) do ConPrintf("[package] %s", m.label) end end
+	if #moves == 0 then return end
+	self:EvaluatePackages(moves, rounds or 1, function(best, gain, overAdaptation)
+		return string.format("Uniques of the idea taken together: %s, with passives and supports adapted: score %+.3f", best.label, gain)
+	-- (packages lose before the build adapts to them - the gear they push
+	-- out held resistances and crit - so all are applied and adapted)
+	end, { threshold = 10, tries = 4, baseline = true })
+end
+
 -- Ideas of the other archetypes tried on the finished build: each one's
 -- keystone and best uniques as a package, applied for real and adapted like
 -- the top players' packages (a crossover between ideas: the best build with
@@ -6774,6 +6849,11 @@ function BuildGeneratorClass:Run()
 		self:Move(3, 3, "Damage behind conditions: what keeps them up")
 		local ok, err = pcall(function() self:ConditionEnablerMove(2) end)
 		if not ok then ConPrintf("Condition audit failed: %s", tostring(err)) end
+	end
+	if opts.packageMove ~= false then
+		self:Move(3, 3, "Taking the idea's uniques together")
+		local ok, err = pcall(function() self:PackageMove(1) end)
+		if not ok then ConPrintf("Package move failed: %s", tostring(err)) end
 	end
 	if opts.crossIdeas ~= false then
 		self:Move(3, 3, "Trying the ideas of the other archetypes")

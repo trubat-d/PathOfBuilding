@@ -674,12 +674,12 @@ local stackAmount = {
 	PowerChargesMax = 5, FrenzyChargesMax = 5, EnduranceChargesMax = 5, Int = 400, Str = 400, Dex = 400, Mana = 1500,
 	EnergyShield = 4000, Life = 2500, BlockChance = 25, Evasion = 15000, Armour = 15000, MaximumRage = 30,
 }
-function BuildDoctorClass:PredictCombos(archetypes, maxSize)
-	local r = self.report or self:Diagnose()
+-- The tests the combination designer uses: measure(lines, extraNodes) is
+-- the score an idea adds as a ratio; payoffLines(archetype) the payoff and
+-- enabler lines of its uniques chosen together, and their names
+function BuildDoctorClass:ComboTools()
 	local gen = self.gen
 	local spec = self.build.spec
-	local byId = { }
-	for _, e in ipairs(r.layers) do byId[e.layer.id] = e end
 	local baseScore, baseR = gen:Score()
 	local baseDps = m_max(1, baseR.dps or 0)
 	-- (a virtual passive's lines never reach the configuration: charges an
@@ -782,6 +782,16 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 		if stat then table.remove(out, 1) end
 		return out, names
 	end
+	return measure, payoffLines, lib
+end
+
+function BuildDoctorClass:PredictCombos(archetypes, maxSize)
+	local r = self.report or self:Diagnose()
+	local gen = self.gen
+	local spec = self.build.spec
+	local byId = { }
+	for _, e in ipairs(r.layers) do byId[e.layer.id] = e end
+	local measure, payoffLines, lib = self:ComboTools()
 	local function allocatedName(name)
 		for _, node in pairs(spec.allocNodes) do if node.dn == name then return node end end
 	end
@@ -853,6 +863,90 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 	end
 	t_sort(combos, function(a, b) return a.predicted > b.predicted end)
 	return combos
+end
+
+-- The uniques a stacking idea is built on, chosen together by the
+-- combination designer's test (names, best first); nil if none
+function BuildDoctorClass:Package(archetype)
+	if not (archetype and archetype.lens and stackLines[archetype.lens.stat]) then return nil end
+	local _, payoffLines = self:ComboTools()
+	local lines, names = payoffLines(archetype)
+	return #names > 0 and names or nil
+end
+
+-- Packages found in the scaling graph (Classes/ScalingGraph), not in the
+-- archetypes: for each stat several affordable uniques consume, the stat
+-- stacked (as a test) with the consumers and feeders - producers, enablers,
+-- converters - chosen together, greedily, by the score they add; one piece
+-- per kind of slot. allowed(item): the generator's filter. Returns
+-- { { stat, names, ratio } }, best first
+local graphStatLens = {
+	PowerCharges = "PowerChargesMax", FrenzyCharges = "FrenzyChargesMax", EnduranceCharges = "EnduranceChargesMax",
+	Int = "Int", Str = "Str", Dex = "Dex", Life = "Life", Mana = "Mana", EnergyShield = "EnergyShield",
+	BlockChance = "BlockChance", Rage = "MaximumRage", Evasion = "Evasion", Armour = "Armour",
+}
+function BuildDoctorClass:GraphPackages(allowed, maxVectors)
+	local measure = self:ComboTools()
+	local graphLib = new("ScalingGraph"):ScalingGraph()
+	local items = { }
+	for _, item in ipairs(graphLib.AllUniques()) do
+		if item.type ~= "Jewel" and (not allowed or allowed(item)) then t_insert(items, item) end
+	end
+	local graph = graphLib:Graph(items)
+	local out = { }
+	local tried = 0
+	for _, v in ipairs(graphLib:Vectors(graph, 2)) do
+		local lensStat = graphStatLens[v.stat]
+		if lensStat and stackLines[lensStat] and tried < (maxVectors or 6) then
+			tried = tried + 1
+			local stacked = string.format(stackLines[lensStat], stackAmount[lensStat])
+			local base = measure({ stacked })
+			local pool, seen = { }, { }
+			for _, list in ipairs({ v.consumers, v.feeders }) do
+				for _, a in ipairs(list) do
+					if not seen[a] and #a.lines > 0 then seen[a] = true t_insert(pool, a) end
+				end
+			end
+			-- (each alone first: the ten best go into the joint choice)
+			for _, a in ipairs(pool) do
+				local lines = { stacked }
+				for _, l in ipairs(a.lines) do t_insert(lines, l) end
+				a.alone = measure(lines) / base
+				self.gen:Tick()
+			end
+			t_sort(pool, function(a, b) return a.alone > b.alone end)
+			local chosen, names, kinds = { stacked }, { }, { }
+			local current = base
+			for _ = 1, 4 do
+				local best, bestRatio
+				for i = 1, m_min(10, #pool) do
+					local a = pool[i]
+					local kind = a.item.type == "Ring" and "Ring" or a.item.base and a.item.base.weapon and "Weapon" or a.item.type
+					if not a.used and (kinds[kind] or 0) < (kind == "Ring" and 2 or 1) then
+						local trial = { }
+						for _, l in ipairs(chosen) do t_insert(trial, l) end
+						for _, l in ipairs(a.lines) do t_insert(trial, l) end
+						local ratio = measure(trial)
+						if not bestRatio or ratio > bestRatio then best, bestRatio = a, ratio end
+					end
+				end
+				if not best or bestRatio <= current * 1.01 then break end
+				best.used = true
+				local kind = best.item.type == "Ring" and "Ring" or best.item.base and best.item.base.weapon and "Weapon" or best.item.type
+				kinds[kind] = (kinds[kind] or 0) + 1
+				for _, l in ipairs(best.lines) do t_insert(chosen, l) end
+				t_insert(names, best.title)
+				current = bestRatio
+			end
+			for _, a in ipairs(pool) do a.used = nil end
+			if #names > 0 then
+				t_insert(out, { stat = v.stat, names = names, ratio = current, consumers = #v.consumers })
+				if os.getenv("DOCTOR_DEBUG") then ConPrintf("[graph] %s (%d consumers): %s x%.3f", v.stat, #v.consumers, table.concat(names, " + "), current) end
+			end
+		end
+	end
+	t_sort(out, function(a, b) return a.ratio > b.ratio end)
+	return out
 end
 
 -- The build's real score: without any commitment lens (lenses steer the
