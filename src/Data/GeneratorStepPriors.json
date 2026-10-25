@@ -1,0 +1,270 @@
+{
+"builds": 16,
+"steps": {
+"ENDGAME|attack": {
+"ChooseRadiusJewels": {
+"gain": 0.0771,
+"kept": 1,
+"seconds": 84.8,
+"tries": 1
+},
+"ChooseTimelessJewel": {
+"gain": 0.3024,
+"kept": 1,
+"seconds": 24.3,
+"tries": 1
+},
+"CorruptionMove": {
+"gain": 0.3392,
+"kept": 1,
+"seconds": 11.4,
+"tries": 1
+},
+"PairAilments": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 19.1,
+"tries": 1
+},
+"PermanentFlaskMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 11.8,
+"tries": 1
+},
+"SupremeOstentationMove": {
+"gain": 0.3901,
+"kept": 1,
+"seconds": 196.3,
+"tries": 1
+},
+"UniqueCombosMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 18.9,
+"tries": 1
+}
+},
+"ENDGAME|minion": {
+"ChooseRadiusJewels": {
+"gain": 0.1237,
+"kept": 1,
+"seconds": 139.3,
+"tries": 2
+},
+"ChooseTimelessJewel": {
+"gain": 0.5276,
+"kept": 2,
+"seconds": 46.9,
+"tries": 2
+},
+"CorruptionMove": {
+"gain": 0.4161,
+"kept": 2,
+"seconds": 10.3,
+"tries": 2
+},
+"PairAilments": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 13.4,
+"tries": 2
+},
+"PermanentFlaskMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 16.9,
+"tries": 2
+},
+"SupremeOstentationMove": {
+"gain": 0.0411,
+"kept": 1,
+"seconds": 135.4,
+"tries": 2
+},
+"UniqueCombosMove": {
+"gain": 0.0181,
+"kept": 1,
+"seconds": 23.1,
+"tries": 2
+}
+},
+"ENDGAME|spell": {
+"ChooseRadiusJewels": {
+"gain": 0.2923,
+"kept": 2,
+"seconds": 111.7,
+"tries": 3
+},
+"ChooseTimelessJewel": {
+"gain": 0.447,
+"kept": 2,
+"seconds": 48.1,
+"tries": 3
+},
+"CorruptionMove": {
+"gain": 0.775,
+"kept": 3,
+"seconds": 11.9,
+"tries": 3
+},
+"PairAilments": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 32.6,
+"tries": 3
+},
+"PermanentFlaskMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 17.4,
+"tries": 3
+},
+"SupremeOstentationMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 563.1,
+"tries": 3
+},
+"UniqueCombosMove": {
+"gain": 0.0033,
+"kept": 0,
+"seconds": 24.7,
+"tries": 3
+}
+},
+"MID|attack": {
+"ChooseRadiusJewels": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 0.3,
+"tries": 3
+},
+"ChooseTimelessJewel": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 37.1,
+"tries": 3
+},
+"CorruptionMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 0.5,
+"tries": 3
+},
+"PairAilments": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 29.1,
+"tries": 3
+},
+"PermanentFlaskMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 0.3,
+"tries": 3
+},
+"SupremeOstentationMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 0.4,
+"tries": 3
+},
+"UniqueCombosMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 19.0,
+"tries": 3
+}
+},
+"MID|minion": {
+"ChooseRadiusJewels": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 0.1,
+"tries": 1
+},
+"ChooseTimelessJewel": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 15.9,
+"tries": 1
+},
+"CorruptionMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 0.8,
+"tries": 1
+},
+"PairAilments": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 1.7,
+"tries": 1
+},
+"PermanentFlaskMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 0.1,
+"tries": 1
+},
+"SupremeOstentationMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 0.2,
+"tries": 1
+},
+"UniqueCombosMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 6.5,
+"tries": 1
+}
+},
+"MID|spell": {
+"ChooseRadiusJewels": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 0.7,
+"tries": 6
+},
+"ChooseTimelessJewel": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 70.3,
+"tries": 6
+},
+"CorruptionMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 1.2,
+"tries": 6
+},
+"PairAilments": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 34.3,
+"tries": 6
+},
+"PermanentFlaskMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 0.6,
+"tries": 6
+},
+"SupremeOstentationMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 0.6,
+"tries": 6
+},
+"UniqueCombosMove": {
+"gain": 0.0,
+"kept": 0,
+"seconds": 33.1,
+"tries": 6
+}
+}
+},
+"version": 1
+}

@@ -95,14 +95,36 @@ end
 ------------------------------------------------------------------------------
 
 -- Should an optional step be skipped for this kind of build? skip, reason
+-- Steps measured on the generator's own test builds (bench/step_priors.py ->
+-- Data/GeneratorStepPriors.json, same form as data.steps): counted with this
+-- computer's, so a step that never helped builds of a kind there is judged
+-- sooner; one gain here, or there, keeps it
+function M.Priors()
+	if M.priors then return M.priors end
+	M.priors = { }
+	local base = (GetScriptPath and GetScriptPath() or ".") .. "/Data/GeneratorStepPriors.json"
+	for _, p in ipairs({ base, "Data/GeneratorStepPriors.json" }) do
+		local f = io.open(p, "r")
+		if f then
+			local ok, value = pcall(dkjson.decode, f:read("*a"))
+			f:close()
+			if ok and type(value) == "table" and type(value.steps) == "table" then M.priors = value.steps break end
+		end
+	end
+	return M.priors
+end
+
 function M.ShouldSkip(context, step)
 	local data = M.Load()
 	local stats = data.steps[context] and data.steps[context][step]
-	if not stats or (stats.tries or 0) < minTries then return false end
-	if (stats.kept or 0) > 0 then return false end
+	local prior = M.Priors()[context] and M.Priors()[context][step]
+	local tries = (stats and stats.tries or 0) + (prior and prior.tries or 0)
+	local kept = (stats and stats.kept or 0) + (prior and prior.kept or 0)
+	if tries < minTries then return false end
+	if kept > 0 then return false end
 	-- (now and then tried again)
-	if (stats.tries % retryEvery) == retryEvery - 1 then return false end
-	return true, string.format("it improved none of the last %d builds like this one", stats.tries)
+	if (tries % retryEvery) == retryEvery - 1 then return false end
+	return true, string.format("it improved none of the last %d builds like this one", tries)
 end
 
 -- A step's outcome: { context, step, gain, seconds }
