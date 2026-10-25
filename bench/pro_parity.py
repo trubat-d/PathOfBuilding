@@ -62,6 +62,55 @@ def generate(src, skill, asc, budget, save_dir, timeout=3600):
     return {"error": (p.stderr or p.stdout)[-400:]}
 
 
+def list_archetypes(src, skill, asc):
+    p = subprocess.run(["luajit", os.path.join(ROOT, "bench", "bench_case.lua"), skill, asc, "ENDGAME", "quick", "LIST"],
+                       cwd=src, env=lua_env(), capture_output=True, text=True, timeout=600)
+    for line in p.stdout.splitlines():
+        if line.startswith("ARCHETYPES "):
+            return [a for a in line[11:].split(",") if a]
+    return []
+
+
+def run_bench(src, skill, asc, budget, mode, arch, save_dir, timeout=3600):
+    env = dict(lua_env(), BUDGET=str(round(budget, 1)), FOCUS="DPS_FLOOR", BENCH_SAVE=save_dir)
+    cmd = ["luajit", os.path.join(ROOT, "bench", "bench_case.lua"), skill, asc, "ENDGAME", mode] + ([arch] if arch else [])
+    try:
+        p = subprocess.run(cmd, cwd=src, env=env, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return {"error": "timeout"}
+    for line in p.stdout.splitlines()[::-1]:
+        if line.startswith("BENCH "):
+            r = json.loads(line[6:])
+            r.pop("log", None)
+            return r
+    return {"error": (p.stderr or p.stdout)[-400:]}
+
+
+def generate_auto(src, skill, asc, budget, save_dir, top, jobs):
+    """As the app's automatic mode: a quick build of every archetype that fits,
+    then full builds of the best `top` by quick score plus the archetype's learnt
+    full-build gain (src/Data/GeneratorPriors.json); the best full build kept."""
+    archs = list_archetypes(src, skill, asc)
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        quick = list(pool.map(lambda a: dict(run_bench(src, skill, asc, budget, "quick", a, save_dir), archetype=a), archs))
+    try:
+        priors = json.load(open(os.path.join(src, "Data", "GeneratorPriors.json")))
+    except Exception:
+        priors = {"globalUplift": 2.8, "archetypes": {}}
+    def priority(q):
+        pr = priors.get("archetypes", {}).get(q["archetype"], {"uplift": 0, "count": 0})
+        return q["score"] + (pr.get("uplift", 0) * pr.get("count", 0) + priors.get("globalUplift", 2.8) * 2) / (pr.get("count", 0) + 2)
+    ranked = sorted([q for q in quick if q.get("score") is not None], key=lambda q: -priority(q))
+    picked = [q["archetype"] for q in ranked[:top]]
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        full = list(pool.map(lambda a: dict(run_bench(src, skill, asc, budget, "full", a, save_dir), archetype=a), picked))
+    best = max([f for f in full if f.get("score") is not None], key=lambda f: f["score"], default=None)
+    if best:
+        best["scan"] = [{"archetype": q["archetype"], "quick": q.get("score")} for q in ranked]
+        best["fullTried"] = [{"archetype": f["archetype"], "score": f.get("score")} for f in full]
+    return best or {"error": "no full build"}
+
+
 def run_skill(args, skill):
     src = args.src
     files = sorted(f for f in os.listdir(CODES) if f.startswith(skill.replace(" ", "_") + "__") and f.endswith(".txt"))
@@ -80,7 +129,7 @@ def run_skill(args, skill):
     budget = statistics.median(costs) if costs else 100
     save_dir = os.path.join(ROOT, "bench", "results", args.label)
     os.makedirs(save_dir, exist_ok=True)
-    gen = generate(src, skill, asc, budget, save_dir)
+    gen = generate_auto(src, skill, asc, budget, save_dir, args.auto, args.jobs) if args.auto else generate(src, skill, asc, budget, save_dir)
     ours = None
     if "error" not in gen and gen.get("xml"):
         ours = evaluate(src, gen["xml"], skill)
@@ -112,7 +161,8 @@ def print_row(row):
     print(f"   players (median of {len(pros)}): score {med('score'):.2f}  DPS {fmt(med('dps'))}  max hit {fmt(med('minHit'))}  EHP {fmt(med('ehp'))}  cost {med('cost'):.0f} div")
     print(f"   best player:              score {best['score']:.2f}  DPS {fmt(best['dps'])}  max hit {fmt(best['minHit'])}  EHP {fmt(best['ehp'])}  cost {best['cost'] or 0:.0f} div")
     if ours and "score" in ours:
-        print(f"   generated:                score {ours['score']:.2f}  DPS {fmt(ours['dps'])}  max hit {fmt(ours['minHit'])}  EHP {fmt(ours['ehp'])}  cost {ours['cost'] or 0:.0f} div")
+        arch = (row['generated'] or {}).get('archetype')
+        print(f"   generated{' (' + arch + ')' if arch else ''}:  score {ours['score']:.2f}  DPS {fmt(ours['dps'])}  max hit {fmt(ours['minHit'])}  EHP {fmt(ours['ehp'])}  cost {ours['cost'] or 0:.0f} div")
     else:
         print(f"   generated: failed ({(row['generated'] or {}).get('error', '')[:200]})")
     sys.stdout.flush()
@@ -125,9 +175,11 @@ def main():
     ap.add_argument("--pros", type=int, default=3)
     ap.add_argument("--jobs", type=int, default=2)
     ap.add_argument("--src", default=os.path.join(ROOT, "src"))
+    ap.add_argument("--auto", type=int, default=0, help="as the app's automatic mode: scan every archetype, full builds of the best N")
     args = ap.parse_args()
     skills = [s.strip() for s in args.skills.split(",") if s.strip()]
-    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+    # (auto mode: one skill at a time, its archetypes in parallel)
+    with ThreadPoolExecutor(max_workers=1 if args.auto else args.jobs) as pool:
         list(pool.map(lambda s: run_skill(args, s), skills))
 
 
