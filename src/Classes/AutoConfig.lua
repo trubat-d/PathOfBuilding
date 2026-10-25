@@ -499,6 +499,30 @@ function AutoConfigClass:Run()
 				local onHit = skillValue(output, entry.ailment .. "ChanceOnHit") or 0
 				local onCrit = skillValue(output, entry.ailment .. "ChanceOnCrit") or 0
 				local chance = onHit * (1 - crit / 100) + onCrit * crit / 100
+				-- (cold hits always chill in the game - PoB gives them no chill
+				-- chance - with an effect from the hit against the enemy's ailment
+				-- threshold: 50% x (damage / threshold)^0.4, up to 30%)
+				local chillEffect
+				if entry.ailment == "Chill" and (skillValue(output, "ColdHitAverage") or 0) > 0 and skill then
+					chance = 100
+					local isBoss = env.configInput and env.configInput["enemyIsBoss"] ~= "None"
+					local level = env.enemyLevel or 84
+					local threshold = (data.monsterAilmentThresholdTable[level] or 1) * (isBoss and 7.68 or 1)
+					if level >= 66 then
+						threshold = threshold * ((isBoss and data.mapLevelBossLifeMult[level] or data.mapLevelLifeMult[level]) or 1) * ((isBoss and data.mapLevelBossAilmentMult[level]) or 1)
+					end
+					threshold = threshold * env.enemyDB:More(nil, "Life") * env.enemyDB:More(nil, "AilmentThreshold")
+					local mdb, cfg = skill.skillModList, skill.skillCfg
+					local effectMod = (1 + mdb:Sum("INC", cfg, "EnemyChillEffect") / 100) * mdb:More(cfg, "EnemyChillEffect")
+					local maxChill = mdb:Override(nil, "ChillMax") or 30
+					-- (the average hit with crits, its cold part)
+					local typesTotal = 0
+					for _, t in ipairs({ "Physical", "Lightning", "Cold", "Fire", "Chaos" }) do typesTotal = typesTotal + (skillValue(output, t .. "HitAverage") or 0) end
+					local coldHit = (skillValue(output, "AverageHit") or 0) * (skillValue(output, "ColdHitAverage") or 0) / math.max(1, typesTotal)
+					coldHit = math.max(coldHit, skillValue(output, "ColdHitAverage") or 0)
+					chillEffect = math.floor(math.min(maxChill, 50 * ((coldHit / math.max(1, threshold)) ^ 0.4) * effectMod))
+					if chillEffect < 5 then chance = 0 end
+				end
 				if entry.ailment == "Chill" and (skillValue(output, "ColdHitAverage") or 0) <= 0 then
 					-- other damage chills too with "all damage can chill" (Elementalist...)
 					local canChill = false
@@ -517,7 +541,20 @@ function AutoConfigClass:Run()
 				local reason = string.format("%.0f%% chance per hit, %.1f hits/s, %.1f s: up %.0f%% of the time", chance, hitRate, duration, uptime * 100)
 				if boss and entry.notOnBoss then reason = "pinnacle bosses can't be frozen reliably" end
 				self:Set(entry.var, on, reason)
+				if chillEffect and on then
+					self:Set("conditionEnemyChilledEffect", chillEffect, string.format("cold hits always chill: %d%% from the average hit against the enemy's ailment threshold", chillEffect))
+				end
 			end
+		end
+		-- (game states the build's own setup guarantees)
+		if skill and skill.skillTypes and skill.skillTypes[SkillType.Channel] then
+			setIfUsed("conditionStationary", 1, "the main skill is channelled: the character stands still while using it")
+		end
+		if env.player.modDB:Flag(nil, "ChaosInoculation") then
+			setIfUsed("conditionFullLife", true, "Chaos Inoculation: life is always full")
+		end
+		if (output.EnergyShield or 0) > 0 and (output.EnergyShield or 0) >= (output.Life or 0) then
+			setIfUsed("conditionHaveEnergyShield", true, "the energy shield pool is the main one")
 		end
 
 		-- buffs and stacks the build gives itself (its ascendancy, gems or items
