@@ -4113,8 +4113,13 @@ function BuildGeneratorClass:SupremeOstentationMove()
 		if ah ~= bh then return ah end
 		return a.value > b.value
 	end)
-	-- (each socket tried as a package; the first that improves the build is kept)
+	-- (each socket tried as a package; the first that improves the build is kept.
+	-- The second only when the first came close: in the traces on five Endgame
+	-- builds, a second socket never won, and never after a first that ended
+	-- 0.2 or more below the build)
+	local firstAfter
 	for i = 1, m_min(2, #sockets) do
+		if i == 2 and firstAfter and firstAfter < before - 0.15 then break end
 		local socket = sockets[i]
 		local snap = self:Snapshot()
 		local savedLog = #self.log
@@ -4146,6 +4151,7 @@ function BuildGeneratorClass:SupremeOstentationMove()
 		if not ok then ConPrintf("Supreme Ostentation trial failed: %s", tostring(err)) end
 		for j = #self.log, savedLog + 1, -1 do t_remove(self.log, j) end
 		local after = ok and self:FullScore() or before
+		firstAfter = firstAfter or after
 		if self.options.debugTiming then ConPrintf("[ostentation] socket %d (historic %s, keystones %d, near %s): %.3f -> %.3f", socket.node.id, tostring(historicSocket), socket.keystones, socket.nearKeystone and socket.nearKeystone.dn or "-", before, after) end
 		if ok and after > before + 0.01 then
 			self:Note(string.format("Elegant Hubris (Caspiro, seed %d): Supreme Ostentation, attribute requirements ignored; the passives and rare mods that were there for attributes spent on other stats: score %+.3f", seed, after - before))
