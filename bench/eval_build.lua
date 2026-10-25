@@ -15,9 +15,16 @@ while main.uniqueDB.loading do runCallback("OnFrame") end
 local dkjson = require "dkjson"
 
 local f = assert(io.open(codeFile))
-local code = f:read("*a"):gsub("%s", "")
+local text = f:read("*a")
 f:close()
-local xml = Inflate(common.base64.decode(code:gsub("-", "+"):gsub("_", "/")))
+-- (a PoB code, or a saved build's XML: generated builds scored the same way)
+local xml
+if text:match("^%s*<") then
+	xml = text
+else
+	local code = text:gsub("%s", "")
+	xml = Inflate(common.base64.decode(code:gsub("-", "+"):gsub("_", "/")))
+end
 loadBuildFromXML(xml, "eval")
 runCallback("OnFrame")
 
@@ -84,6 +91,25 @@ if not os.getenv("KEEP_CONFIG") then
 	normalized = evaluate("generator configuration")
 end
 
+-- COST=1: what the build costs, priced like a generated build (BuildGenerator:BuildCost,
+-- league phase from PHASE=, default now), for comparisons at the same budget
+local cost
+if os.getenv("COST") then
+	local investment
+	for _, level in ipairs(new("PriceSource"):PriceSource().levels) do if level.id == (os.getenv("INVEST") or "ENDGAME") then investment = level end end
+	local gen = new("BuildGenerator"):BuildGenerator(build, { investment = investment, focus = focus, yieldEvery = 1e9, leaguePhase = os.getenv("PHASE") })
+	gen.scorer = scorer
+	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
+	gen.options.quality = rg.qualityList[investment and investment.quality or rg.defaultQuality]
+	local ok, total, entries = pcall(function() return gen:BuildCost() end)
+	if ok then
+		cost = { total = total, parts = { } }
+		for _, e in ipairs(entries or { }) do table.insert(cost.parts, string.format("%s %s %s %.1f%s", e.kind, tostring(e.slot), e.label, e.price, e.known and "" or " (no price)")) end
+	else
+		cost = { error = tostring(total) }
+	end
+end
+
 -- what the build is made of
 local summary = { keystones = { }, ascendancy = { }, uniques = { }, rares = 0, groups = { }, notables = 0, points = 0, masteries = { } }
 for _, node in pairs(build.spec.allocNodes) do
@@ -122,4 +148,4 @@ summary.class = build.spec.curAscendClassName
 summary.bandit = build.bandit
 summary.pantheon = { build.pantheonMajorGod, build.pantheonMinorGod }
 
-print("EVAL " .. dkjson.encode({ own = own, normalized = normalized, summary = summary }))
+print("EVAL " .. dkjson.encode({ own = own, normalized = normalized, summary = summary, cost = cost }))
