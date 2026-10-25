@@ -481,8 +481,9 @@ function BuildDoctorClass:Plans()
 		local element = r.mode.element
 		commitPlan("resistance", "resistance", function()
 			return { id = "resistance", label = "lower the enemy's " .. element:lower() .. " resistance and raise its damage taken",
-				lens = r.mode.main == "hit" and { func = function(o) return o[element .. "EffMult"] or 1 end, base = 0.5, label = element .. " damage multiplier against the enemy", weight = 0.6 } or nil,
-				rares = true, refine = 16, utility = true }
+				lens = r.mode.main == "hit" and { func = function(o) return o[element .. "EffMult"] or 1 end, base = 0.5, label = element .. " damage multiplier against the enemy",
+					weight = tonumber(os.getenv("DOCTOR_RES_WEIGHT") or "") or 0.6 } or nil,
+				rares = true, refine = tonumber(os.getenv("DOCTOR_RES_REFINE") or "") or 16, utility = true }
 		end)
 		commitPlan("speed", "speed", function()
 			return { id = "speed", label = "more attack / cast speed", lens = { stat = "Speed", base = 1, label = "Speed", weight = 0.4 }, rares = true, refine = 16 }
@@ -611,7 +612,18 @@ function BuildDoctorClass:Execute(plan)
 	gen.scorer.lens2 = savedLens2
 	for j = #gen.log, savedLog + 1, -1 do table.remove(gen.log, j) end
 	local after = ok and gen:FullScore() or before
-	if gen.options.debugTiming then ConPrintf("[doctor] plan %s: %.3f -> %.3f%s", plan.id, before, after, ok and "" or (" failed: " .. tostring(err))) end
+	if gen.options.debugTiming then
+		ConPrintf("[doctor] plan %s: %.3f -> %.3f%s", plan.id, before, after, ok and "" or (" failed: " .. tostring(err)))
+		if os.getenv("DOCTOR_DEBUG") and ok then
+			local prof = self:Profile()
+			ConPrintf("[doctor]   after: crit %.2f, enemy %.2f, speed %.2f, increased %.1f, more %.2f, power %s", prof.crit or 0, prof.enemy or 0, prof.speed or 0, prof.increased or 0, prof.more or 0, tostring(prof.power))
+			for _, g in ipairs(gen.build.skillsTab.socketGroupList) do
+				local names = { }
+				for _, gem in ipairs(g.gemList) do if gem.gemData then t_insert(names, gem.gemData.name) end end
+				ConPrintf("[doctor]   group: %s", table.concat(names, ", "))
+			end
+		end
+	end
 	if ok and after > before + 0.01 then
 		gen:Note(string.format("Build doctor: %s (%s): score %+.3f", plan.label, plan.reason, after - before))
 		return after - before
