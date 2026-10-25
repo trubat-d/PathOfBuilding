@@ -3,11 +3,14 @@
 -- Module: Generator Model
 -- The candidate model trained from the generator's decision logs
 -- (bench/train_model.py -> Data/GeneratorModel.json): for each support gem,
--- the chance that it helps a main skill with given gem tags (a logistic
--- regression on the tags). The generator skips the supports the model is
+-- the chance that it helps a main skill with given gem tags and skill types
+-- (a logistic regression). The generator skips the supports the model is
 -- sure can't help (below "skipBelow", seen at least "minSeen" times), so the
 -- calculations go to the ones that can. PoB's calculator still decides
--- between the supports that are tried.
+-- between the supports that are tried. The trainer only sets a threshold
+-- when, leaving each skill out in turn, nothing worth more than 0.02 score
+-- would have been skipped: with the first 56 skills it found none (Lifetap,
+-- trigger supports, minion supports surprise), so nothing is skipped yet.
 --
 local dkjson = require "dkjson"
 local M = { }
@@ -27,23 +30,42 @@ function M.Load()
 	return M.model
 end
 
--- Chance that a support helps a skill with these tags ({ [tag] = true }), and
+-- The features of a main skill gem: its tags, and its skill types as "t:<name>"
+local typeNames
+function M.Features(gem)
+	local feats = { }
+	for tag in pairs(gem and gem.tags or { }) do feats[tag] = true end
+	if not typeNames then
+		typeNames = { }
+		for name, id in pairs(SkillType or { }) do typeNames[id] = name end
+	end
+	for id in pairs(gem and gem.grantedEffect and gem.grantedEffect.skillTypes or { }) do
+		if typeNames[id] then feats["t:" .. typeNames[id]] = true end
+	end
+	return feats
+end
+
+-- Chance that a support helps a skill with these features (M.Features), and
 -- how many measurements it is based on; nil when the model doesn't know it
-function M.SupportChance(name, tags)
+function M.SupportChance(name, feats)
 	local model = M.Load()
 	local entry = model and model.support[name]
 	if not entry then return nil end
 	local z = entry.bias or 0
-	for tag in pairs(tags or { }) do z = z + (entry.w[tag] or 0) end
+	for f in pairs(feats or { }) do z = z + (entry.w[f] or 0) end
 	return 1 / (1 + math.exp(-z)), entry.n or 0
 end
 
--- Should the generator skip this support for a skill with these tags?
-function M.SkipSupport(name, tags)
+-- Should the generator skip this support for this main skill gem? (never when
+-- the trainer found no safe threshold: skipBelow 0)
+function M.SkipSupport(name, gem)
 	local model = M.Load()
-	if not model then return false end
-	local p, n = M.SupportChance(name, tags)
-	return p ~= nil and n >= (model.minSeen or 30) and p < (model.skipBelow or 0.01)
+	if not model or (model.skipBelow or 0) <= 0 then return false end
+	M.featureCache = M.featureCache or { }
+	local feats = M.featureCache[gem]
+	if not feats then feats = M.Features(gem) M.featureCache[gem] = feats end
+	local p, n = M.SupportChance(name, feats)
+	return p ~= nil and n >= (model.minSeen or 30) and p < model.skipBelow
 end
 
 return M

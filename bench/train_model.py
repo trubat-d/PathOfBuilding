@@ -11,7 +11,11 @@ gem tags: a logistic regression per support on the main skill's tags.
 The generator then skips the supports whose chance is very low, and only once
 the model has seen enough of them.
 
-    python3 bench/train_model.py <decision log> [more logs...] [--out src/Data/GeneratorModel.json]
+    python3 bench/train_model.py <decision log> [more logs...] [--gems gems.json] [--out src/Data/GeneratorModel.json]
+
+--gems: the active gems' skill types (bench/export_gem_types.lua), added as
+features ("t:Minion"...): minion and trigger skills are supported in ways
+the gem tags alone don't show.
 
 Validation: each skill is left out in turn, the model trained on the others,
 and the supports it would skip for that skill are checked against what the
@@ -26,8 +30,10 @@ from collections import defaultdict
 import numpy as np
 
 HELPS = 0.002     # a gain above this counts as helping
-SKIP_BELOW = 0.01  # the generator skips a support below this chance
-MIN_SEEN = 30      # ... seen at least this many times in training
+MATTERS = 0.02    # a skipped support that would have gained more than this is a real miss
+THRESHOLDS = [0.001, 0.002, 0.005, 0.01, 0.02]  # skip thresholds tried; the highest without real misses is kept
+MIN_SEEN = 30      # a support is only skipped once seen this many times in training
+GEMS = {}         # gem name -> { types, tags } (bench/export_gem_types.lua), for skill type features
 
 
 def load(paths):
@@ -48,7 +54,10 @@ def load(paths):
                 elif r.get("k") == "support" and r.get("g") is not None:
                     run = runs.get(r.get("run"))
                     if run:
-                        rows.append({"name": r["n"], "gain": r["g"], "skill": run.get("skill"), "tags": run.get("tags", []),
+                        feats = list(run.get("tags", []))
+                        for t in GEMS.get(run.get("skill"), {}).get("types", []):
+                            feats.append("t:" + t)
+                        rows.append({"name": r["n"], "gain": r["g"], "skill": run.get("skill"), "tags": feats,
                                      "investment": run.get("investment"), "pick": r.get("pick")})
     return rows
 
@@ -94,9 +103,10 @@ def chance(entry, tags):
 
 
 def validate(rows):
+    """Leave each skill out; per threshold: measurements skipped, real misses."""
     skills = sorted({r["skill"] for r in rows})
-    skipped = missed = total = 0
-    worst = []
+    stats = {t: {"skipped": 0, "missed": 0, "worst": []} for t in THRESHOLDS}
+    total = 0
     for skill in skills:
         train_rows = [r for r in rows if r["skill"] != skill]
         test_rows = [r for r in rows if r["skill"] == skill]
@@ -106,18 +116,25 @@ def validate(rows):
         for r in test_rows:
             total += 1
             e = model.get(r["name"])
-            if e and e["n"] >= MIN_SEEN and chance(e, r["tags"]) < SKIP_BELOW:
-                skipped += 1
-                if r["gain"] > HELPS:
-                    missed += 1
-                    worst.append((r["gain"], skill, r["name"]))
-    worst.sort(reverse=True)
-    return skipped, missed, total, worst[:10]
+            if not e or e["n"] < MIN_SEEN:
+                continue
+            p = chance(e, r["tags"])
+            for t in THRESHOLDS:
+                if p < t:
+                    stats[t]["skipped"] += 1
+                    if r["gain"] > MATTERS:
+                        stats[t]["missed"] += 1
+                        stats[t]["worst"].append((r["gain"], skill, r["name"]))
+    return stats, total
 
 
 def main():
     args = sys.argv[1:]
     out = "src/Data/GeneratorModel.json"
+    if "--gems" in args:
+        i = args.index("--gems")
+        GEMS.update(json.load(open(args[i + 1])))
+        args = args[:i] + args[i + 2:]
     if "--out" in args:
         i = args.index("--out")
         out = args[i + 1]
@@ -125,14 +142,20 @@ def main():
     rows = load(args)
     skills = {r["skill"] for r in rows}
     print(f"{len(rows)} support measurements, {len(skills)} skills")
-    skipped, missed, total, worst = validate(rows)
-    print(f"leave-one-skill-out: {skipped} of {total} measurements skipped ({100 * skipped / max(total, 1):.0f}%), "
-          f"{missed} of them would have helped")
-    for gain, skill, name in worst:
-        print(f"  missed {name} for {skill}: {gain:+.3f}")
+    stats, total = validate(rows)
+    chosen = 0
+    for t in THRESHOLDS:
+        st = stats[t]
+        print(f"skip below {t}: {st['skipped']} of {total} measurements skipped ({100 * st['skipped'] / max(total, 1):.0f}%), "
+              f"{st['missed']} would have gained more than {MATTERS}")
+        for gain, skill, name in sorted(st["worst"], reverse=True)[:5]:
+            print(f"    missed {name} for {skill}: {gain:+.3f}")
+        if st["missed"] == 0:
+            chosen = t
+    print(f"threshold kept: {chosen} (0 = the model skips nothing)")
     model = train(rows)
     with open(out, "w") as f:
-        json.dump({"version": 1, "helps": HELPS, "skipBelow": SKIP_BELOW, "minSeen": MIN_SEEN,
+        json.dump({"version": 2, "helps": HELPS, "skipBelow": chosen, "minSeen": MIN_SEEN, "typeFeatures": bool(GEMS),
                    "skills": len(skills), "support": model}, f, indent=0, sort_keys=True)
     print(f"written {out}: {len(model)} supports")
 

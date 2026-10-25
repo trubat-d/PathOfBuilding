@@ -565,7 +565,7 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 			tryList = { }
 			local skipped = 0
 			for _, gemId in ipairs(supports) do
-				if model.SkipSupport(data.gems[gemId].name, self.mainGem and self.mainGem.tags) then skipped = skipped + 1 else t_insert(tryList, gemId) end
+				if model.SkipSupport(data.gems[gemId].name, self.mainGem) then skipped = skipped + 1 else t_insert(tryList, gemId) end
 			end
 			self.modelSkipped = (self.modelSkipped or 0) + skipped
 		end
