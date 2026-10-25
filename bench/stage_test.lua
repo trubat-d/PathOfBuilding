@@ -110,6 +110,15 @@ elseif step == "tree" or step == "treeplain" then
 elseif step == "profile" then
 	local prof = new("BuildDoctor"):BuildDoctor(gen):Profile()
 	print("PROFILE " .. require("dkjson").encode(prof))
+elseif step == "combos" then
+	-- the combinations of commitments the doctor predicts best (ARCHETYPES="CRIT,POWER,...")
+	local doctor = new("BuildDoctor"):BuildDoctor(gen)
+	doctor:Diagnose()
+	local archetypes = new("BuildArchetypes"):BuildArchetypes().ForSkill(gen.mainGem, nil)
+	for i, c in ipairs(doctor:PredictCombos(archetypes, 3)) do
+		if i > 8 then break end
+		print(string.format("COMBO %s x%.2f (%s)", c.ids, c.predicted, c.why))
+	end
 elseif step == "joint" then
 	-- JOINT="crit,power,resistance,ci": those commitments together, built for real
 	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator

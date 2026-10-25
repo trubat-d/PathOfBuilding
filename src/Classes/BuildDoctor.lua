@@ -611,6 +611,133 @@ function BuildDoctorClass:CommitmentPlans()
 	}
 end
 
+-- Which combinations of commitments to build from scratch (archetype ids
+-- "A+B+C" for the full generation), predicted from the math on one build:
+-- each commitment is a test of its full form on this build (crit chance and
+-- multiplier together; a stacking idea's stat stacked AND the payoff lines
+-- of its uniques read from the game data, e.g. Malachai's Loop's damage per
+-- power charge with five more charges; a pool the damage follows tripled),
+-- and commitments of different layers multiply, so a combination is worth
+-- about the product of its parts. archetypes: the archetype tables that fit
+-- the skill (BuildArchetypes.ForSkill). Returns { { ids, predicted, why } },
+-- best first
+local stackLines = {
+	PowerChargesMax = "+%d to Maximum Power Charges", FrenzyChargesMax = "+%d to Maximum Frenzy Charges",
+	EnduranceChargesMax = "+%d to Maximum Endurance Charges", Int = "+%d to Intelligence", Str = "+%d to Strength",
+	Dex = "+%d to Dexterity", Mana = "+%d to maximum Mana", EnergyShield = "+%d to maximum Energy Shield",
+	Life = "+%d to maximum Life", BlockChance = "+%d%% Chance to Block Attack Damage", Evasion = "+%d to Evasion Rating",
+	Armour = "+%d to Armour", MaximumRage = "+%d to Maximum Rage",
+}
+local stackAmount = {
+	PowerChargesMax = 5, FrenzyChargesMax = 5, EnduranceChargesMax = 5, Int = 400, Str = 400, Dex = 400, Mana = 1500,
+	EnergyShield = 4000, Life = 2500, BlockChance = 25, Evasion = 15000, Armour = 15000, MaximumRage = 30,
+}
+function BuildDoctorClass:PredictCombos(archetypes, maxSize)
+	local r = self.report or self:Diagnose()
+	local gen = self.gen
+	local spec = self.build.spec
+	local byId = { }
+	for _, e in ipairs(r.layers) do byId[e.layer.id] = e end
+	local baseScore, baseR = gen:Score()
+	local baseDps = m_max(1, baseR.dps or 0)
+	local function measure(lines)
+		local override = { addNodes = { [probeNode(spec.tree, lines)] = true } }
+		local _, res = gen:Score(override)
+		return m_max(1e-9, (res.dps or 0) / baseDps)
+	end
+	-- the payoff lines of an archetype's uniques: the ones mentioning damage
+	-- among those matching its patterns, best two items by their own test
+	local lib = new("BuildArchetypes"):BuildArchetypes()
+	local function payoffLines(a)
+		local items = lib.UniqueCandidates(a)
+		local scored = { }
+		for _, item in ipairs(items) do
+			local lines = { }
+			for _, modLine in ipairs(item.explicitModLines or { }) do
+				local current = not modLine.variantList or (item.variant and modLine.variantList[item.variant])
+				-- (payoffs: damage lines; enablers: "count as having maximum...",
+				-- without which there is nothing to stack)
+				local line = modLine.line
+				local enabler = line and (line:find("[Cc]ount as having") or line:find("is equal to"))
+				if current and line and (enabler or (line:find("[Dd]amage") and not line:find("taken"))) then
+					for _, pattern in ipairs(a.uniqueLines or { }) do
+						if modLine.line:match(pattern) then t_insert(lines, modLine.line) break end
+					end
+				end
+			end
+			if #lines > 0 then t_insert(scored, { title = item.title or item.name, lines = lines, ratio = measure(lines) }) end
+			gen:Tick()
+		end
+		t_sort(scored, function(x, y) return x.ratio > y.ratio end)
+		local out, names = { }, { }
+		for i = 1, m_min(2, #scored) do
+			for _, l in ipairs(scored[i].lines) do t_insert(out, l) end
+			t_insert(names, scored[i].title)
+		end
+		return out, names
+	end
+	local options = { }
+	local life = byId.life
+	local damageFollowsLife = life and life.ratio >= 1.04
+	for _, a in ipairs(archetypes or { }) do
+		local ratio, why
+		if a.id == "CRIT" and byId.crit then
+			ratio, why = byId.crit.commitRatio, "crit chance and multiplier"
+		elseif a.id == "CI" then
+			-- (Chaos Inoculation: energy shield as the pool; never for a skill
+			-- whose damage follows life)
+			local es = byId.es
+			if es and not damageFollowsLife then ratio, why = math.exp(m_log(es.ratio) / m_log(1.1) * m_log(3)), "energy shield pool" end
+		elseif a.id == "LIFE" and life and damageFollowsLife then
+			ratio, why = math.exp(m_log(life.ratio) / m_log(1.1) * m_log(3)), "life pool the damage follows"
+		elseif a.lens and stackLines[a.lens.stat] then
+			local lines, names = payoffLines(a)
+			if #lines > 0 then
+				t_insert(lines, string.format(stackLines[a.lens.stat], stackAmount[a.lens.stat]))
+				ratio = measure(lines)
+				why = string.format("%s stacked with %s", a.lens.label or a.lens.stat, table.concat(names, ", "))
+			end
+		end
+		if os.getenv("DOCTOR_DEBUG") and ratio then ConPrintf("[combos] %s x%.3f (%s)", a.id, ratio, why or "") end
+		if ratio and ratio >= 1.3 then t_insert(options, { id = a.id, ratio = ratio, why = why, stat = a.lens and a.lens.stat, keystones = a.keystones }) end
+	end
+	t_sort(options, function(a, b) return a.ratio > b.ratio end)
+	-- (one idea per stat: POWER and MINED_POWER are the same commitment)
+	local seen, kept = { }, { }
+	for _, o in ipairs(options) do
+		local key = o.stat or o.id
+		if not seen[key] then seen[key] = true t_insert(kept, o) end
+	end
+	options = kept
+	local function compatible(set)
+		local ci, life = false, false
+		for _, o in ipairs(set) do
+			if o.id == "CI" then ci = true end
+			if o.id == "LIFE" or o.stat == "Life" then life = true end
+		end
+		return not (ci and life)
+	end
+	local combos = { }
+	local n = m_min(#options, 6)
+	local function push(set)
+		if not compatible(set) then return end
+		local ids, ratio, why = { }, 1, { }
+		for _, o in ipairs(set) do t_insert(ids, o.id) ratio = ratio * o.ratio t_insert(why, string.format("%s x%.2f", o.why, o.ratio)) end
+		t_insert(combos, { ids = table.concat(ids, "+"), predicted = ratio, why = table.concat(why, "; ") })
+	end
+	for i = 1, n do
+		push({ options[i] })
+		for j = i + 1, n do
+			push({ options[i], options[j] })
+			if (maxSize or 3) >= 3 then
+				for k = j + 1, n do push({ options[i], options[j], options[k] }) end
+			end
+		end
+	end
+	t_sort(combos, function(a, b) return a.predicted > b.predicted end)
+	return combos
+end
+
 -- Builds a plan for real and keeps it when the finished build scores better.
 -- Returns the gain kept (0 if none)
 function BuildDoctorClass:Execute(plan)
