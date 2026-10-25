@@ -31,7 +31,7 @@ import numpy as np
 
 HELPS = 0.002     # a gain above this counts as helping
 MATTERS = 0.02    # a skipped support that would have gained more than this is a real miss
-THRESHOLDS = [0.001, 0.002, 0.005, 0.01, 0.02]  # skip thresholds tried; the highest without real misses is kept
+THRESHOLDS = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1]  # skip thresholds tried; the highest without real misses is kept
 MIN_SEEN = 30      # a support is only skipped once seen this many times in training
 GEMS = {}         # gem name -> { types, tags } (bench/export_gem_types.lua), for skill type features
 
@@ -67,7 +67,7 @@ def load(paths):
                         # the rest of the features carry the build's situation
                         feats.append("s:" + run.get("skill", "?"))
                         rows.append({"name": r["n"], "gain": r["g"], "skill": run.get("skill"), "tags": feats,
-                                     "investment": run.get("investment"), "pick": r.get("pick"), "run": r.get("run")})
+                                     "investment": run.get("investment"), "pick": r.get("pick"), "cx": r.get("cx"), "run": r.get("run")})
     return rows
 
 
@@ -158,24 +158,32 @@ def validate(rows):
         model = train(train_rows)
         familiar = familiar_skills(train_rows)
         useless = useless_pairs(train_rows)
+        # each logged pick measured every candidate and kept the best: a skip
+        # only costs something when the best support it hid beats the best one
+        # still tried (or nothing) by more than MATTERS
+        steps = defaultdict(list)
         for r in test_rows:
             total += 1
-            e = model.get(r["name"])
-            if not e or e["n"] < MIN_SEEN or familiar.get(r["skill"], 0) < FAMILIAR_RUNS:
-                continue
-            if r["name"] not in useless.get(r["skill"], ()):
-                continue
-            # checked as used: the generator always gives the build's situation,
-            # so measurements logged before it was recorded are only trained on
+            # checked as used: the generator always gives the build's situation
             if HAS_CONTEXT and not any(f.startswith("c:") for f in r["tags"]):
                 continue
-            p = chance(e, r["tags"])
+            e = model.get(r["name"])
+            p = 1.0
+            if e and e["n"] >= MIN_SEEN and familiar.get(r["skill"], 0) >= FAMILIAR_RUNS and r["name"] in useless.get(r["skill"], ()):
+                p = chance(e, r["tags"])
+            key = (r["run"], r["cx"], r["pick"]) if r["cx"] is not None else id(r)
+            steps[key].append((p, r))
+        for step in steps.values():
             for t in THRESHOLDS:
-                if p < t:
-                    stats[t]["skipped"] += 1
-                    if r["gain"] > MATTERS:
+                kept = [r["gain"] for p, r in step if p >= t]
+                skipped = [r for p, r in step if p < t]
+                stats[t]["skipped"] += len(skipped)
+                if skipped:
+                    best = max(skipped, key=lambda r: r["gain"])
+                    best_kept = max([0.0] + kept)
+                    if best["gain"] - best_kept > MATTERS:
                         stats[t]["missed"] += 1
-                        stats[t]["worst"].append((r["gain"], r["skill"], r["name"]))
+                        stats[t]["worst"].append((best["gain"], best["skill"], best["name"]))
     return stats, total
 
 
@@ -203,8 +211,15 @@ def main():
               f"{st['missed']} would have gained more than {MATTERS}")
         for gain, skill, name in sorted(st["worst"], reverse=True)[:5]:
             print(f"    missed {name} for {skill}: {gain:+.3f}")
-        if st["missed"] == 0:
-            chosen = t
+    # the highest safe threshold, less one step of margin when there is one
+    safe = 0
+    for i, t in enumerate(THRESHOLDS):
+        if stats[t]["missed"] == 0:
+            safe = i + 1
+        else:
+            break
+    if safe:
+        chosen = THRESHOLDS[max(0, safe - 2)]
     print(f"threshold kept: {chosen} (0 = the model skips nothing)")
     model = train(rows)
     with open(out, "w") as f:

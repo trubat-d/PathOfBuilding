@@ -8,20 +8,21 @@
 -- it helps, and the supports that never helped each skill in two builds or
 -- more (a support is skipped only when both agree). It is checked before it
 -- is used: the builds are split in five groups (twice, differently), each
--- group left out in turn, and the skip threshold kept is the
--- highest at which no left-out support worth more than 0.02 score would have
--- been skipped (none: the model only ranks, skipping nothing). The result
--- goes to the user folder's GeneratorModel.json, which the generator reads
+-- group left out in turn, and the skip threshold kept is the highest at which
+-- no left-out pick would have lost more than 0.02 score (the best support
+-- skipped against the best one still tried; none: the model only ranks,
+-- skipping nothing). The result goes to the user folder's GeneratorModel.json, which the generator reads
 -- before the one shipped in Data/.
 -- Run again by the window after every 10 new generations, in the background
 -- (tick() is called often so the caller can yield).
 --
 local dkjson = require "dkjson"
+local m_max = math.max
 local M = { }
 
 local HELPS = 0.002
 local MATTERS = 0.02
-local THRESHOLDS = { 0.001, 0.002, 0.005, 0.01, 0.02 }
+local THRESHOLDS = { 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1 }
 local MIN_SEEN = 30
 local FOLDS = 5
 local ITERATIONS = 150
@@ -99,7 +100,7 @@ function M.ReadRows(path, tick)
 				end
 				local hasContext = ctx ~= nil
 				feats[#feats + 1] = "s:" .. skill
-				rows[#rows + 1] = { name = r.n, gain = r.g, skill = skill, feats = feats, run = r.run, hasContext = hasContext }
+				rows[#rows + 1] = { name = r.n, gain = r.g, skill = skill, feats = feats, run = r.run, hasContext = hasContext, cx = r.cx, pick = r.pick }
 			end
 		end
 	end
@@ -223,25 +224,47 @@ function M.Validate(rows, tick, repeats)
 			local model = train(trainRows, tick)
 			local familiar = familiarSkills(trainRows)
 			local useless = uselessPairs(trainRows)
+			-- Each logged pick measured every candidate and kept the best: a
+			-- skip only costs something when the best support it hid beats the
+			-- best one still tried (or nothing, when none of those helps) by
+			-- more than MATTERS. Later picks are logged as their own steps.
+			local steps, order = { }, { }
 			for _, r in ipairs(testRows) do
 				-- (checked as used: the generator always gives the build's
 				-- situation, so measurements logged before it was recorded are
 				-- only trained on)
-				local e = (r.hasContext or not M.hasContext) and model[r.name]
-				if e and e.n >= MIN_SEEN and (familiar[r.skill] or 0) >= FAMILIAR_RUNS and useless[r.skill] and useless[r.skill][r.name] then
-					local p = chance(e, r.feats)
-					for _, t in ipairs(THRESHOLDS) do
-						if p < t then
+				if r.hasContext or not M.hasContext then
+					local key = r.cx and (r.run .. "#" .. r.cx .. "#" .. (r.pick or 0)) or tostring(r)
+					local step = steps[key]
+					if not step then step = { } steps[key] = step order[#order + 1] = key end
+					local e = model[r.name]
+					local p = 1
+					if e and e.n >= MIN_SEEN and (familiar[r.skill] or 0) >= FAMILIAR_RUNS and useless[r.skill] and useless[r.skill][r.name] then
+						p = chance(e, r.feats)
+					end
+					step[#step + 1] = { r = r, p = p }
+				end
+			end
+			for _, key in ipairs(order) do
+				local step = steps[key]
+				for _, t in ipairs(THRESHOLDS) do
+					local bestKept, bestSkipped = 0, nil
+					for _, m in ipairs(step) do
+						if m.p < t then
 							stats[t].skipped = stats[t].skipped + 1
-							if r.gain > MATTERS then
-								stats[t].missed = stats[t].missed + 1
-								stats[t].worst = stats[t].worst or { }
-								if #stats[t].worst < 20 then
-									local ctx = { }
-									for _, f in ipairs(r.feats) do if f:sub(1, 2) == "c:" then ctx[#ctx + 1] = f:sub(3) end end
-									table.insert(stats[t].worst, string.format("%s for %s %+.3f (p %.4f; %s)", r.name, r.skill, r.gain, p, table.concat(ctx, " ")))
-								end
-							end
+							if not bestSkipped or m.r.gain > bestSkipped.r.gain then bestSkipped = m end
+						elseif m.r.gain > bestKept then
+							bestKept = m.r.gain
+						end
+					end
+					if bestSkipped and bestSkipped.r.gain - bestKept > MATTERS then
+						local r = bestSkipped.r
+						stats[t].missed = stats[t].missed + 1
+						stats[t].worst = stats[t].worst or { }
+						if #stats[t].worst < 20 then
+							local ctx = { }
+							for _, f in ipairs(r.feats) do if f:sub(1, 2) == "c:" then ctx[#ctx + 1] = f:sub(3) end end
+							table.insert(stats[t].worst, string.format("%s for %s %+.3f over the best tried %+.3f (p %.4f; %s)", r.name, r.skill, r.gain, bestKept, bestSkipped.p, table.concat(ctx, " ")))
 						end
 					end
 				end
@@ -260,8 +283,12 @@ function M.Run(tick, logPath, outPath)
 	local rows, runs = M.ReadRows(logPath, tick)
 	if #rows < 1000 then return nil, string.format("not enough decisions yet (%d support measurements)", #rows) end
 	local stats, skills = M.Validate(rows, tick)
-	local chosen = 0
-	for _, t in ipairs(THRESHOLDS) do if stats[t].missed == 0 then chosen = t end end
+	-- (the highest safe threshold, less one step of margin when there is one)
+	local chosen, safe = 0, 0
+	for i, t in ipairs(THRESHOLDS) do
+		if stats[t].missed == 0 then safe = i else break end
+	end
+	if safe > 0 then chosen = THRESHOLDS[m_max(1, safe - 1)] end
 	local model = train(rows, tick)
 	-- (the history, as lists of support names per skill)
 	local useless = { }
