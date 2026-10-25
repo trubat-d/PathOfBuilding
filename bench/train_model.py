@@ -108,14 +108,21 @@ def chance(entry, tags):
     return 1 / (1 + math.exp(-z))
 
 
+FOLDS = 5
+
+
 def validate(rows):
-    """Leave each skill out; per threshold: measurements skipped, real misses."""
+    """Skills split in FOLDS groups, each left out in turn (every skill is
+    judged by a model that never saw it); per threshold: measurements
+    skipped, real misses."""
     skills = sorted({r["skill"] for r in rows})
+    fold_of = {s: i % FOLDS for i, s in enumerate(skills)}
     stats = {t: {"skipped": 0, "missed": 0, "worst": []} for t in THRESHOLDS}
     total = 0
-    for skill in skills:
-        train_rows = [r for r in rows if r["skill"] != skill]
-        test_rows = [r for r in rows if r["skill"] == skill]
+    for k in range(FOLDS):
+        skill = k
+        train_rows = [r for r in rows if fold_of[r["skill"]] != k]
+        test_rows = [r for r in rows if fold_of[r["skill"]] == k]
         if not train_rows or not test_rows:
             continue
         model = train(train_rows)
@@ -130,7 +137,7 @@ def validate(rows):
                     stats[t]["skipped"] += 1
                     if r["gain"] > MATTERS:
                         stats[t]["missed"] += 1
-                        stats[t]["worst"].append((r["gain"], skill, r["name"]))
+                        stats[t]["worst"].append((r["gain"], r["skill"], r["name"]))
     return stats, total
 
 
