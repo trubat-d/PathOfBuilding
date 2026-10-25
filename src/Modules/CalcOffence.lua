@@ -3607,9 +3607,8 @@ function calcs.offence(env, actor, activeSkill)
 						damageTypeHitMin = damageTypeHitMin * effMult
 						damageTypeHitMax = damageTypeHitMax * effMult
 						damageTypeHitAvg = damageTypeHitAvg * effMult
-						if env.mode == "CALCS" then
-							output[damageType.."EffMult"] = effMult
-						end
+						-- (kept in every mode: the build doctor values it, Classes/BuildDoctor)
+						output[damageType.."EffMult"] = effMult
 						if pass == 2 and breakdown and (effMult ~= 1 or sourceRes ~= damageType or invertChance > 0) and skillModList:Flag(cfg, isElemental[damageType] and "CannotElePenIgnore" or nil) then
 							t_insert(breakdown[damageType], s_format("x %.3f ^8(effective DPS modifier)", effMult))
 							breakdown[damageType.."EffMult"] = breakdown.effMult(damageType, resist, 0, takenInc, effMult, takenMore, sourceRes, useRes, invertChance, effectiveResist)

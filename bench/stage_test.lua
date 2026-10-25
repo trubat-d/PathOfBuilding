@@ -105,6 +105,9 @@ elseif step == "tree" or step == "treeplain" then
 	local opt = new("TreeOptimizer"):TreeOptimizer(gen)
 	local gain, swaps = opt:Run({ global = step == "tree" })
 	print("TREE", gain, swaps, "solver won:", tostring(opt.globalWon), "points", opt.globalPoints, opt.globalCount)
+elseif step == "profile" then
+	local prof = new("BuildDoctor"):BuildDoctor(gen):Profile()
+	print("PROFILE " .. require("dkjson").encode(prof))
 elseif step == "doctor" or step == "diagnose" then
 	-- (diagnose: the layer report only; doctor: the plans tried too)
 	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator

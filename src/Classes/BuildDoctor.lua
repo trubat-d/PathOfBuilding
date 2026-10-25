@@ -229,8 +229,103 @@ function BuildDoctorClass:Diagnose()
 		speed = o.Speed, life = o.Life, es = o.EnergyShield, mana = o.Mana, power = o.PowerChargesMax,
 		effMult = o[mode.element .. "EffMult"],
 	}
-	self.report = { mode = mode, layers = layers, state = state, baseScore = baseScore, baseDps = baseDps }
+	-- the gap to the skill's top players, layer by layer
+	local profile = self:Profile()
+	local target = self.Targets(gen.mainGem and gen.mainGem.name)
+	local gaps
+	if target and target.mode == profile.mode then
+		gaps = { }
+		for _, k in ipairs({ "crit", "speed", "enemy", "increased", "more", "dotMulti", "power", "frenzy", "life", "es" }) do
+			if target[k] and profile[k] and profile[k] > 0 and target[k] > 0 then
+				gaps[k] = { ours = profile[k], target = target[k], ratio = target[k] / profile[k] }
+			end
+		end
+	end
+	gen:Recalculate()
+	self.report = { mode = mode, layers = layers, state = state, baseScore = baseScore, baseDps = baseDps, profile = profile, target = target, gaps = gaps }
 	return self.report
+end
+
+-- What the enemy lets through of the main damage type: resistance (after
+-- curses, exposure; minus penetration for hits) and damage taken (shock,
+-- wither, Vulnerability...). PoB keeps its own only in the Calcs view
+function BuildDoctorClass:EnemyMultiplier(mode)
+	local env = self.build.calcsTab.mainEnv
+	local skill = env and env.player.mainSkill
+	if not skill or not env.enemyDB then return 1 end
+	local e = mode.element
+	local edb = env.enemyDB
+	local elemental = e == "Fire" or e == "Cold" or e == "Lightning"
+	local res = 0
+	if e ~= "Physical" then
+		res = edb:Sum("BASE", nil, e .. "Resist") + (elemental and edb:Sum("BASE", nil, "ElementalResist") or 0)
+		res = m_max(-200, m_min(res, edb:Sum("BASE", nil, e .. "ResistMax") > 0 and edb:Sum("BASE", nil, e .. "ResistMax") or 75))
+	end
+	if mode.main == "hit" and e ~= "Physical" then
+		local mdb, cfg = skill.skillModList, skill.skillCfg
+		res = res - mdb:Sum("BASE", cfg, e .. "Penetration") - (elemental and mdb:Sum("BASE", cfg, "ElementalPenetration") or 0)
+	end
+	local takenNames = { "DamageTaken", e .. "DamageTaken" }
+	if elemental then t_insert(takenNames, "ElementalDamageTaken") end
+	if mode.main ~= "hit" then t_insert(takenNames, "DamageTakenOverTime") end
+	local taken = (1 + edb:Sum("INC", nil, unpack(takenNames)) / 100) * edb:More(nil, unpack(takenNames))
+	return (1 - res / 100) * taken
+end
+
+-- The layers' current values (for comparing with a top player's build:
+-- each one's ratio is that layer's share of the gap; their product is about
+-- the DPS ratio): crit factor, speed, enemy multiplier (resistance and damage
+-- taken), increased pool, more multipliers, DoT multiplier, charges, gem
+-- level, pools, and the rest (base and flat damage, conversion, hits per use)
+function BuildDoctorClass:Profile()
+	self.gen:Recalculate()
+	local mode = self:Mode()
+	local o = mode.output
+	local env = self.build.calcsTab.mainEnv
+	local skill = env and env.player.mainSkill
+	local p = { mode = mode.main, element = mode.element, dps = (o.CombinedDPS or 0) - (o.CullingDPS or 0) }
+	if skill then
+		local mdb, cfg = skill.skillModList, skill.skillCfg
+		local e = mode.element
+		local names = { "Damage", e .. "Damage" }
+		if e == "Fire" or e == "Cold" or e == "Lightning" then t_insert(names, "ElementalDamage") end
+		local isDot = mode.main ~= "hit"
+		local dotCfg = cfg
+		if isDot then t_insert(names, "DamageOverTime") end
+		p.increased = 1 + mdb:Sum("INC", dotCfg, unpack(names)) / 100
+		p.more = mdb:More(dotCfg, unpack(names))
+		p.dotMulti = isDot and (1 + mdb:Sum("BASE", dotCfg, "DotMultiplier", e .. "DotMultiplier") / 100) or 1
+		p.gemLevel = skill.activeEffect and skill.activeEffect.level or 0
+	end
+	p.crit = mode.main == "hit" and (o.CritEffect or 1) or 1
+	p.speed = mode.main == "hit" and (o.Speed or 0) or 1
+	-- (PoB's own for hits; computed for damage over time)
+	p.enemy = (mode.main == "hit" and o[mode.element .. "EffMult"]) or self:EnemyMultiplier(mode)
+	p.power, p.frenzy, p.endurance = o.PowerCharges or 0, o.FrenzyCharges or 0, o.EnduranceCharges or 0
+	p.life, p.es, p.mana = o.Life or 0, o.EnergyShield or 0, o.Mana or 0
+	-- the rest: whatever the named layers don't explain
+	local named = (p.increased or 1) * (p.more or 1) * p.crit * m_max(p.speed, 1e-6) * p.enemy * (p.dotMulti or 1)
+	p.rest = p.dps / m_max(named, 1e-9)
+	return p
+end
+
+-- The skill's top players' layer targets (bench/layer_targets.py,
+-- Data/GeneratorLayerTargets.json): medians of each layer; nil without one
+local targetsData
+function BuildDoctorClass.Targets(skillName)
+	if targetsData == nil then
+		targetsData = false
+		local dkjson = require "dkjson"
+		for _, path in ipairs({ (GetScriptPath and GetScriptPath() or ".") .. "/Data/GeneratorLayerTargets.json", "Data/GeneratorLayerTargets.json" }) do
+			local f = io.open(path, "r")
+			if f then
+				local ok, value = pcall(dkjson.decode, f:read("*a"))
+				f:close()
+				if ok and type(value) == "table" and value.skills then targetsData = value.skills break end
+			end
+		end
+	end
+	return targetsData and skillName and targetsData[skillName] or nil
 end
 
 -- One line per layer, best damage per point first
@@ -243,6 +338,16 @@ function BuildDoctorClass:ReportLines(limit)
 	t_insert(lines, string.format("Build doctor: damage mostly from %s (%s); crit %.0f%% x %.2f (factor x%.2f), %s %.1f/s, enemy %s damage taken x%.2f",
 		modeLabel, r.mode.element:lower(), s.critChance or 0, s.critMulti or 1, s.critEffect or 1,
 		r.mode.attack and "attacks" or "casts", s.speed or 0, r.mode.element:lower(), s.effMult or 1))
+	if r.gaps then
+		local parts = { }
+		for _, k in ipairs({ "crit", "enemy", "speed", "increased", "more", "dotMulti", "power", "life", "es" }) do
+			local g = r.gaps[k]
+			if g and (g.ratio >= 1.15 or g.ratio <= 0.87) then
+				t_insert(parts, string.format("%s %.3g vs %.3g", k, g.ours, g.target))
+			end
+		end
+		t_insert(lines, string.format("    Against the skill's top players (%d builds, medians): %s", r.target.builds or 0, #parts > 0 and table.concat(parts, ", ") or "every layer within 15%"))
+	end
 	for i, e in ipairs(r.layers) do
 		if i > (limit or 8) then break end
 		local text = string.format("    %s: a dose x%.3f DPS (%.1f%% per point)", e.layer.label, e.ratio, (math.exp(e.perPoint) - 1) * 100)
@@ -311,7 +416,7 @@ function BuildDoctorClass:Plans()
 		t_insert(plans, {
 			id = "resistance", label = "lower the enemy's " .. element:lower() .. " resistance",
 			reason = string.format("-15%% %s resistance gives x%.3f%s", element:lower(), res.ratio, pen and string.format(", 15%% penetration x%.3f", pen.ratio) or ""),
-			lens = { func = function(o) return o[element .. "EffMult"] or 1 end, base = 0.5, label = element .. " damage multiplier against the enemy", weight = 0.5 },
+			lens = { func = function(o) return o[element .. "EffMult"] or o.MainHand and o.MainHand[element .. "EffMult"] or 1 end, base = 0.5, label = element .. " damage multiplier against the enemy", weight = 0.5 },
 			rares = true, refine = 16, utility = true, value = res.perPoint,
 		})
 	end
@@ -340,6 +445,68 @@ function BuildDoctorClass:Plans()
 				drop = { "Mind Over Matter" }, auras = true, refine = 8, value = average })
 		end
 	end
+	-- the layers clearly below the skill's top players: a plan for each, even
+	-- when a test dose looks small (the players show the layer pays off)
+	local gaps = r.gaps or { }
+	local have = { }
+	for _, p in ipairs(plans) do have[p.id] = p end
+	local function gapPlan(id, key, make)
+		local g = gaps[key]
+		if g and g.ratio >= 1.25 then
+			local existing = have[id]
+			local reason = string.format("the skill's top players have %s %.3g, this build %.3g", key, g.target, g.ours)
+			if existing then
+				existing.value = m_max(existing.value or 0, m_log(g.ratio))
+				existing.reason = existing.reason .. "; " .. reason
+			else
+				local p = make(g)
+				if p then
+					p.reason = reason
+					p.value = m_log(g.ratio)
+					t_insert(plans, p)
+					have[id] = p
+				end
+			end
+		end
+	end
+	gapPlan("crit", "crit", function()
+		local drop = { }
+		for _, name in ipairs({ "Elemental Overload", "Resolute Technique" }) do if allocated(name) then t_insert(drop, name) end end
+		local blockSupports = { }
+		for name in pairs(self.critBlockers or { }) do t_insert(blockSupports, name) t_insert(drop, name) end
+		return { id = "crit", label = "commit to critical strikes", drop = drop, blockSupports = blockSupports,
+			lens = { func = function(o) return o.CritEffect or 1 end, base = 1, label = "Crit damage factor", weight = 0.5 },
+			rares = true, refine = 30, utility = true }
+	end)
+	if r.mode.main == "hit" then
+		local element = r.mode.element
+		gapPlan("resistance", "enemy", function()
+			return { id = "resistance", label = "lower the enemy's " .. element:lower() .. " resistance and raise its damage taken",
+				lens = { func = function(o) return o[element .. "EffMult"] or 1 end, base = 0.5, label = element .. " damage multiplier against the enemy", weight = 0.6 },
+				rares = true, refine = 16, utility = true }
+		end)
+	else
+		gapPlan("resistance", "enemy", function()
+			return { id = "resistance", label = "lower the enemy's resistance", rares = true, refine = 16, utility = true }
+		end)
+	end
+	gapPlan("speed", "speed", function()
+		return { id = "speed", label = "more attack / cast speed", lens = { stat = "Speed", base = 1, label = "Speed", weight = 0.4 }, rares = true, refine = 16 }
+	end)
+	gapPlan("power", "power", function()
+		return { id = "power", label = "more power charges", lens = { stat = "PowerChargesMax", base = 3, label = "Maximum power charges", weight = 0.4 }, rares = true, refine = 16 }
+	end)
+	gapPlan("frenzy", "frenzy", function()
+		return { id = "frenzy", label = "more frenzy charges", lens = { stat = "FrenzyChargesMax", base = 3, label = "Maximum frenzy charges", weight = 0.4 }, rares = true, refine = 16 }
+	end)
+	gapPlan("pool_life", "life", function()
+		if (byId.life and byId.life.ratio or 1) < 1.03 then return nil end
+		return { id = "pool_life", label = "stack maximum life", lens = { stat = "Life", base = 1000, label = "Life", weight = 0.5 }, rares = true, refine = 24 }
+	end)
+	gapPlan("pool_es", "es", function()
+		if (byId.es and byId.es.ratio or 1) < 1.03 then return nil end
+		return { id = "pool_es", label = "stack maximum energy shield", lens = { stat = "EnergyShield", base = 1000, label = "Energy shield", weight = 0.5 }, rares = true, refine = 24 }
+	end)
 	t_sort(plans, function(a, b) return (a.value or 0) > (b.value or 0) end)
 	return plans
 end
