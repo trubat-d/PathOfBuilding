@@ -308,6 +308,24 @@ function BuildScorerClass:SkillSustain(output)
 	return fraction, limiting
 end
 
+-- Share of the DPS kept for the cost (1 = paid for all the time). Hard: the
+-- share of time the skill can be paid for. Soft (while a build is being
+-- made, softSustain): what is missing is a price, not a cut - recovery is a
+-- cheap layer of its own (regeneration nodes and mods, Clarity, cost
+-- reduction), so a shortfall of N per second costs about what the points
+-- to recover it cost (N / 12 points at ~1.5% DPS each). With the hard cut, a
+-- build at the edge of its mana saw every speed source as a loss (Badge of
+-- the Brotherhood's frenzy charges: -8% DPS instead of +30%) and recovery
+-- as worthless until something needed it: neither could come first.
+function BuildScorerClass:SustainFactor(output)
+	local fraction, resource = self:SkillSustain(output)
+	if not self.softSustain or not resource or fraction >= 0.999 then return fraction, resource end
+	local rate = self:SustainableRate(output, resource)
+	local missing = rate * (1 / math.max(fraction, 0.05) - 1)
+	local soft = math.exp(-(self.sustainPointValue or 0.015) * missing / (self.sustainPerPoint or 12))
+	return math.max(fraction, soft), resource
+end
+
 -- DPS figure used for scoring (player + minions, full DPS when the build uses it)
 function BuildScorerClass:GetDPS(output)
 	local dps
@@ -325,7 +343,7 @@ function BuildScorerClass:GetDPS(output)
 	end
 	-- a skill you can't pay for doesn't deal its DPS for long
 	if self.resourceSustain ~= false and not self.ignoreCosts then
-		dps = dps * (self:SkillSustain(output))
+		dps = dps * (self:SustainFactor(output))
 	end
 	-- a boss fight as it is played: moving and dodging stop the hits
 	if self.fightSim then
@@ -413,7 +431,7 @@ function BuildScorerClass:GetPenalties(output)
 			t_insert(penalties, { label = string.format("%s reservation is over 100%% (by %d%%)", pool, over * 100), value = p })
 		end
 	end
-	local sustain, limiting = self:SkillSustain(output)
+	local sustain, limiting = self:SustainFactor(output)
 	if sustain < 0.999 and not self.ignoreCosts then
 		-- running out of mana mid-fight is worse than lower DPS: casting stops
 		local p = 4 * (1 - sustain)

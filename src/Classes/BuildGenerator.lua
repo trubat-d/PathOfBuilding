@@ -1798,7 +1798,7 @@ function BuildGeneratorClass:RunRaresParallel(finder, options)
 		-- (the generator's own settings: the threads must score as it does)
 		lens = sc.lens, lens2 = sc.lens2, avoidanceWeight = sc.avoidanceWeight, pastTarget = sc.pastTarget, fightWeight = sc.fightWeight,
 		smoothBuffs = sc.smoothBuffs, reservationSlope = sc.reservationSlope, focusEhp = sc.focus and sc.focus.ehp,
-		clearBoost = sc.clearBoost, clearBuffs = sc.clearBuffs, fightSim = sc.fightSim,
+		clearBoost = sc.clearBoost, clearBuffs = sc.clearBuffs, fightSim = sc.fightSim, softSustain = sc.softSustain,
 	}
 	local xml = self.build:SaveDB("code")
 	-- weapons first (their seeded fills take longest), then round robin
@@ -2738,14 +2738,14 @@ end
 -- Rare jewels in passive tree sockets: one rare jewel is generated for the
 -- build, then sockets are added one at a time; each one stays only if the
 -- jewel is worth more than the passives trimmed to pay for the points.
-function BuildGeneratorClass:AddJewels(maxJewels)
+function BuildGeneratorClass:AddJewels(maxJewels, maxPath)
 	local spec = self.build.spec
 	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
 	local generator = finder.rareGenerator
 	self:Recalculate()
 	local sockets = { }
 	for _, node in ipairs(nodesById(spec.nodes)) do
-		if node.type == "Socket" and not node.alloc and node.path and #node.path <= 5 and not node.expansionJewel and self.itemsTab.slots["Jewel " .. node.id] then
+		if node.type == "Socket" and not node.alloc and node.path and #node.path <= (maxPath or 5) and not node.expansionJewel and self.itemsTab.slots["Jewel " .. node.id] then
 			t_insert(sockets, node)
 		end
 	end
@@ -2809,6 +2809,90 @@ function BuildGeneratorClass:AddJewels(maxJewels)
 		for _, l in ipairs(best.item.explicitModLines) do t_insert(mods, l.line) end
 		self:Note(string.format("Rare jewels: %d socket%s (%s)", added, added == 1 and "" or "s", table.concat(mods, ", ")))
 	end
+	return added, best
+end
+
+-- Jewels on the finished build: a rare jewel made for it (its crit, its
+-- resistances...), put in place of the jewels worth less, then in more
+-- sockets wherever one pays for its path. Top Winter Orbs run six rare
+-- jewels of four crit multiplier mods each (x1.06 each, x1.45 together)
+-- and fifteen sockets; ours stopped at the four nearest, made for the
+-- half-built tree, and unique jewels later took their place.
+function BuildGeneratorClass:LateJewelsMove(maxJewels)
+	local spec = self.build.spec
+	local before = self:FullScore()
+	-- 1. the best rare for the finished build, in the first allocated plain socket
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local generator = finder.rareGenerator
+	local scorer, ratio = self.scorer, self.ratio
+	local measure = function(output) return scorer:ScoreOutput(output, ratio) end
+	local plain = { }
+	for _, node in ipairs(nodesById(spec.allocNodes)) do
+		if node.type == "Socket" and not node.expansionJewel and self.itemsTab.slots["Jewel " .. node.id] then t_insert(plain, node) end
+	end
+	local replaced = 0
+	if plain[1] then
+		-- (made with that socket emptied: against the jewel already there,
+		-- the generator finds nothing to add)
+		local firstSlot = self.itemsTab.slots["Jewel " .. plain[1].id]
+		local firstId = firstSlot.selItemId
+		firstSlot:SetSelItemId(0)
+		self.itemsTab:PopulateSlots()
+		self:Recalculate()
+		local baseOutput = self.calcFunc({ })
+		local ctx = {
+			calcFunc = self.calcFunc, baseOutput = baseOutput, basePower = measure(baseOutput),
+			measure = measure, tick = function() self:Tick() end,
+			opts = { quality = self.options.quality, levelOnly = true, keepResists = false, keepAttributes = false, keepLife = false },
+		}
+		local best
+		for _, baseName in ipairs({ "Crimson Jewel", "Viridian Jewel", "Cobalt Jewel" }) do
+			if data.itemBases[baseName] then
+				local blank = new("Item"):Item("Rarity: NORMAL\n" .. baseName)
+				blank:BuildModList()
+				local result = generator:GenerateForSlotWith("Jewel " .. plain[1].id, blank, ctx, nil)
+				if result and (not best or result.power > best.power) then best = result end
+			end
+		end
+		firstSlot:SetSelItemId(firstId or 0)
+		self.itemsTab:PopulateSlots()
+		self:Recalculate()
+		if self.options.debugTiming then ConPrintf("[late jewels] best rare: %s", best and table.concat((function() local t = { } for _, l in ipairs(best.item.explicitModLines) do t_insert(t, l.line) end return t end)(), ", ") or "none") end
+		-- 2. each socket's jewel replaced by it when the build is better
+		-- (timeless and radius jewels too: the score says what they're worth)
+		if best then
+			for _, node in ipairs(plain) do
+				local slot = self.itemsTab.slots["Jewel " .. node.id]
+				local oldId = slot.selItemId
+				local old = self.itemsTab.items[oldId]
+				if not (old and old.rarity == "RARE" and old.explicitModLines and #old.explicitModLines > 0 and old.title == best.item.title) then
+					local current = self:FullScore()
+					local jewel = self:Equip(best.item, "Jewel " .. node.id)
+					self.itemsTab:PopulateSlots()
+					self:Recalculate()
+					local trial = self:FullScore()
+					if self.options.debugTiming then ConPrintf("[late jewels] socket %d: %s -> rare %.3f -> %.3f", node.id, old and (old.title or old.name) or "empty", current, trial) end
+					if trial > current + 0.002 then
+						replaced = replaced + 1
+					else
+						slot:SetSelItemId(oldId or 0)
+						self.itemsTab:DeleteItem(jewel, true)
+						self.itemsTab:PopulateSlots()
+						self:Recalculate()
+					end
+				end
+			end
+		end
+	end
+	-- 3. more sockets, further away
+	local added = self:AddJewels(maxJewels or 6, self.options.lateJewelPath or 7) or 0
+	self:RemoveUnusedItems()
+	self:Recalculate()
+	local after = self:FullScore()
+	if replaced > 0 or added > 0 then
+		self:Note(string.format("Jewels for the finished build: %d replaced by a rare made for it, %d new socket%s: score %+.3f", replaced, added, added == 1 and "" or "s", after - before))
+	end
+	return after - before
 end
 
 -- Allocated jewel sockets left empty (a jewel taken out by a later step, a
@@ -6257,6 +6341,9 @@ function BuildGeneratorClass:SetupScorer()
 	self.scorer = new("BuildScorer"):BuildScorer(self.build, { focus = opts.focus, chargesPerSecond = opts.chargesPerSecond, overlap = self.overlap, ehpFloor = opts.ehpFloor, hitFloor = opts.hitFloor,
 		bossTier = opts.investment and opts.investment.awakenedGems and "uber" or "pinnacle" })
 	self.scorer.useChecklist = false -- on from the flask stage
+	-- (mana the build can't pay for priced, not cut, while it is made: the
+	-- finishing stages judge on the real cut and buy the recovery)
+	self.scorer.softSustain = opts.softSustain ~= false or nil
 	-- (a boss fight as it is played: time moving and dodging costs damage)
 	self.scorer.fightSim = bossFight and opts.fightSim ~= false or nil
 	-- (Clearing + bossing: clear speed counts more than the focus says)
@@ -6464,6 +6551,7 @@ function BuildGeneratorClass:Run()
 	-- score: at half weight, three lenses of a combination still traded three
 	-- quarters of the defences for damage there)
 	if opts.lensFade ~= false then self:FadeLenses(0) end
+	self.scorer.softSustain = nil
 	stage(10, "Choosing flasks, pantheon and bandit")
 	self.scorer.useChecklist = true
 	self:FullScore()
@@ -6559,6 +6647,11 @@ function BuildGeneratorClass:Run()
 	self:PairAilments()
 	self:Move(4, 6, "Optimizing the passive tree")
 	self:OptimizeTree()
+	if opts.jewels ~= false and opts.lateJewels ~= false then
+		self:Move(4, 6, "Jewels for the finished build")
+		local ok, err = pcall(function() self:LateJewelsMove(opts.lateJewelCount or 6) end)
+		if not ok then ConPrintf("Late jewels failed: %s", tostring(err)) end
+	end
 	-- (the build doctor again on the finished build: later steps can undo a
 	-- layer it built, and the balance has moved; one or two plans)
 	if opts.doctor ~= false and opts.finalDoctor ~= false then
