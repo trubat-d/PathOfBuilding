@@ -5795,6 +5795,19 @@ function BuildGeneratorClass:PastBuildsMove()
 	local key = self.know.BuildKey(self.options, self.mainGem.name, self.build.spec.curAscendClassName)
 	local past = self.know.Past(key)
 	if #past == 0 then return 0 end
+	-- whole builds remembered: crossed with this one in a short population
+	-- search (a generation that took a worse path still ends at least as well
+	-- as the best earlier one, and can combine with it)
+	local seeds = { }
+	for i, entry in ipairs(past) do
+		if entry.state and i <= 2 then
+			local ok, state = pcall(function() return self:DeserializeState(entry.state) end)
+			if ok then t_insert(seeds, { state = state, label = string.format("your earlier build %d", i) }) end
+		end
+	end
+	if #seeds > 0 then
+		return self:PopulationSearch(#seeds + 1, 1, seeds)
+	end
 	local tops = { }
 	for i, entry in ipairs(past) do
 		t_insert(tops, { name = string.format("your earlier build %d (score %.2f)", i, entry.score or 0), parts = entry.parts })
@@ -5849,8 +5862,9 @@ function BuildGeneratorClass:FinishKnowledge(final, mode, before)
 		local key = self.know.BuildKey(self.options, self.mainGem.name, self.build.spec.curAscendClassName)
 		local ok, parts = pcall(self.know.Parts, self.build)
 		if ok then
+			local okState, state = pcall(function() return self:SerializeState() end)
 			t_insert(self.knowRecords.builds, { key = key, entry = { score = final.score, dps = final.dps, ehp = final.ehp,
-				archetype = self.options.archetype and self.options.archetype.id, time = os.time(), parts = parts } })
+				archetype = self.options.archetype and self.options.archetype.id, time = os.time(), parts = parts, state = okState and state or nil } })
 		end
 	end
 	if self.options.knowledgeWrite ~= false then

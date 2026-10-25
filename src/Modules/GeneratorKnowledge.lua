@@ -30,7 +30,7 @@ local M = { }
 -- (bumped when the scorer changes enough that old scores can't be compared)
 M.version = 1
 local maxBuildsPerKey = 3
-local maxBuilds = 120
+local maxBuilds = 60
 local minTries = 8 -- (a step is judged after this many builds of a kind)
 local retryEvery = 5 -- (a skipped step is tried again every this many builds)
 
