@@ -292,6 +292,14 @@ function BuildDoctorClass:Profile()
 		local isDot = mode.main ~= "hit"
 		local dotCfg = cfg
 		if isDot then t_insert(names, "DamageOverTime") end
+		-- (a skill's own damage over time: PoB's DoT configuration for that
+		-- type, with "Damage over Time" and the DoT keywords, and its base)
+		if mode.main == "dot" and skill["dot" .. e .. "Cfg"] then
+			dotCfg = skill["dot" .. e .. "Cfg"]
+			names = { "Damage", e .. "Damage" }
+			if e == "Fire" or e == "Cold" or e == "Lightning" then t_insert(names, "ElementalDamage") end
+			p.base = skill.skillData and skill.skillData[e .. "Dot"] or nil
+		end
 		p.increased = 1 + mdb:Sum("INC", dotCfg, unpack(names)) / 100
 		p.more = mdb:More(dotCfg, unpack(names))
 		p.dotMulti = isDot and (1 + mdb:Sum("BASE", dotCfg, "DotMultiplier", e .. "DotMultiplier") / 100) or 1
@@ -300,7 +308,7 @@ function BuildDoctorClass:Profile()
 	p.crit = mode.main == "hit" and (o.CritEffect or 1) or 1
 	p.speed = mode.main == "hit" and (o.Speed or 0) or 1
 	-- (PoB's own for hits; computed for damage over time)
-	p.enemy = (mode.main == "hit" and o[mode.element .. "EffMult"]) or self:EnemyMultiplier(mode)
+	p.enemy = (mode.main == "hit" and o[mode.element .. "EffMult"]) or (mode.main == "dot" and o[mode.element .. "DotEffMult"]) or self:EnemyMultiplier(mode)
 	p.power, p.frenzy, p.endurance = o.PowerCharges or 0, o.FrenzyCharges or 0, o.EnduranceCharges or 0
 	p.life, p.es, p.mana = o.Life or 0, o.EnergyShield or 0, o.Mana or 0
 	-- the rest: whatever the named layers don't explain
