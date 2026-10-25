@@ -90,7 +90,13 @@ local gen = new("BuildGenerator"):BuildGenerator(build, {
 for pair in (os.getenv("GEN_OPTS") or ""):gmatch("[^,]+") do
 	local k, v = pair:match("^%s*([%w_]+)%s*=%s*(.-)%s*$")
 	if k then
-		if v == "true" then v = true elseif v == "false" then v = false else v = tonumber(v) or v end
+		if v == "true" then v = true elseif v == "false" then v = false
+		elseif v:find("|", 1, true) then
+			-- (lists: "8|12")
+			local list = { }
+			for item in v:gmatch("[^|]+") do list[#list + 1] = tonumber(item) or item end
+			v = list
+		else v = tonumber(v) or v end
 		gen.options[k] = v
 	end
 end

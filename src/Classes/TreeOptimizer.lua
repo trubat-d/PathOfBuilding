@@ -239,6 +239,307 @@ function TreeOptimizerClass:Candidates(limit)
 	return list
 end
 
+------------------------------------------------------------------------------
+-- Whole-tree solver: a prize-collecting Steiner tree. Every main tree passive
+-- gets a value (allocated ones: what the build loses without it; the others:
+-- what it gains with it alone; small passives with the same stats measured
+-- once), each point costs lambda, and the tree of the most value for its
+-- points is found at once (Goemans-Williamson growth, then strong pruning),
+-- lambda searched so it fits the points. Unlike the allocator, which pays
+-- each path from the tree as it is, a group of strong notables far away is
+-- valued together, so a long road to a rich area can win.
+------------------------------------------------------------------------------
+
+-- Values of the passives in reach of the class start (node -> value), in
+-- the context of a node set (nil: the current tree): what the build loses
+-- without a passive of the set, or gains with one more
+function TreeOptimizerClass:NodeValues(reach, set)
+	local gen = self.gen
+	local spec = self.spec
+	local base = set and self:Override(set) or { addNodes = { }, removeNodes = { } }
+	local function with(node, add)
+		local o = { addNodes = { }, removeNodes = { } }
+		for k in pairs(base.addNodes) do o.addNodes[k] = true end
+		for k in pairs(base.removeNodes) do o.removeNodes[k] = true end
+		if add then
+			if o.removeNodes[node] then o.removeNodes[node] = nil else o.addNodes[node] = true end
+		else
+			if o.addNodes[node] then o.addNodes[node] = nil else o.removeNodes[node] = true end
+		end
+		return o
+	end
+	local current = gen:Score(base)
+	local protected = gen.protectedNodes or { }
+	local values, bySig = { }, { }
+	local measured = 0
+	for _, node in ipairs(nodesById(spec.nodes)) do
+		if reach[node] and node ~= self.startNode and not self.fixed[node] then
+			local holdsJewel = node.type == "Socket" and (spec.jewels[node.id] or 0) ~= 0
+			local inSet
+			if set then inSet = set[node] and true or false else inSet = node.alloc end
+			if protected[node.id] or holdsJewel then
+				values[node] = 1000
+			elseif inSet then
+				values[node] = current - gen:Score(with(node, false))
+			elseif gen.forbiddenNodes and gen.forbiddenNodes[node.id] then
+				values[node] = -1000
+			elseif node.type == "Socket" then
+				values[node] = 0
+			else
+				-- (small passives: one measurement per set of stats)
+				local sig = node.type == "Normal" and table.concat(node.sd or { }, "|") or nil
+				if sig and bySig[sig] then
+					values[node] = bySig[sig]
+				else
+					values[node] = gen:Score(with(node, true)) - current
+					if sig then bySig[sig] = values[node] end
+				end
+			end
+			measured = measured + 1
+			if measured % 50 == 0 then gen:Tick() end
+		end
+	end
+	return values
+end
+
+-- Rooted prize-collecting Steiner tree for one lambda (cost of a point).
+-- nodes: list of graph nodes (start first), prize[node] >= 0, weight[node]
+-- (point cost, start 0). Returns the node set (start included).
+local function solvePCST(nodes, adj, prize, weight, start)
+	local n = #nodes
+	local index = { }
+	for i, node in ipairs(nodes) do index[node] = i end
+	-- edges (i < j), cost = mean of the endpoints' weights (exact for equal weights)
+	local eu, ev, ec = { }, { }, { }
+	for i, node in ipairs(nodes) do
+		for _, other in ipairs(adj[node]) do
+			local j = index[other]
+			if j and j > i then
+				eu[#eu + 1], ev[#ev + 1], ec[#ec + 1] = i, j, (weight[node] + weight[other]) / 2
+			end
+		end
+	end
+	local comp, members, active, paid, total, d = { }, { }, { }, { }, { }, { }
+	for i, node in ipairs(nodes) do
+		comp[i], members[i], d[i] = i, { i }, 0
+		paid[i], total[i] = 0, prize[node]
+		active[i] = node ~= start and prize[node] > 0
+	end
+	local rootComp = index[start]
+	local forest = { }
+	local live = { }
+	for e = 1, #eu do live[e] = true end
+	local eps = 1e-12
+	while true do
+		local bestT, bestE, bestC = math.huge, nil, nil
+		for c = 1, n do
+			if active[c] and members[c] then
+				local t = total[c] - paid[c]
+				if t < bestT then bestT, bestE, bestC = t, nil, c end
+			end
+		end
+		for e = 1, #eu do
+			if live[e] then
+				local a, b = comp[eu[e]], comp[ev[e]]
+				if a == b then
+					live[e] = false
+				else
+					local rate = (active[a] and 1 or 0) + (active[b] and 1 or 0)
+					if rate > 0 then
+						local t = (ec[e] - d[eu[e]] - d[ev[e]]) / rate
+						if t < bestT then bestT, bestE, bestC = t, e, nil end
+					end
+				end
+			end
+		end
+		if bestT == math.huge then break end
+		if bestT < 0 then bestT = 0 end
+		for c = 1, n do
+			if active[c] and members[c] then
+				paid[c] = paid[c] + bestT
+				for _, i in ipairs(members[c]) do d[i] = d[i] + bestT end
+			end
+		end
+		if bestC then
+			active[bestC] = false
+		else
+			local a, b = comp[eu[bestE]], comp[ev[bestE]]
+			forest[#forest + 1] = bestE
+			live[bestE] = false
+			-- merge the smaller into the larger
+			if #members[a] < #members[b] then a, b = b, a end
+			for _, i in ipairs(members[b]) do comp[i] = a; t_insert(members[a], i) end
+			members[b] = nil
+			paid[a] = paid[a] + paid[b]
+			total[a] = total[a] + total[b]
+			if a == rootComp or b == rootComp then
+				rootComp = a
+				active[a] = false
+			else
+				active[a] = total[a] - paid[a] > eps
+			end
+			active[b] = false
+		end
+	end
+	-- the root's tree, strongly pruned: a branch stays if what it brings beats its points
+	local treeAdj = { }
+	for _, e in ipairs(forest) do
+		local u, v = eu[e], ev[e]
+		treeAdj[u] = treeAdj[u] or { }
+		treeAdj[v] = treeAdj[v] or { }
+		t_insert(treeAdj[u], v)
+		t_insert(treeAdj[v], u)
+	end
+	local root = index[start]
+	local order, parent = { root }, { [root] = 0 }
+	local head = 1
+	while head <= #order do
+		local u = order[head]
+		head = head + 1
+		for _, v in ipairs(treeAdj[u] or { }) do
+			if parent[v] == nil then parent[v] = u; t_insert(order, v) end
+		end
+	end
+	local net = { }
+	for k = #order, 1, -1 do
+		local u = order[k]
+		net[u] = (net[u] or 0) + prize[nodes[u]] - weight[nodes[u]]
+		local p = parent[u]
+		if p and p > 0 and net[u] > 0 then net[p] = (net[p] or 0) + net[u] end
+	end
+	local set = { }
+	for _, u in ipairs(order) do
+		local p = parent[u]
+		if u == root or (set[nodes[p]] and net[u] > 0) then set[nodes[u]] = true end
+	end
+	return set
+end
+
+-- The whole-tree solver: values measured one passive at a time miss what
+-- passives do together (many mana passives dropped at once break mana
+-- sustain, while each alone has slack), so it iterates: values measured in
+-- the context of a tree, trees solved for several "stay" bonuses (passives
+-- of that tree get a bonus: from close to it to free), each measured for
+-- real; the best becomes the context of the next round. Returns the best
+-- tree found and its score (Evaluate), or nil.
+function TreeOptimizerClass:GlobalSolve(reach, currentScore)
+	local gen = self.gen
+	local debug = gen.options.debugTiming
+	local nodes, adj, prize, weight = { self.startNode }, { }, { }, { }
+	for node in pairs(reach) do
+		if node ~= self.startNode and not self.fixed[node] then t_insert(nodes, node) end
+	end
+	t_sort(nodes, function(a, b)
+		if a == self.startNode then return true elseif b == self.startNode then return false end
+		return a.id < b.id
+	end)
+	local inGraph = { }
+	for _, node in ipairs(nodes) do inGraph[node] = true end
+	for _, node in ipairs(nodes) do
+		local list = { }
+		for _, other in ipairs(node.linked) do
+			if inGraph[other] and self:Passable(other) then t_insert(list, other) end
+		end
+		adj[node] = list
+	end
+	-- points the main tree has: the budget less the kept parts and masteries
+	local masteries = 0
+	for _, node in pairs(self.spec.allocNodes) do
+		if node.type == "Mastery" and not node.ascendancyName then masteries = masteries + 1 end
+	end
+	local points = self.budget - self.fixedCost - masteries
+	local function solve(values, context, lambda, stay)
+		for _, node in ipairs(nodes) do
+			local inContext
+			if context then inContext = context[node] else inContext = node.alloc end
+			local v = (values[node] or 0) + (inContext and stay or 0)
+			prize[node] = m_max(0, v)
+			weight[node] = node == self.startNode and 0 or (lambda + m_max(0, -v))
+		end
+		local set = solvePCST(nodes, adj, prize, weight, self.startNode)
+		local count = 0
+		for node in pairs(set) do if node ~= self.startNode then count = count + 1 end end
+		return set, count
+	end
+	-- (lambda: bisection on a log scale for the largest tree within the points)
+	-- (the tree size isn't monotonic in lambda: the largest tree within the
+	-- points seen during the search is kept)
+	local function fit(values, context, stay)
+		local lo, hi = 1e-6, 1
+		local best, bestCount
+		for _ = 1, 18 do
+			local mid = math.sqrt(lo * hi)
+			local set, count = solve(values, context, mid, stay)
+			if count > points then
+				lo = mid
+			else
+				hi = mid
+				if not bestCount or count > bestCount then best, bestCount = set, count end
+			end
+			gen:Tick()
+		end
+		return best
+	end
+	local function same(a, b)
+		for node in pairs(a) do if not b[node] then return false end end
+		for node in pairs(b) do if not a[node] then return false end end
+		return true
+	end
+	local bestSet, bestScore
+	local context
+	local tried = { }
+	for round = 1, gen.options.treeSolverRounds or 3 do
+		local t0 = os.clock()
+		local values = self:NodeValues(reach, context)
+		local roundBest, roundScore, nextContext, nextScore
+		for _, stay in ipairs(gen.options.treeSolverStay or { 0, 0.002, 0.004, 0.008, 0.016, 0.03 }) do
+			local set = fit(values, context, stay)
+			local new = set and true
+			for _, old in ipairs(tried) do if set and same(set, old) then new = false break end end
+			if new then
+				t_insert(tried, set)
+				local score = self:Evaluate(set)
+				if debug then
+					local changed = 0
+					for node in pairs(set) do if not node.alloc then changed = changed + 1 end end
+					ConPrintf("[tree solver] round %d, stay %.3f: %d of %d points, %d passives new: %s (current %.4f)", round, stay, self:Cost(set), self.budget, changed, score and string.format("%.4f", score) or "over budget", currentScore)
+				end
+				if score and (not roundScore or score > roundScore) then roundBest, roundScore = set, score end
+				-- (the next round's context: the best tree that changed something,
+				-- even if worse: measured there, what it lacks shows its worth)
+				local changed = false
+				for node in pairs(set) do if node ~= self.startNode and not node.alloc then changed = true break end end
+				if score and changed and (not nextScore or score > nextScore) then nextContext, nextScore = set, score end
+			end
+			gen:Tick()
+		end
+		if debug then ConPrintf("[tree solver] round %d: %.1f s", round, os.clock() - t0) end
+		if not roundBest then break end
+		if not bestScore or roundScore > bestScore then bestSet, bestScore = roundBest, roundScore end
+		if not nextContext then break end
+		context = nextContext
+	end
+	return bestSet, bestScore
+end
+
+-- Targets of a node set: notables, keystones, sockets with jewels, protected
+-- nodes and its leaves
+function TreeOptimizerClass:TargetsOf(set)
+	local protected = self.gen.protectedNodes or { }
+	local targets = { }
+	for node in pairs(set) do
+		if node ~= self.startNode then
+			local degree = 0
+			for _, other in ipairs(node.linked) do if set[other] then degree = degree + 1 end end
+			local holdsJewel = node.type == "Socket" and (self.spec.jewels[node.id] or 0) ~= 0
+			if node.type == "Notable" or node.type == "Keystone" or holdsJewel or protected[node.id] or degree <= 1 then
+				targets[node] = true
+			end
+		end
+	end
+	return targets
+end
+
 -- Runs the optimisation; returns the score gain kept (0 if none)
 function TreeOptimizerClass:Run(opts)
 	opts = opts or { }
@@ -293,8 +594,14 @@ function TreeOptimizerClass:Run(opts)
 			bestSet[node] = true
 		end
 	end
+	-- (a tree already over the budget, e.g. points from a bandit the
+	-- calculation doesn't see yet: its own size is the budget)
+	self.budget = m_max(self.budget, self:Cost(bestSet))
 	local bestScore = self:Evaluate(bestSet)
-	if not bestScore then return 0 end
+	if not bestScore then
+		if gen.options.debugTiming then ConPrintf("[tree] current tree over budget: %d of %d points", self:Cost(bestSet), self.budget) end
+		return 0
+	end
 	local function without(set, node)
 		local copy = { }
 		for n in pairs(set) do if n ~= node then copy[n] = true end end
@@ -318,6 +625,18 @@ function TreeOptimizerClass:Run(opts)
 			gen:Tick()
 		end
 		if not improved then break end
+	end
+	-- 1b. the whole-tree solver's tree, kept when it measures better
+	self.globalWon = false
+	if opts.global ~= false and gen.options.globalTree ~= false then
+		local ok, set, score = pcall(function() return self:GlobalSolve(reach, bestScore) end)
+		if not ok then
+			ConPrintf("Whole-tree solver failed: %s", tostring(set))
+		elseif set and score > bestScore + 0.0005 then
+			bestSet, bestScore = set, score
+			targets = self:TargetsOf(set)
+			self.globalWon = true
+		end
 	end
 	-- 2. swaps: drop a weak target, add a better one, both with real path costs
 	local candidates = self:Candidates(opts.candidates or 30)

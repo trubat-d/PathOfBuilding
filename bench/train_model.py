@@ -66,7 +66,9 @@ def load(paths):
                         # the skill itself: what a support does for it is learnt per skill,
                         # the rest of the features carry the build's situation
                         feats.append("s:" + run.get("skill", "?"))
-                        rows.append({"name": r["n"], "gain": r["g"], "skill": run.get("skill"), "tags": feats,
+                        # (interned, as a tuple: a million rows share a few hundred feature strings)
+                        feats = tuple(sys.intern(t) for t in feats)
+                        rows.append({"name": sys.intern(r["n"]), "gain": r["g"], "skill": sys.intern(run.get("skill") or "?"), "tags": feats,
                                      "investment": run.get("investment"), "pick": r.get("pick"), "cx": r.get("cx"), "run": r.get("run")})
     return rows
 

@@ -2926,9 +2926,12 @@ function BuildGeneratorClass:OptimizeTree()
 	if self.options.notableSwaps then self:SwapForNotables(10) end
 	-- 1. re-choose and reconnect the targets with the fewest points
 	if self.options.treeSearch ~= false then
-		local ok, gain, swaps = pcall(function() return new("TreeOptimizer"):TreeOptimizer(self):Run() end)
+		local optimizer = new("TreeOptimizer"):TreeOptimizer(self)
+		-- (the whole-tree solver runs on the first tree, TreeSolverMove; on a
+		-- finished tree it didn't gain on our test builds)
+		local ok, gain, swaps = pcall(function() return optimizer:Run({ global = self.options.treeSolverFinal == true }) end)
 		if ok and gain and gain > 0.001 then
-			self:Note(string.format("Passive tree rebuilt with shorter paths%s: score %+.3f", (swaps or 0) > 0 and string.format(" and %d better target%s", swaps, swaps == 1 and "" or "s") or "", gain))
+			self:Note(string.format("Passive tree rebuilt %s%s: score %+.3f", optimizer.globalWon and "by the whole-tree solver (the best set of passives for the points, chosen at once)" or "with shorter paths", (swaps or 0) > 0 and string.format(" and %d better target%s", swaps, swaps == 1 and "" or "s") or "", gain))
 		elseif not ok then
 			ConPrintf("Tree optimizer failed: %s", tostring(gain))
 		end
@@ -2941,6 +2944,25 @@ function BuildGeneratorClass:OptimizeTree()
 	if total > 0.001 then
 		self:Note(string.format("Passive tree adjusted in rounds: score %+.3f", total))
 	end
+end
+
+-- The whole-tree solver (TreeOptimizer:GlobalSolve) on the greedy tree: the
+-- best set of passives for the points chosen at once, with a group of strong
+-- notables far away valued together; kept only if the build is better. On
+-- quick Endgame builds before the tidy-up: Righteous Fire 12.19 -> 14.10
+-- (12.71 without it), Cyclone 13.13 -> 13.96 (13.39), Boneshatter the same
+function BuildGeneratorClass:TreeSolverMove()
+	if self.options.treeSolver == false then return 0 end
+	local optimizer = new("TreeOptimizer"):TreeOptimizer(self)
+	local ok, gain, swaps = pcall(function() return optimizer:Run({ global = true }) end)
+	if not ok then
+		ConPrintf("Tree solver failed: %s", tostring(gain))
+		return 0
+	end
+	if gain and gain > 0.001 then
+		self:Note(string.format("Passive tree %s: score %+.3f", optimizer.globalWon and "chosen again by the whole-tree solver (the best set of passives for the points, chosen at once)" or "rebuilt with shorter paths", gain))
+	end
+	return gain or 0
 end
 
 -- Ailment pairs: passives like Cornered Prey ("against Bleeding Enemies") are
@@ -4332,6 +4354,10 @@ function BuildGeneratorClass:PlayerPackagesMove(rounds)
 				if not item or item.type == "Jewel" or item.type == "Flask" or item.type == "Tincture"
 					or not prices.Available(self.options.investment, name) or not finder:IsItemAllowed(item, filter) then
 					missing = true
+					if self.options.debugTiming then
+						local _, why = GetGeneratorRules().UniqueAllowed(item or { title = name })
+						ConPrintf("[player packages] %s skipped: %s %s", table.concat(package.uniques, " + "), name, why or (item and "not affordable or not allowed" or "unknown"))
+					end
 					break
 				end
 				if not equipped[name] then
@@ -5987,7 +6013,7 @@ end
 local skippableSteps = {
 	"ChooseMetaUniques", "UniqueSweep", "ChooseArchetypeJewels", "AddJewels", "ChooseTimelessJewel", "ChooseMetaJewels",
 	"ChooseRadiusJewels", "ChooseClusterJewels", "ChooseAnoint", "ChooseTattoos", "UniqueFlaskSweep", "PermanentFlaskMove",
-	"FlaskEnchantMove", "AuraStackMove", "FillMainLinkMove", "ApplySynergies", "JointMoves", "UniqueCombosMove", "PlayerPackagesMove",
+	"FlaskEnchantMove", "AuraStackMove", "FillMainLinkMove", "ApplySynergies", "JointMoves", "UniqueCombosMove", "PlayerPackagesMove", "TreeSolverMove",
 	"ConditionEnablerMove", "CrossIdeasMove", "LearnFromTopBuilds", "PopularPassivesMove", "AscendancyRecheck",
 	"FinalSupports", "PairAilments", "PearlMove", "CorruptionMove", "SupremeOstentationMove", "BossSkillMove", "PastBuildsMove",
 }
@@ -6296,6 +6322,7 @@ function BuildGeneratorClass:Run()
 		-- traded for notables, then the least useful freed and spent again).
 		-- On quick Endgame builds: Boneshatter 14.5 -> 16.5, Cyclone 13.4 -> 14.9
 		if opts.quickRefine ~= false then
+			self:TreeSolverMove()
 			self:SwapForNotables(6)
 			for _, n in ipairs(opts.quickRefineRounds or { 8, 12 }) do self:RefineTree(n) end
 		end
@@ -6319,6 +6346,7 @@ function BuildGeneratorClass:Run()
 		for _, price in ipairs(self.costs) do total = total + (price or 0) end
 		return { log = self.log, final = final, cost = total, ideas = { }, configChanges = self.configChanges or { }, assumptions = { } }
 	end
+	self:TreeSolverMove()
 	self:ChooseBloodline()
 
 	stage(8, (opts.investment.influences or 0) > 0 and "Generating influenced rare items" or "Generating rare items again")

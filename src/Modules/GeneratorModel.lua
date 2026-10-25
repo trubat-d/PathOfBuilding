@@ -62,6 +62,38 @@ function M.SupportChance(name, feats)
 	return 1 / (1 + math.exp(-z)), entry.n or 0
 end
 
+-- Chance from the boosted model (bench/train_boosted.py: gradient boosted
+-- trees over the same features plus the support itself, which learn
+-- combinations such as "helps when mana is short and the skill is fast");
+-- nil without one
+function M.BoostedChance(name, feats)
+	local model = M.Load()
+	local boosted = model and model.boosted
+	if not boosted or not boosted.trees then return nil end
+	local z = boosted.init or 0
+	for _, tree in ipairs(boosted.trees) do
+		local i = tree.root or 0
+		while i >= 0 do
+			local node = tree.nodes[i + 1]
+			local f, test = node[1], node[2]
+			local left
+			if type(test) == "table" then
+				-- (categories: the support names going left, as a set once)
+				if not node.set then
+					node.set = { }
+					for _, c in ipairs(test) do node.set[c] = true end
+				end
+				left = f == "support" and node.set[name] or false
+			else
+				left = (feats[f] and 1 or 0) <= test
+			end
+			i = left and node[3] or node[4]
+		end
+		z = z + tree.leaves[-i]
+	end
+	return 1 / (1 + math.exp(-z))
+end
+
 -- Should the generator skip this support for this main skill gem? (never when
 -- the trainer found no safe threshold: skipBelow 0)
 function M.SkipSupport(name, gem, context)
@@ -100,6 +132,12 @@ function M.SkipSupport(name, gem, context)
 		if not set or not set[name] then return false end
 	end
 	local p, n = M.SupportChance(name, feats)
+	-- (the boosted model, when it skipped more than the logistic one in
+	-- validation without a real loss, decides instead)
+	if p ~= nil and model.boosted and (model.boosted.skipBelow or 0) > 0 then
+		local pb = M.BoostedChance(name, feats)
+		if pb then return n >= (model.minSeen or 30) and pb < model.boosted.skipBelow end
+	end
 	return p ~= nil and n >= (model.minSeen or 30) and p < model.skipBelow
 end
 

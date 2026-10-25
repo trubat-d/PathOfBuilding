@@ -100,6 +100,11 @@ elseif step == "refine" then
 	-- (one allocation first, as the generator's tree has been allocated before refining)
 	gen:AllocateTree(true)
 	for _, n in ipairs({ 6, 10, 16, 6 }) do print("REFINE", n, gen:RefineTree(n)) end
+elseif step == "tree" or step == "treeplain" then
+	-- (tree: the tree optimizer with the whole-tree solver; treeplain: without)
+	local opt = new("TreeOptimizer"):TreeOptimizer(gen)
+	local gain, swaps = opt:Run({ global = step == "tree" })
+	print("TREE", gain, swaps, "solver won:", tostring(opt.globalWon), "points", opt.globalPoints, opt.globalCount)
 elseif step == "repair" then
 	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
 	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
