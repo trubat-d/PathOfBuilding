@@ -60,13 +60,16 @@ PriceSourceClass.scarceUniques = {
 }
 
 -- The investment level for a total budget (divines for the whole build): the
--- highest level whose rares fit about twelve times in it (a build's ten gear
--- slots and a couple of jewels), with per-item caps from the total (one item
+-- highest level whose rares fit about six times in it, with per-item caps from the total (one item
 -- can't take more than half of it). The build is then fitted under the total
 -- (BuildGenerator:FitTotalBudget), so the budget is spent where it scores
 -- best rather than left over: by the old "budget up to" limits, 449 divines
 -- made 8-divine rares and a 117-divine Cyclone next to players' 450-divine builds
-local RARES_PER_BUILD = 12
+-- (6: the level whose rares the total buys six times; the fit then trims the
+-- parts worth the least per divine. With 12, 270 divines picked High and a
+-- Winter Orb spent 83 of them: 16.73; with 6, Endgame fitted to 250: 17.07,
+-- 3.1M -> 3.7M DPS, physical max hit 16k -> 21k)
+local RARES_PER_BUILD = 6
 function PriceSourceClass.ForBudget(total, raresPerBuild)
 	local chosen
 	for _, level in ipairs(PriceSourceClass.levels) do

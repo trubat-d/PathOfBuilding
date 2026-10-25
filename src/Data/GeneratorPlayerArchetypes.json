@@ -1,0 +1,1146 @@
+{
+ "skills": {
+  "Absolution": {
+   "builds": 6,
+   "keystones": [
+    "Eldritch Battery",
+    "Roiling Tempest"
+   ],
+   "shares": {
+    "Asenath's Gentle Touch": 0.67,
+    "Dawnbreaker": 0.5,
+    "Doryani's Prototype": 1.0,
+    "Eldritch Battery": 1.0,
+    "Garb of the Ephemeral": 0.83,
+    "Kalandra's Touch": 0.83,
+    "Kingmaker": 1.0,
+    "Leer Cast": 0.5,
+    "Mageblood": 0.83,
+    "Roiling Tempest": 0.67,
+    "Svalinn": 0.5,
+    "Windscream": 0.83
+   },
+   "supports": [
+    "Physical to Lightning",
+    "Greater Spell Echo",
+    "Increased Critical Damage"
+   ],
+   "uniques": [
+    "Doryani's Prototype",
+    "Kingmaker",
+    "Mageblood",
+    "Windscream",
+    "Kalandra's Touch",
+    "Garb of the Ephemeral",
+    "Asenath's Gentle Touch",
+    "Dawnbreaker",
+    "Leer Cast",
+    "Svalinn"
+   ]
+  },
+  "Blade Blast": {
+   "builds": 6,
+   "keystones": [
+    "Eternal Youth",
+    "Blood Magic",
+    "The Agnostic"
+   ],
+   "shares": {
+    "Azadi Crest": 0.5,
+    "Blood Magic": 0.5,
+    "Doppelganger Guise": 0.5,
+    "Eternal Youth": 0.67,
+    "Festering Resentment": 0.5,
+    "Mageblood": 0.5,
+    "Ralakesh's Impatience": 0.5,
+    "The Agnostic": 0.5,
+    "The Anvil": 0.5,
+    "Valyrium": 0.5
+   },
+   "supports": [
+    "Deadly Ailments",
+    "Unbound Ailments",
+    "Physical to Lightning",
+    "Added Fire Damage",
+    "Cast when Stunned",
+    "Increased Critical Damage"
+   ],
+   "uniques": [
+    "Festering Resentment",
+    "Azadi Crest",
+    "Doppelganger Guise",
+    "Ralakesh's Impatience",
+    "The Anvil",
+    "Valyrium",
+    "Mageblood"
+   ]
+  },
+  "Blade Vortex": {
+   "builds": 6,
+   "keystones": [
+    "Pain Attunement"
+   ],
+   "shares": {
+    "Headhunter": 0.83,
+    "Lost Unity": 0.83,
+    "Pain Attunement": 0.5,
+    "Svalinn": 1.0
+   },
+   "supports": [
+    "Greater Unleash",
+    "Increased Critical Damage",
+    "Power Charge On Critical",
+    "Inspiration"
+   ],
+   "uniques": [
+    "Svalinn",
+    "Lost Unity",
+    "Headhunter"
+   ]
+  },
+  "Blight of Contagion": {
+   "builds": 6,
+   "keystones": [
+    "Zealot's Oath",
+    "Chaos Inoculation",
+    "The Agnostic"
+   ],
+   "shares": {
+    "Badge of the Brotherhood": 0.67,
+    "Chaos Inoculation": 0.83,
+    "Kalandra's Touch": 0.67,
+    "Mageblood": 1.0,
+    "Ralakesh's Impatience": 0.67,
+    "The Agnostic": 0.67,
+    "Zealot's Oath": 1.0
+   },
+   "supports": [
+    "Swift Affliction",
+    "Infused Channelling",
+    "Controlled Destruction",
+    "Void Manipulation",
+    "Arcane Surge"
+   ],
+   "uniques": [
+    "Mageblood",
+    "Ralakesh's Impatience",
+    "Badge of the Brotherhood",
+    "Kalandra's Touch"
+   ]
+  },
+  "Boneshatter": {
+   "builds": 6,
+   "keystones": [
+    "Divine Shield",
+    "Eternal Youth",
+    "Precise Technique"
+   ],
+   "shares": {
+    "Arn's Anguish": 0.5,
+    "Divine Shield": 0.67,
+    "Eternal Youth": 0.5,
+    "Kalandra's Touch": 0.83,
+    "Kaom's Sign": 0.67,
+    "Mageblood": 0.5,
+    "Precise Technique": 0.5,
+    "Ralakesh's Impatience": 0.5
+   },
+   "supports": [
+    "Impale",
+    "Ruthless",
+    "Endurance Charge on Melee Stun",
+    "Brutality",
+    "Fortify"
+   ],
+   "uniques": [
+    "Kalandra's Touch",
+    "Kaom's Sign",
+    "Ralakesh's Impatience",
+    "Arn's Anguish",
+    "Mageblood"
+   ]
+  },
+  "Corrupting Fever": {
+   "builds": 6,
+   "keystones": [
+    "Eternal Youth"
+   ],
+   "shares": {
+    "Death Rush": 0.5,
+    "Eternal Youth": 0.5,
+    "Lost Unity": 1.0,
+    "Mageblood": 1.0,
+    "Svalinn": 1.0,
+    "The Dark Monarch": 1.0,
+    "The Primordial Chain": 1.0
+   },
+   "supports": [
+    "Brutality",
+    "Swift Affliction",
+    "Vaal Reap of Butchery",
+    "Eclipse",
+    "Awakened Empower"
+   ],
+   "uniques": [
+    "Svalinn",
+    "The Dark Monarch",
+    "The Primordial Chain",
+    "Lost Unity",
+    "Mageblood",
+    "Death Rush"
+   ]
+  },
+  "Cyclone": {
+   "builds": 6,
+   "keystones": [
+    "Chaos Inoculation",
+    "Zealot's Oath"
+   ],
+   "shares": {
+    "Chaos Inoculation": 0.5,
+    "Le Heup of All": 0.5,
+    "Mageblood": 0.67,
+    "Whispers of Infinity": 0.5,
+    "Zealot's Oath": 0.5
+   },
+   "supports": [
+    "Cast On Critical Strike",
+    "Greater Volley",
+    "Cooldown Recovery",
+    "Forbidden Rite of Soul Sacrifice"
+   ],
+   "uniques": [
+    "Mageblood",
+    "Whispers of Infinity",
+    "Le Heup of All"
+   ]
+  },
+  "Cyclone of Tumult": {
+   "builds": 10,
+   "keystones": [
+    "Versatile Combatant"
+   ],
+   "shares": {
+    "Mageblood": 0.6,
+    "Versatile Combatant": 0.8
+   },
+   "supports": [
+    "Infused Channelling",
+    "Melee Physical Damage",
+    "Brutality",
+    "Pulverise"
+   ],
+   "uniques": [
+    "Mageblood"
+   ]
+  },
+  "Detonate Dead of Scavenging": {
+   "builds": 6,
+   "keystones": [
+    "Blood Magic",
+    "Elemental Overload",
+    "Eternal Youth",
+    "The Agnostic"
+   ],
+   "shares": {
+    "Azadi Crest": 1.0,
+    "Blood Magic": 1.0,
+    "Elemental Overload": 1.0,
+    "Eternal Youth": 0.83,
+    "Festering Resentment": 0.5,
+    "Lori's Lantern": 0.5,
+    "Mageblood": 0.67,
+    "Nebulis": 0.5,
+    "Ralakesh's Impatience": 0.67,
+    "The Agnostic": 0.67,
+    "The Anvil": 0.67,
+    "Valyrium": 1.0
+   },
+   "supports": [
+    "Cruelty",
+    "Cast when Stunned",
+    "Efficacy",
+    "Unbound Ailments",
+    "Fire Penetration",
+    "Combustion"
+   ],
+   "uniques": [
+    "Azadi Crest",
+    "Valyrium",
+    "Ralakesh's Impatience",
+    "The Anvil",
+    "Mageblood",
+    "Festering Resentment",
+    "Lori's Lantern",
+    "Nebulis"
+   ]
+  },
+  "Dual Strike of Ambidexterity": {
+   "builds": 6,
+   "keystones": [
+    "Versatile Combatant",
+    "Chaos Inoculation",
+    "Precise Technique",
+    "Roiling Tempest"
+   ],
+   "shares": {
+    "Chaos Inoculation": 0.83,
+    "Ephemeral Edge": 0.83,
+    "Essentia Sanguis": 0.83,
+    "Le Heup of All": 0.5,
+    "Mageblood": 0.83,
+    "Precise Technique": 0.83,
+    "Roiling Tempest": 0.67,
+    "Shavronne's Revelation": 0.67,
+    "Versatile Combatant": 1.0,
+    "Voice of the Storm": 0.83
+   },
+   "supports": [
+    "Volatility",
+    "Greater Multistrike",
+    "Elemental Damage with Attacks",
+    "Ruthless",
+    "Damage on Full Life"
+   ],
+   "uniques": [
+    "Ephemeral Edge",
+    "Essentia Sanguis",
+    "Voice of the Storm",
+    "Mageblood",
+    "Shavronne's Revelation",
+    "Le Heup of All"
+   ]
+  },
+  "Earthshatter": {
+   "builds": 6,
+   "keystones": [
+    "Iron Reflexes",
+    "Iron Will"
+   ],
+   "shares": {
+    "Crown of Eyes": 0.67,
+    "Iron Reflexes": 0.67,
+    "Iron Will": 0.67,
+    "Mageblood": 0.83,
+    "Mahuxotl's Machination": 0.67,
+    "Replica Alberon's Warpath": 0.67,
+    "The Iron Fortress": 0.67
+   },
+   "supports": [
+    "Overexertion",
+    "Pulverise",
+    "Volatility",
+    "Increased Critical Strikes",
+    "Increased Critical Damage"
+   ],
+   "uniques": [
+    "Mageblood",
+    "Mahuxotl's Machination",
+    "Crown of Eyes",
+    "The Iron Fortress",
+    "Replica Alberon's Warpath"
+   ]
+  },
+  "Elemental Hit of the Spectrum": {
+   "builds": 6,
+   "keystones": [],
+   "shares": {
+    "Headhunter": 0.83,
+    "Hyrri's Ire": 0.67,
+    "Hyrri's Truth": 0.67,
+    "The Fledgling": 0.83,
+    "The Taming": 0.67
+   },
+   "supports": [
+    "Trinity",
+    "Elemental Damage with Attacks",
+    "Increased Critical Damage",
+    "Invert the Rules",
+    "Inspiration"
+   ],
+   "uniques": [
+    "The Fledgling",
+    "Headhunter",
+    "Hyrri's Ire",
+    "Hyrri's Truth",
+    "The Taming"
+   ]
+  },
+  "Essence Drain": {
+   "builds": 6,
+   "keystones": [
+    "Chaos Inoculation",
+    "Zealot's Oath",
+    "The Agnostic"
+   ],
+   "shares": {
+    "Badge of the Brotherhood": 0.83,
+    "Chaos Inoculation": 1.0,
+    "Kalandra's Touch": 0.67,
+    "Mageblood": 1.0,
+    "Ralakesh's Impatience": 0.83,
+    "The Agnostic": 0.67,
+    "Zealot's Oath": 1.0
+   },
+   "supports": [
+    "Swift Affliction",
+    "Efficacy",
+    "Controlled Destruction",
+    "Void Manipulation",
+    "Empower"
+   ],
+   "uniques": [
+    "Mageblood",
+    "Ralakesh's Impatience",
+    "Badge of the Brotherhood",
+    "Kalandra's Touch"
+   ]
+  },
+  "Ethereal Knives": {
+   "builds": 10,
+   "keystones": [
+    "Chaos Inoculation",
+    "Zealot's Oath",
+    "Pain Attunement"
+   ],
+   "shares": {
+    "Chaos Inoculation": 0.9,
+    "Headhunter": 0.6,
+    "Lost Unity": 0.6,
+    "Mageblood": 0.4,
+    "Nimis": 0.8,
+    "Pain Attunement": 0.5,
+    "Zealot's Oath": 0.6
+   },
+   "supports": [
+    "Greater Spell Echo",
+    "Inspiration",
+    "Pinpoint",
+    "Overloaded Intensity",
+    "Invert the Rules"
+   ],
+   "uniques": [
+    "Nimis",
+    "Lost Unity",
+    "Headhunter",
+    "Mageblood"
+   ]
+  },
+  "Ethereal Knives of the Massacre": {
+   "builds": 6,
+   "keystones": [
+    "Elemental Overload",
+    "Pain Attunement"
+   ],
+   "shares": {
+    "Elemental Overload": 1.0,
+    "Grace of the Goddess": 0.83,
+    "Headhunter": 0.83,
+    "Lost Unity": 1.0,
+    "Pain Attunement": 0.5,
+    "Polaric Devastation": 0.83,
+    "Replica Dragonfang's Flight": 0.83,
+    "Servant of Decay": 0.5,
+    "Svalinn": 1.0
+   },
+   "supports": [
+    "Cruelty",
+    "Swift Affliction",
+    "Inspiration"
+   ],
+   "uniques": [
+    "Svalinn",
+    "Lost Unity",
+    "Grace of the Goddess",
+    "Polaric Devastation",
+    "Replica Dragonfang's Flight",
+    "Headhunter",
+    "Servant of Decay"
+   ]
+  },
+  "Flicker Strike": {
+   "builds": 10,
+   "keystones": [],
+   "shares": {
+    "Crown of Eyes": 0.4,
+    "Kalandra's Touch": 0.9,
+    "Mageblood": 0.7,
+    "Paradoxica": 0.6,
+    "Replica Alberon's Warpath": 0.4,
+    "Replica Farrul's Fur": 1.0,
+    "Svalinn": 0.5
+   },
+   "supports": [
+    "Greater Multistrike",
+    "Close Combat",
+    "Increased Critical Damage",
+    "Endurance Charge on Melee Stun"
+   ],
+   "uniques": [
+    "Replica Farrul's Fur",
+    "Kalandra's Touch",
+    "Mageblood",
+    "Paradoxica",
+    "Svalinn",
+    "Crown of Eyes",
+    "Replica Alberon's Warpath"
+   ]
+  },
+  "Forbidden Rite of Soul Sacrifice": {
+   "builds": 6,
+   "keystones": [
+    "Chaos Inoculation",
+    "Zealot's Oath",
+    "Ghost Dance"
+   ],
+   "shares": {
+    "Chaos Inoculation": 1.0,
+    "Ghost Dance": 0.5,
+    "Mageblood": 1.0,
+    "Malachai's Loop": 0.83,
+    "Ralakesh's Impatience": 0.83,
+    "Romira's Banquet": 0.67,
+    "Void Battery": 0.67,
+    "Whispers of Infinity": 1.0,
+    "Willclash": 0.5,
+    "Zealot's Oath": 1.0
+   },
+   "supports": [
+    "Greater Spell Echo",
+    "Pinpoint",
+    "Intensify",
+    "Power Charge On Critical",
+    "Void Manipulation"
+   ],
+   "uniques": [
+    "Whispers of Infinity",
+    "Mageblood",
+    "Malachai's Loop",
+    "Ralakesh's Impatience",
+    "Romira's Banquet",
+    "Void Battery",
+    "Willclash"
+   ]
+  },
+  "Heavy Strike of Trarthus": {
+   "builds": 6,
+   "keystones": [
+    "Iron Will",
+    "Divine Shield",
+    "Iron Reflexes",
+    "Versatile Combatant"
+   ],
+   "shares": {
+    "Advancing Fortress": 0.5,
+    "Divine Shield": 0.83,
+    "Iron Reflexes": 0.83,
+    "Iron Will": 1.0,
+    "Mageblood": 0.83,
+    "Replica Alberon's Warpath": 1.0,
+    "The Iron Fortress": 1.0,
+    "Versatile Combatant": 0.83
+   },
+   "supports": [
+    "Volatility",
+    "Greater Multistrike",
+    "Increased Critical Damage",
+    "Void Manipulation",
+    "Ruthless"
+   ],
+   "uniques": [
+    "The Iron Fortress",
+    "Replica Alberon's Warpath",
+    "Mageblood",
+    "Advancing Fortress"
+   ]
+  },
+  "Kinetic Blast": {
+   "builds": 6,
+   "keystones": [
+    "Iron Will"
+   ],
+   "shares": {
+    "Esh's Mirror": 0.5,
+    "Headhunter": 0.5,
+    "Iron Will": 0.5,
+    "Nimis": 0.5,
+    "Replica Alberon's Warpath": 0.5
+   },
+   "supports": [
+    "Increased Critical Damage",
+    "Trinity",
+    "Greater Fork"
+   ],
+   "uniques": [
+    "Esh's Mirror",
+    "Nimis",
+    "Headhunter",
+    "Replica Alberon's Warpath"
+   ]
+  },
+  "Kinetic Blast of Clustering": {
+   "builds": 6,
+   "keystones": [
+    "Chaos Inoculation",
+    "Ghost Reaver"
+   ],
+   "shares": {
+    "Chaos Inoculation": 0.83,
+    "Ghost Reaver": 0.83,
+    "Headhunter": 0.83,
+    "Shavronne's Revelation": 0.67,
+    "Svalinn": 0.67,
+    "Whispers of Infinity": 0.67
+   },
+   "supports": [
+    "Greater Fork",
+    "Increased Critical Damage",
+    "Damage on Full Life",
+    "Returning Projectiles",
+    "Sacred Wisps"
+   ],
+   "uniques": [
+    "Headhunter",
+    "Svalinn",
+    "Whispers of Infinity",
+    "Shavronne's Revelation"
+   ]
+  },
+  "Kinetic Fusillade": {
+   "builds": 6,
+   "keystones": [],
+   "shares": {
+    "Aegis Aurora": 0.5,
+    "Mageblood": 0.67,
+    "Wilma's Requital": 0.67,
+    "Yoke of Suffering": 0.67
+   },
+   "supports": [
+    "Greater Volley",
+    "Increased Critical Damage",
+    "Less Duration",
+    "Ballista Totem",
+    "Invert the Rules"
+   ],
+   "uniques": [
+    "Wilma's Requital",
+    "Yoke of Suffering",
+    "Mageblood",
+    "Aegis Aurora"
+   ]
+  },
+  "Lancing Steel of Spraying": {
+   "builds": 6,
+   "keystones": [
+    "Eldritch Battery",
+    "Pain Attunement"
+   ],
+   "shares": {
+    "Eldritch Battery": 0.67,
+    "Mageblood": 0.67,
+    "Pain Attunement": 0.5,
+    "Svalinn": 0.5,
+    "The Covenant": 0.5
+   },
+   "supports": [
+    "Cast On Critical Strike",
+    "Increased Critical Damage",
+    "Empower"
+   ],
+   "uniques": [
+    "Mageblood",
+    "Svalinn",
+    "The Covenant"
+   ]
+  },
+  "Lightning Arrow": {
+   "builds": 6,
+   "keystones": [],
+   "shares": {
+    "Headhunter": 1.0,
+    "Nimis": 1.0
+   },
+   "supports": [
+    "Trinity",
+    "Invert the Rules",
+    "Elemental Damage with Attacks",
+    "Increased Critical Damage",
+    "Inspiration",
+    "Vicious Projectiles",
+    "Mirage Archer"
+   ],
+   "uniques": [
+    "Nimis",
+    "Headhunter"
+   ]
+  },
+  "Lightning Tendrils of Eccentricity": {
+   "builds": 6,
+   "keystones": [
+    "Pain Attunement",
+    "Roiling Tempest",
+    "Zealot's Oath",
+    "Eternal Youth"
+   ],
+   "shares": {
+    "Eternal Youth": 0.83,
+    "Lori's Lantern": 0.67,
+    "Mageblood": 1.0,
+    "Marylene's Fallacy": 1.0,
+    "Pain Attunement": 1.0,
+    "Pearl of Tsoatha": 1.0,
+    "Roiling Tempest": 1.0,
+    "Zealot's Oath": 1.0
+   },
+   "supports": [
+    "Inspiration",
+    "Arcane Surge",
+    "Controlled Destruction",
+    "Infused Channelling"
+   ],
+   "uniques": [
+    "Marylene's Fallacy",
+    "Pearl of Tsoatha",
+    "Mageblood",
+    "Lori's Lantern"
+   ]
+  },
+  "Penance Brand": {
+   "builds": 10,
+   "keystones": [
+    "Elemental Overload",
+    "Mind Over Matter",
+    "Chaos Inoculation",
+    "Zealot's Oath"
+   ],
+   "shares": {
+    "Aegis Aurora": 0.4,
+    "Chaos Inoculation": 0.8,
+    "Elemental Overload": 1.0,
+    "Grace of the Goddess": 0.9,
+    "Lost Unity": 1.0,
+    "Mageblood": 0.8,
+    "Mind Over Matter": 0.9,
+    "Polaric Devastation": 0.8,
+    "Svalinn": 0.6,
+    "Zealot's Oath": 0.7
+   },
+   "supports": [
+    "Inspiration",
+    "Cruelty",
+    "Swift Affliction"
+   ],
+   "uniques": [
+    "Lost Unity",
+    "Grace of the Goddess",
+    "Mageblood",
+    "Polaric Devastation",
+    "Svalinn",
+    "Aegis Aurora"
+   ]
+  },
+  "Raise Spectre": {
+   "builds": 10,
+   "keystones": [],
+   "shares": {
+    "Bitterbind Point": 0.5,
+    "Doryani's Prototype": 0.4,
+    "Mageblood": 0.6,
+    "The Dark Monarch": 0.4
+   },
+   "supports": [],
+   "uniques": [
+    "Mageblood",
+    "Bitterbind Point",
+    "The Dark Monarch",
+    "Doryani's Prototype"
+   ]
+  },
+  "Reap of Butchery": {
+   "builds": 6,
+   "keystones": [
+    "Eternal Youth"
+   ],
+   "shares": {
+    "Death Rush": 0.67,
+    "Eternal Youth": 0.83,
+    "Lost Unity": 1.0,
+    "Mageblood": 1.0,
+    "Svalinn": 1.0,
+    "The Dark Monarch": 1.0,
+    "The Primordial Chain": 0.83
+   },
+   "supports": [
+    "Brutality",
+    "Swift Affliction",
+    "Awakened Empower",
+    "Eclipse",
+    "Corrupting Fever"
+   ],
+   "uniques": [
+    "Svalinn",
+    "The Dark Monarch",
+    "Lost Unity",
+    "Mageblood",
+    "The Primordial Chain",
+    "Death Rush"
+   ]
+  },
+  "Righteous Fire": {
+   "builds": 10,
+   "keystones": [
+    "Eternal Youth",
+    "Blood Magic",
+    "Unwavering Stance"
+   ],
+   "shares": {
+    "Blood Magic": 0.6,
+    "Defiance of Destiny": 0.6,
+    "Eternal Youth": 0.8,
+    "Kalandra's Touch": 0.7,
+    "Kaom's Heart": 0.8,
+    "Mageblood": 1.0,
+    "Nebulis": 0.7,
+    "Rathpith Globe": 0.7,
+    "Unwavering Stance": 0.6
+   },
+   "supports": [
+    "Swift Affliction",
+    "Elemental Focus",
+    "Lifetap"
+   ],
+   "uniques": [
+    "Mageblood",
+    "Kaom's Heart",
+    "Nebulis",
+    "Rathpith Globe",
+    "Kalandra's Touch",
+    "Defiance of Destiny"
+   ]
+  },
+  "Scorching Ray of Immolation": {
+   "builds": 6,
+   "keystones": [
+    "Unwavering Stance"
+   ],
+   "shares": {
+    "Annihilation's Approach": 1.0,
+    "Cloak of Flame": 0.83,
+    "Kalandra's Touch": 1.0,
+    "Mageblood": 1.0,
+    "Nebulis": 0.83,
+    "Unwavering Stance": 0.5
+   },
+   "supports": [
+    "Multiple Totems",
+    "Lifetap",
+    "Spell Totem",
+    "Controlled Destruction",
+    "Empower",
+    "Burning Damage"
+   ],
+   "uniques": [
+    "Annihilation's Approach",
+    "Kalandra's Touch",
+    "Mageblood",
+    "Nebulis",
+    "Cloak of Flame"
+   ]
+  },
+  "Smite": {
+   "builds": 6,
+   "keystones": [
+    "Chaos Inoculation",
+    "Iron Reflexes",
+    "Zealot's Oath",
+    "Divine Shield",
+    "Precise Technique"
+   ],
+   "shares": {
+    "Chaos Inoculation": 0.83,
+    "Divine Shield": 0.5,
+    "Iron Reflexes": 0.83,
+    "Kalandra's Touch": 0.5,
+    "Mageblood": 0.67,
+    "March of the Legion": 0.67,
+    "Precise Technique": 0.5,
+    "Replica Dreamfeather": 0.5,
+    "The Dark Seer": 0.5,
+    "Zealot's Oath": 0.83
+   },
+   "supports": [
+    "Empower",
+    "Generosity"
+   ],
+   "uniques": [
+    "Mageblood",
+    "March of the Legion",
+    "The Dark Seer",
+    "Kalandra's Touch",
+    "Replica Dreamfeather"
+   ]
+  },
+  "Spark of the Nova": {
+   "builds": 6,
+   "keystones": [
+    "Chaos Inoculation",
+    "Pain Attunement"
+   ],
+   "shares": {
+    "Chaos Inoculation": 0.5,
+    "Kalandra's Touch": 0.5,
+    "Mageblood": 0.83,
+    "Pain Attunement": 0.5,
+    "Pearl of Tsoatha": 0.5
+   },
+   "supports": [
+    "Pinpoint",
+    "Greater Spell Echo",
+    "Overloaded Intensity"
+   ],
+   "uniques": [
+    "Mageblood",
+    "Pearl of Tsoatha",
+    "Kalandra's Touch"
+   ]
+  },
+  "Static Strike of Gathering Lightning": {
+   "builds": 6,
+   "keystones": [
+    "Iron Will",
+    "Divine Shield",
+    "Iron Reflexes",
+    "Precise Technique"
+   ],
+   "shares": {
+    "Crown of Eyes": 1.0,
+    "Divine Shield": 0.67,
+    "Iron Reflexes": 0.5,
+    "Iron Will": 1.0,
+    "Kalandra's Touch": 0.83,
+    "Mageblood": 1.0,
+    "Paradoxica": 0.83,
+    "Precise Technique": 0.5,
+    "Replica Alberon's Warpath": 1.0,
+    "Svalinn": 0.5
+   },
+   "supports": [
+    "Void Manipulation",
+    "Close Combat",
+    "Volatility",
+    "Greater Multistrike"
+   ],
+   "uniques": [
+    "Crown of Eyes",
+    "Replica Alberon's Warpath",
+    "Mageblood",
+    "Paradoxica",
+    "Kalandra's Touch",
+    "Svalinn"
+   ]
+  },
+  "Storm Burst of Repulsion": {
+   "builds": 6,
+   "keystones": [
+    "Ancestral Bond",
+    "Iron Will",
+    "Mind Over Matter",
+    "Roiling Tempest"
+   ],
+   "shares": {
+    "Anathema": 0.83,
+    "Ancestral Bond": 0.83,
+    "Ashes of the Stars": 0.83,
+    "Iron Will": 0.83,
+    "Mageblood": 0.83,
+    "Mind Over Matter": 0.67,
+    "Pearl of Tsoatha": 0.5,
+    "Roiling Tempest": 0.5
+   },
+   "supports": [
+    "Increased Critical Damage",
+    "More Duration",
+    "Spell Totem"
+   ],
+   "uniques": [
+    "Ashes of the Stars",
+    "Anathema",
+    "Mageblood",
+    "Pearl of Tsoatha"
+   ]
+  },
+  "Tornado Shot": {
+   "builds": 6,
+   "keystones": [
+    "Point Blank"
+   ],
+   "shares": {
+    "Headhunter": 0.67,
+    "Kalandra's Touch": 0.5,
+    "Point Blank": 0.5
+   },
+   "supports": [
+    "Elemental Damage with Attacks",
+    "Increased Critical Damage",
+    "Inspiration",
+    "Invert the Rules"
+   ],
+   "uniques": [
+    "Headhunter",
+    "Kalandra's Touch"
+   ]
+  },
+  "Toxic Rain": {
+   "builds": 6,
+   "keystones": [],
+   "shares": {
+    "Dialla's Malefaction": 1.0,
+    "Kalandra's Touch": 0.5,
+    "Mageblood": 0.5,
+    "The Tides of Time": 0.5,
+    "Widowhail": 1.0
+   },
+   "supports": [
+    "Vicious Projectiles",
+    "Efficacy",
+    "Void Manipulation",
+    "More Duration",
+    "Empower"
+   ],
+   "uniques": [
+    "Widowhail",
+    "Dialla's Malefaction",
+    "Mageblood",
+    "The Tides of Time",
+    "Kalandra's Touch"
+   ]
+  },
+  "Vaal Reap": {
+   "builds": 6,
+   "keystones": [
+    "Eternal Youth"
+   ],
+   "shares": {
+    "Eternal Youth": 0.67,
+    "Headhunter": 0.5,
+    "Lost Unity": 1.0,
+    "Mageblood": 0.5,
+    "Svalinn": 0.83,
+    "The Dark Monarch": 0.67,
+    "The Primordial Chain": 0.67
+   },
+   "supports": [
+    "Eclipse",
+    "Empower",
+    "Brutality",
+    "Swift Affliction",
+    "Corrupting Fever"
+   ],
+   "uniques": [
+    "Lost Unity",
+    "Svalinn",
+    "The Dark Monarch",
+    "The Primordial Chain",
+    "Headhunter",
+    "Mageblood"
+   ]
+  },
+  "Viper Strike of the Mamba": {
+   "builds": 6,
+   "keystones": [
+    "Chaos Inoculation",
+    "Ghost Dance",
+    "Perfect Agony"
+   ],
+   "shares": {
+    "Bino's Kitchen Knife": 1.0,
+    "Chaos Inoculation": 1.0,
+    "Essentia Sanguis": 0.83,
+    "Ghost Dance": 1.0,
+    "Le Heup of All": 0.83,
+    "Mageblood": 1.0,
+    "Perfect Agony": 1.0,
+    "Shavronne's Revelation": 1.0,
+    "Whispers of Infinity": 1.0
+   },
+   "supports": [
+    "Melee Physical Damage",
+    "Nightblade",
+    "Swift Affliction",
+    "Deadly Ailments",
+    "Damage on Full Life"
+   ],
+   "uniques": [
+    "Bino's Kitchen Knife",
+    "Whispers of Infinity",
+    "Shavronne's Revelation",
+    "Mageblood",
+    "Essentia Sanguis",
+    "Le Heup of All"
+   ]
+  },
+  "Void Shockwave": {
+   "builds": 6,
+   "keystones": [
+    "Versatile Combatant"
+   ],
+   "shares": {
+    "Carnage Heart": 0.5,
+    "Mageblood": 0.83,
+    "Versatile Combatant": 1.0
+   },
+   "supports": [
+    "Melee Physical Damage",
+    "Brutality",
+    "Pulverise",
+    "Infused Channelling",
+    "Cyclone of Tumult"
+   ],
+   "uniques": [
+    "Mageblood",
+    "Carnage Heart"
+   ]
+  },
+  "Winter Orb": {
+   "builds": 10,
+   "keystones": [
+    "Bitter Frost",
+    "Chaos Inoculation",
+    "Ghost Reaver",
+    "Mind Over Matter"
+   ],
+   "shares": {
+    "Badge of the Brotherhood": 1.0,
+    "Bitter Frost": 0.9,
+    "Chaos Inoculation": 0.9,
+    "Ghost Reaver": 0.9,
+    "Kalandra's Touch": 0.6,
+    "Mageblood": 0.5,
+    "Malachai's Loop": 1.0,
+    "Mind Over Matter": 0.8,
+    "Ralakesh's Impatience": 1.0,
+    "Romira's Banquet": 0.5,
+    "Tulfall": 1.0,
+    "Willclash": 1.0
+   },
+   "supports": [
+    "Power Charge On Critical",
+    "Infused Channelling",
+    "Focused Channelling",
+    "Inspiration"
+   ],
+   "uniques": [
+    "Tulfall",
+    "Malachai's Loop",
+    "Willclash",
+    "Ralakesh's Impatience",
+    "Badge of the Brotherhood",
+    "Kalandra's Touch",
+    "Romira's Banquet",
+    "Mageblood"
+   ]
+  }
+ },
+ "source": "poe.ninja top players",
+ "version": 1
+}

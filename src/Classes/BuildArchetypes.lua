@@ -115,6 +115,10 @@ BuildArchetypesClass.list = {
 	{
 		id = "CRIT", label = "Critical strikes",
 		summary = "Crit chance and multiplier supports linked; tree and gear follow.",
+		-- (crit pays off only when chance and multiplier are both high: the
+		-- crit damage factor counts on its own while the build is made, so
+		-- neither is judged alone. Winter Orb: top players x7.9, ours x1)
+		lens = { stat = "CritEffect", base = 1, label = "Crit damage factor" },
 		supports = { "Increased Critical Strikes", "Increased Critical Damage" },
 		excludeKeystones = { "Elemental Overload", "Resolute Technique" },
 		applies = function(info) return info.hits and not info.minion end,
@@ -312,6 +316,11 @@ function BuildArchetypesClass.ForSkill(gem, meta)
 			t_insert(list, copy)
 		end
 	end
+	-- the skill's top players' archetype (bench/mine_archetypes.py,
+	-- Data/GeneratorPlayerArchetypes.json): one more candidate, built and
+	-- compared like the others
+	local players = BuildArchetypesClass.PlayersArchetype(gem)
+	if players then t_insert(list, players) end
 	-- ideas found in the game data (Classes/IdeaMiner): stats that uniques scale with
 	if BuildArchetypesClass.minedIdeas ~= false then
 		local ok, mined = pcall(function() return new("IdeaMiner"):IdeaMiner().Ideas(info) end)
@@ -322,6 +331,56 @@ function BuildArchetypesClass.ForSkill(gem, meta)
 		end
 	end
 	return list
+end
+
+-- The archetype most top players of a skill share (keystones, gear uniques,
+-- main link supports, from their PoB codes): nil when none was mined for it.
+-- Its stat lens follows what those choices stack: energy shield with Chaos
+-- Inoculation, life with Blood Magic or Kaom's Heart; crit supports add the
+-- crit damage factor as a second lens (chance and multiplier pay off together)
+local playersData
+function BuildArchetypesClass.PlayersArchetype(gem)
+	if not gem then return nil end
+	if playersData == nil then
+		playersData = false
+		local dkjson = require "dkjson"
+		for _, path in ipairs({ (GetScriptPath and GetScriptPath() or ".") .. "/Data/GeneratorPlayerArchetypes.json", "Data/GeneratorPlayerArchetypes.json" }) do
+			local f = io.open(path, "r")
+			if f then
+				local ok, value = pcall(dkjson.decode, f:read("*a"))
+				f:close()
+				if ok and type(value) == "table" and value.skills then playersData = value.skills break end
+			end
+		end
+	end
+	local entry = playersData and (playersData[gem.name] or playersData[(gem.name or ""):gsub("^Vaal ", "")])
+	if not entry or ((#(entry.keystones or { }) == 0) and #(entry.uniques or { }) == 0) then return nil end
+	local set = function(list) local t = { } for _, v in ipairs(list or { }) do t[v] = true end return t end
+	local ks, us, sup = set(entry.keystones), set(entry.uniques), set(entry.supports)
+	local lens
+	if ks["Chaos Inoculation"] then
+		lens = { stat = "EnergyShield", base = 1000, label = "Energy shield" }
+	elseif ks["Blood Magic"] or us["Kaom's Heart"] then
+		lens = { stat = "Life", base = 1000, label = "Life" }
+	end
+	local lens2
+	if sup["Power Charge On Critical"] or sup["Increased Critical Damage"] or sup["Increased Critical Strikes"] then
+		lens2 = { stat = "CritEffect", base = 1, label = "Crit damage factor", weight = 0.3 }
+		if not lens then lens, lens2 = lens2, nil end
+	end
+	local parts = { }
+	if #(entry.keystones or { }) > 0 then t_insert(parts, table.concat(entry.keystones, ", ")) end
+	if #(entry.uniques or { }) > 0 then t_insert(parts, table.concat(entry.uniques, ", ")) end
+	return {
+		id = "PLAYERS",
+		label = string.format("Top players' archetype (%s)", table.concat(parts, "; ")),
+		summary = string.format("What most of the %d top %s players share: %s.", entry.builds or 0, gem.name, table.concat(parts, "; ")),
+		keystones = entry.keystones, uniques = entry.uniques, supports = entry.supports,
+		lens = lens, lens2 = lens2,
+		maxUniques = math.max(3, #(entry.uniques or { })), setTolerance = 0.25,
+		players = true,
+		applies = function() return true end,
+	}
 end
 
 -- Two archetypes together ("A+B"): keystones, uniques, auras, supports and
