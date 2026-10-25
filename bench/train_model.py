@@ -43,6 +43,7 @@ def load(paths):
     rows = []
     for path in paths:
         runs = {}
+        contexts = {}
         with open(path) as f:
             for line in f:
                 line = line.strip()
@@ -51,12 +52,17 @@ def load(paths):
                 r = json.loads(line)
                 if r.get("type") == "run":
                     runs[r["id"]] = r
+                elif r.get("k") == "support_ctx":
+                    contexts[(r.get("run"), r.get("cx"))] = r.get("f", [])
                 elif r.get("k") == "support" and r.get("g") is not None:
                     run = runs.get(r.get("run"))
                     if run:
                         feats = list(run.get("tags", []))
                         for t in GEMS.get(run.get("skill"), {}).get("types", []):
                             feats.append("t:" + t)
+                        # the build's situation at that choice (BuildGenerator:SupportContext)
+                        for c in contexts.get((r.get("run"), r.get("cx")), []):
+                            feats.append("c:" + c)
                         rows.append({"name": r["n"], "gain": r["g"], "skill": run.get("skill"), "tags": feats,
                                      "investment": run.get("investment"), "pick": r.get("pick")})
     return rows
@@ -155,7 +161,8 @@ def main():
     print(f"threshold kept: {chosen} (0 = the model skips nothing)")
     model = train(rows)
     with open(out, "w") as f:
-        json.dump({"version": 2, "helps": HELPS, "skipBelow": chosen, "minSeen": MIN_SEEN, "typeFeatures": bool(GEMS),
+        has_context = any(f.startswith("c:") for r in rows for f in r["tags"])
+        json.dump({"version": 3, "helps": HELPS, "skipBelow": chosen, "minSeen": MIN_SEEN, "typeFeatures": bool(GEMS), "contextFeatures": has_context,
                    "skills": len(skills), "support": model}, f, indent=0, sort_keys=True)
     print(f"written {out}: {len(model)} supports")
 

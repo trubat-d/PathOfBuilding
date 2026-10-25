@@ -61,12 +61,19 @@ end
 
 -- Should the generator skip this support for this main skill gem? (never when
 -- the trainer found no safe threshold: skipBelow 0)
-function M.SkipSupport(name, gem)
+function M.SkipSupport(name, gem, context)
 	local model = M.Load()
 	if not model or (model.skipBelow or 0) <= 0 then return false end
 	M.featureCache = M.featureCache or { }
 	local feats = M.featureCache[gem]
 	if not feats then feats = M.Features(gem) M.featureCache[gem] = feats end
+	-- (the build's situation: BuildGenerator:SupportContext, "c:" features)
+	if context and model.contextFeatures then
+		local all = { }
+		for k in pairs(feats) do all[k] = true end
+		for _, c in ipairs(context) do all["c:" .. c] = true end
+		feats = all
+	end
 	local p, n = M.SupportChance(name, feats)
 	return p ~= nil and n >= (model.minSeen or 30) and p < model.skipBelow
 end

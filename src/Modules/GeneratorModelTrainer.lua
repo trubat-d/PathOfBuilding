@@ -50,9 +50,11 @@ end
 function M.ReadRows(path, tick)
 	local rows, runs, runCount = { }, { }, 0
 	M.pairs = { }
+	M.hasContext = false
 	local f = io.open(path or LoadModule("Modules/GeneratorKnowledge").DecisionsPath(), "r")
 	if not f then return rows, 0 end
 	local features = gemFeatures()
+	local contexts = { }
 	local n = 0
 	for line in f:lines() do
 		n = n + 1
@@ -61,6 +63,9 @@ function M.ReadRows(path, tick)
 		if line:find('"type":"run"', 1, true) then
 			local ok, r = pcall(dkjson.decode, line)
 			if ok and r and r.id then runs[r.id] = r.skill runCount = runCount + 1 end
+		elseif line:find('"k":"support_ctx"', 1, true) then
+			local ok, r = pcall(dkjson.decode, line)
+			if ok and r and r.run and r.cx then contexts[r.run .. "#" .. r.cx] = r.f end
 		elseif line:find('"k":"unique_pair"', 1, true) then
 			-- (unique pairs: the synergy measured, by the two names in order)
 			local ok, r = pcall(dkjson.decode, line)
@@ -79,7 +84,16 @@ function M.ReadRows(path, tick)
 			local ok, r = pcall(dkjson.decode, line)
 			local skill = ok and r and runs[r.run]
 			if skill and r.g and features[skill] then
-				rows[#rows + 1] = { name = r.n, gain = r.g, skill = skill, feats = features[skill] }
+				local feats = features[skill]
+				-- (the build's situation at that choice: "c:" features)
+				local ctx = r.cx and contexts[r.run .. "#" .. r.cx]
+				if ctx then
+					feats = { }
+					for _, x in ipairs(features[skill]) do feats[#feats + 1] = x end
+					for _, c in ipairs(ctx) do feats[#feats + 1] = "c:" .. c end
+					M.hasContext = true
+				end
+				rows[#rows + 1] = { name = r.n, gain = r.g, skill = skill, feats = feats }
 			end
 		end
 	end
@@ -170,7 +184,7 @@ function M.Run(tick, logPath, outPath)
 	local chosen = 0
 	for _, t in ipairs(THRESHOLDS) do if stats[t].missed == 0 then chosen = t end end
 	local model = train(rows, tick)
-	local out = { version = 2, helps = HELPS, skipBelow = chosen, minSeen = MIN_SEEN, typeFeatures = true, skills = skills, runs = runs,
+	local out = { version = 3, helps = HELPS, skipBelow = chosen, minSeen = MIN_SEEN, typeFeatures = true, contextFeatures = M.hasContext or false, skills = skills, runs = runs,
 		measurements = #rows, trainedAt = os.time(), validation = { }, support = model }
 	for _, t in ipairs(THRESHOLDS) do out.validation[tostring(t)] = stats[t] end
 	-- unique pairs: their mean synergy (ranks the pairs worth a calculation: UniqueComboFinder)

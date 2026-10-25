@@ -476,6 +476,46 @@ function BuildGeneratorClass:WithChargesOf(gem, fn)
 	return a, b
 end
 
+-- The build's situation when supports are chosen, as features for the
+-- candidate model (Modules/GeneratorModel) and the decision log: mana
+-- sustain, costs, crit, damage types, damage over time and ailments, speed,
+-- link size, budget. A list of short strings ("sus:low", "dmg:Fire"...)
+function BuildGeneratorClass:SupportContext()
+	local o = self.calcFunc and self.calcFunc({ }) or self.build.calcsTab.mainOutput or { }
+	local f = { }
+	local sc = self.scorer
+	if sc and sc.SkillSustain then
+		local ok, sustain = pcall(function() return (sc:SkillSustain(o)) end)
+		if ok and sustain and sustain < 0.98 then t_insert(f, "sus:low") end
+	end
+	if (o.ManaCost or 0) > 0 and (o.ManaUnreserved or 0) < 3 * o.ManaCost then t_insert(f, "mana:tight") end
+	if (o.LifeCost or 0) > 0 then t_insert(f, "lifecost") end
+	local crit = o.CritChance or 0
+	t_insert(f, crit >= 40 and "crit:high" or crit < 10 and "crit:low" or "crit:mid")
+	local hits = { }
+	local total = 0
+	for _, t in ipairs({ "Physical", "Fire", "Cold", "Lightning", "Chaos" }) do
+		hits[t] = o[t .. "HitAverage"] or 0
+		total = total + hits[t]
+	end
+	if total > 0 then
+		for t, v in pairs(hits) do if v / total >= 0.25 then t_insert(f, "dmg:" .. t) end end
+	end
+	local combined = (o.CombinedDPS or 0) - (o.CullingDPS or 0)
+	if combined > 0 then
+		if 1 - (o.TotalDPS or 0) / combined >= 0.5 then t_insert(f, "dot") end
+		for _, a in ipairs({ { "IgniteDPS", "ign" }, { "PoisonDPS", "poi" }, { "BleedDPS", "bleed" } }) do
+			if (o[a[1]] or 0) > 0.05 * combined then t_insert(f, a[2]) end
+		end
+	end
+	if (o.Speed or 0) > 6 then t_insert(f, "speed:fast") end
+	t_insert(f, "links:" .. tostring(self.mainLinkLimit or 5))
+	local inv = self.options.investment
+	if inv then t_insert(f, "inv:" .. (inv.baseId or inv.id or "?")) end
+	t_sort(f)
+	return f
+end
+
 -- restrict: only the supports that helped this main skill in at least one
 -- of the earlier full choices of this generation (two at least), plus any
 -- never measured (the build's own memory: options.supportMemory = false to
@@ -562,6 +602,12 @@ function BuildGeneratorClass:ChooseSupports(maxSupports, restrict)
 	local forcedCount = #group.gemList - 1
 	self.build.skillsTab:ProcessSocketGroup(group)
 	local current = self:Score()
+	-- the build's situation (model features, decision log)
+	local context
+	if self.decisions or self.options.useModel ~= false then context = self:SupportContext() end
+	self.contextCount = (self.contextCount or 0) + 1
+	local contextId = self.contextCount
+	if self.decisions and context then self:Decision("support_ctx", nil, nil, false, { cx = contextId, f = context }) end
 	-- the supports the candidate model is sure can't help this skill skipped
 	-- (Modules/GeneratorModel; options.useModel = false to try them all)
 	local tryList = supports
@@ -575,7 +621,7 @@ function BuildGeneratorClass:ChooseSupports(maxSupports, restrict)
 			tryList = { }
 			local skipped = 0
 			for _, gemId in ipairs(supports) do
-				if model.SkipSupport(data.gems[gemId].name, self.mainGem) then skipped = skipped + 1 else t_insert(tryList, gemId) end
+				if model.SkipSupport(data.gems[gemId].name, self.mainGem, context) then skipped = skipped + 1 else t_insert(tryList, gemId) end
 			end
 			self.modelSkipped = (self.modelSkipped or 0) + skipped
 		end
@@ -603,7 +649,7 @@ function BuildGeneratorClass:ChooseSupports(maxSupports, restrict)
 				self.build.skillsTab:ProcessSocketGroup(group)
 				local score = self:WithChargesOf(gem, function() return self:Score() end)
 				t_remove(group.gemList)
-				if self.decisions then self:Decision("support", gem.name, score - current, false, { pick = pick }) end
+				if self.decisions then self:Decision("support", gem.name, score - current, false, { pick = pick, cx = contextId }) end
 				if not restrict then bestThisCall[gemId] = m_max(bestThisCall[gemId] or -math.huge, score - current) end
 				-- (variants: gains seen through their factor)
 				local seen = current + (score - current) * (score > current and self:Jitter("support" .. gemId) or 1)
@@ -620,7 +666,7 @@ function BuildGeneratorClass:ChooseSupports(maxSupports, restrict)
 		end
 		local gem = data.gems[best]
 		t_insert(group.gemList, { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = best })
-		self:Decision("support", gem.name, bestScore - current, true, { pick = pick })
+		self:Decision("support", gem.name, bestScore - current, true, { pick = pick, cx = contextId })
 		current = bestScore
 		-- a charge support: switch its charges on for the rest of the choice
 		local mainTypes = self.mainGem and self.mainGem.grantedEffect.skillTypes or { }
