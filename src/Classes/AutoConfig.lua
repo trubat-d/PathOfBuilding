@@ -48,6 +48,10 @@ AutoConfigClass.supportStates = {
 	{ gem = "Feeding Frenzy", var = "feedingFrenzyFeedingFrenzyActive", label = "Feeding Frenzy (Feeding Frenzy Support)" },
 	{ gem = "Fresh Meat", var = "freshMeatBuffs", label = "Fresh Meat (Fresh Meat Support)" },
 	{ gem = "Infused Channelling", var = "infusedChannellingInfusion", needs = "Channel", label = "Infusion while channelling (Infused Channelling Support)" },
+	-- (Intensity at its maximum against a boss: casting in place; the full
+	-- configuration sets it from the scenario, see Run)
+	{ gem = "Pinpoint", var = "intensifyIntensity", value = 3, needs = "Spell", label = "Intensity from casting in place (Pinpoint Support)" },
+	{ gem = "Intensify", var = "intensifyIntensity", value = 3, needs = "Spell", label = "Intensity from casting in place (Intensify Support)" },
 }
 
 -- The support states a support gem grants a main skill with these skill
@@ -421,13 +425,34 @@ function AutoConfigClass:Run()
 				self:Set("buffFortification", true, string.format("fortifying about %.1f times a second from \"%s\"", perSecond, source))
 			end
 		end
+		-- Intensity (Pinpoint, Intensify, Crackling Lance): gained by casting, lost
+		-- every 0.5 s while moving, 3 at most (+1 per "+1 to maximum Intensity").
+		-- At its maximum against a boss (casting in place), about 1 while
+		-- mapping; Apex Mode keeps it up, Nadir Mode drains it
+		local hasIntensity = false
+		for _, name in ipairs(gems) do
+			if name == "Pinpoint" or name == "Intensify" or name:find("^Crackling Lance") then hasIntensity = true end
+		end
+		if hasIntensity and self.optionByVar["intensifyIntensity"] then
+			local maxIntensity, apex, nadir = 3, false, false
+			for _, line in ipairs(lines) do
+				local extra = tonumber(line:match("%+(%d+) to maximum intensity"))
+				if extra then maxIntensity = maxIntensity + extra end
+				if line:find("gained intensity recently gain", 1, true) then apex = true end
+				if line:find("gained intensity recently lose", 1, true) then nadir = true end
+			end
+			local value = nadir and 1 or (boss or apex) and maxIntensity or 1
+			self:Set("intensifyIntensity", value, nadir and "Intensity drained by Nadir Mode" or apex and "kept at its maximum by Apex Mode"
+				or boss and "at its maximum: casting in place against a boss" or "about 1 while moving through maps")
+		end
 		-- buffs the supports linked to the main skill grant it
 		local mainGroup = self.build.skillsTab.socketGroupList[self.build.mainSocketGroup]
 		local mainTypes = skill and skill.skillTypes
 		for _, gem in ipairs(mainGroup and mainGroup.enabled ~= false and mainGroup.gemList or { }) do
 			if gem.enabled ~= false and gem.gemData then
 				for _, state in ipairs(AutoConfigClass.SupportStatesOf(gem.gemData.name, mainTypes)) do
-					self:Set(state.var, true, state.label)
+					-- (Intensity: set from the scenario below)
+					if state.var ~= "intensifyIntensity" then self:Set(state.var, state.value or true, state.label) end
 				end
 			end
 		end

@@ -465,16 +465,25 @@ function BuildGeneratorClass:SupportSwitches(gem)
 		if gem.name:find(kind .. " Charge", 1, true) then t_insert(vars, "use" .. kind .. "Charges") end
 	end
 	self.autoConfigClass = self.autoConfigClass or new("AutoConfig"):AutoConfig({ })
-	for _, state in ipairs(self.autoConfigClass.SupportStatesOf(gem.name, mainTypes)) do t_insert(vars, state.var) end
-	return vars
+	local values = { }
+	for _, state in ipairs(self.autoConfigClass.SupportStatesOf(gem.name, mainTypes)) do
+		t_insert(vars, state.var)
+		-- (a count, e.g. Intensity: its value against a boss; about 1 while mapping)
+		if state.value then
+			local boss = not self.options.configScenario or self.options.configScenario.boss == true
+			values[state.var] = boss and state.value or 1
+		end
+	end
+	return vars, values
 end
 
 function BuildGeneratorClass:WithChargesOf(gem, fn)
 	local input = self.build.configTab.input
 	local changed = { }
-	for _, var in ipairs(self:SupportSwitches(gem)) do
+	local vars, values = self:SupportSwitches(gem)
+	for _, var in ipairs(vars) do
 		if not input[var] then
-			input[var] = true
+			input[var] = values[var] or true
 			t_insert(changed, var)
 		end
 	end
@@ -712,9 +721,10 @@ function BuildGeneratorClass:ChooseSupports(maxSupports, restrict)
 		self:Decision("support", gem.name, bestScore - current, true, { pick = pick, cx = contextId })
 		current = bestScore
 		-- a charge or buff support: its switches on for the rest of the choice
-		for _, var in ipairs(self:SupportSwitches(gem)) do
+		local vars, values = self:SupportSwitches(gem)
+		for _, var in ipairs(vars) do
 			if not self.build.configTab.input[var] then
-				self.build.configTab.input[var] = true
+				self.build.configTab.input[var] = values[var] or true
 				self.supportChargeVars = self.supportChargeVars or { }
 				self.supportChargeVars[var] = true
 			end
