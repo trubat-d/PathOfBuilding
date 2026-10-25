@@ -6511,6 +6511,15 @@ function BuildGeneratorClass:Run()
 	self:PairAilments()
 	self:Move(4, 6, "Optimizing the passive tree")
 	self:OptimizeTree()
+	-- (the build doctor again on the finished build: later steps can undo a
+	-- layer it built, and the balance has moved; one or two plans)
+	if opts.doctor ~= false and opts.finalDoctor ~= false then
+		self:Move(4, 6, "Build doctor: balancing the damage layers")
+		local saved = self.options.doctorPlans
+		self.options.doctorPlans = opts.finalDoctorPlans or 2
+		self:DoctorMove()
+		self.options.doctorPlans = saved
+	end
 	-- a second, cheap round: the rebuilt tree can want other supports or
 	-- ascendancy notables (and those other passives)
 	if opts.polishRound ~= false then
