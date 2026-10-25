@@ -1792,6 +1792,18 @@ function BuildGeneratorClass:MakeRares(withInfluences)
 		self:Recalculate()
 		options.onSlot = function(i, n) self:Inner(((pass - 1) + (i - 1) / n) / passes) end
 		local report = self:RunRaresParallel(finder, options)
+		-- (decision log: each rare made, its mods and what it measured)
+		if self.decisions and report and report.slots then
+			for slotName, slotReport in pairs(report.slots) do
+				local r = slotReport.results and slotReport.results[1]
+				if r and r.item then
+					local mods = { }
+					for _, l in ipairs(r.item.explicitModLines or { }) do t_insert(mods, l.line) end
+					for _, l in ipairs(r.item.implicitModLines or { }) do t_insert(mods, "implicit: " .. l.line) end
+					self:Decision("rare", r.item.baseName or slotName, r.deltaPct and r.deltaPct / 100 or nil, true, { slot = slotName, mods = mods })
+				end
+			end
+		end
 		options.onSlot = nil
 		local count = finder:EquipAll(report)
 		self:Tick()

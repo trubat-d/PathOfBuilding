@@ -194,7 +194,23 @@ local function openReview(build, baseFocus, onImprove)
 			ascendancy = build.spec and build.spec.curAscendClassName }
 		for k, v in pairs(values) do record.values[k] = v.value end
 		local any = next(verdicts) ~= nil or record.note
-		if any then review.Learn(data, record) end
+		if any then
+			review.Learn(data, record)
+			-- (also in the decision log, with the build's context: training data for preferences)
+			pcall(function()
+				local entry = { type = "review", time = record.time, skill = record.skill, ascendancy = record.ascendancy, focus = record.focus,
+					values = record.values, verdicts = record.verdicts, note = record.note, level = build.characterLevel }
+				local main = build.skillsTab and build.skillsTab.socketGroupList[build.mainSocketGroup]
+				local first = main and main.gemList[1] and main.gemList[1].gemData
+				if first then
+					entry.skill = first.name
+					entry.tags = { }
+					for tag in pairs(first.tags or { }) do t_insert(entry.tags, tag) end
+					table.sort(entry.tags)
+				end
+				LoadModule("Modules/GeneratorKnowledge").AppendLine(entry)
+			end)
+		end
 		review.Save(data)
 		return any
 	end

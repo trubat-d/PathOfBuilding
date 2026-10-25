@@ -210,6 +210,15 @@ function M.AppendDecisions(run, decisions, filePath)
 	f:close()
 end
 
+-- One line of its own (a player's review of a build: "type":"review")
+function M.AppendLine(entry, filePath)
+	local f = io.open(filePath or M.DecisionsPath(), "a")
+	if not f then return end
+	entry.v = M.decisionVersion
+	f:write(dkjson.encode(entry), "\n")
+	f:close()
+end
+
 ------------------------------------------------------------------------------
 -- Writing
 ------------------------------------------------------------------------------
