@@ -1168,6 +1168,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 		local queue = { standard }
 		local built = 0
 		state.running = true
+		state.combos = nil
 		local meta
 		local t0 = GetTime()
 		local memoryKey = scanMemoryKey(makeOptions())
@@ -1181,7 +1182,12 @@ function BuildIdeasPopupClass:OpenGenerator()
 				for id, r in pairs(results) do
 					stored[id] = { score = r.score, dps = r.dps, ehp = r.ehp, minHit = r.minHit, notes = r.notes, built = r.built, estimated = r.estimated, error = r.error }
 				end
-				memory[memoryKey] = { time = os.time(), version = SCAN_MEMORY_VERSION, skill = skill.label, ascendancy = asc.ascendName, results = stored }
+				local combos = { }
+				for i, c in ipairs(state.combos or { }) do
+					if i > 6 then break end
+					combos[i] = { ids = c.ids, predicted = c.predicted, why = c.why }
+				end
+				memory[memoryKey] = { time = os.time(), version = SCAN_MEMORY_VERSION, skill = skill.label, ascendancy = asc.ascendName, results = stored, combos = combos }
 				-- (only the 50 most recent scans kept)
 				local keys = { }
 				for k, v in pairs(memory) do if type(v) == "table" and v.time then t_insert(keys, k) end end
@@ -1193,6 +1199,10 @@ function BuildIdeasPopupClass:OpenGenerator()
 			controls.archetype.selIndex = 1
 			local lines = { string.format("^7Archetype scan for %s (%s)%s, best first. Pick one in the Archetype list and click Generate:", skill.label, asc.ascendName,
 				remembered and string.format(" ^xC0C0C0(the scan from %s, same settings: \"Scan archetypes\" scans again)^7", os.date("%d %b %H:%M", remembered.time)) or "") }
+			for i, c in ipairs(state.combos or { }) do
+				if i > 3 then break end
+				t_insert(lines, string.format("^7Combination predicted by the build doctor: %s, x%.1f damage (%s)", c.ids, c.predicted, c.why))
+			end
 			for _, entry in ipairs(controls.archetype.list) do
 				t_insert(lines, "^7- " .. entry.label)
 				if entry.scan and entry.scan.notes then
@@ -1265,6 +1275,12 @@ function BuildIdeasPopupClass:OpenGenerator()
 						state.status = "^7Planning every archetype on top of the first build..."
 						generator.stage = "Planning archetypes"
 						plan = new("ScalingPlanner"):ScalingPlanner(generator):Run(list, { units = 20 })
+						-- the build doctor's combinations of commitments, predicted on
+						-- this build (crit with power charge stacking...): built fully
+						-- by the automatic mode next to the best archetypes
+						generator.stage = "Designing combinations of commitments"
+						local okCombos, combos = pcall(function() return new("BuildDoctor"):BuildDoctor(generator):PredictCombos(list, 3) end)
+						if okCombos then state.combos = combos else ConPrintf("Combination design failed: %s", tostring(combos)) end
 					end
 					return { result = result, plan = plan, minHit = (generator.scorer:MinMaxHit(build.calcsTab.mainOutput)) }
 				end, function(r)
@@ -1324,6 +1340,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 				if memory and memory.version == SCAN_MEMORY_VERSION and type(memory.results) == "table"
 					and os.time() - (memory.time or 0) < SCAN_MEMORY_DAYS * 86400 then
 					remembered = memory
+					state.combos = memory.combos
 					for id, r in pairs(memory.results) do
 						r.log = r.notes
 						results[id] = r
@@ -1381,6 +1398,21 @@ function BuildIdeasPopupClass:OpenGenerator()
 		if ranked[1] and ranked[2] and controls.hybrids.state then
 			local hybrid = archetypeLib.Hybrid(ranked[1].archetype, ranked[2].archetype)
 			if hybrid then t_insert(candidates, hybrid) end
+		end
+		-- (and the build doctor's two best combinations of commitments, from the
+		-- math on the first build: Classes/BuildDoctor:PredictCombos)
+		local added = 0
+		for _, c in ipairs(state.combos or { }) do
+			if added >= 2 then break end
+			if c.ids:find("+", 1, true) and c.predicted >= 1.5 then
+				local skill = controls.skill.list[controls.skill.selIndex]
+				local combo = skill and archetypeLib.ById(data.gems[skill.gemId], c.ids)
+				if combo then
+					combo.label = string.format("Combination: %s (predicted x%.1f damage: %s)", c.ids, c.predicted, c.why)
+					t_insert(candidates, combo)
+					added = added + 1
+				end
+			end
 		end
 		if #candidates < 2 then return false end
 		return state.fullParallel(candidates, tonumber(controls.tries.list[controls.tries.selIndex]) or 1)

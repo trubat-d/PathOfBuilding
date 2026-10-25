@@ -102,12 +102,31 @@ def generate_auto(src, skill, asc, budget, save_dir, top, jobs):
         return q["score"] + (pr.get("uplift", 0) * pr.get("count", 0) + priors.get("globalUplift", 2.8) * 2) / (pr.get("count", 0) + 2)
     ranked = sorted([q for q in quick if q.get("score") is not None], key=lambda q: -priority(q))
     picked = [q["archetype"] for q in ranked[:top]]
+    # the build doctor's combinations of commitments (Classes/BuildDoctor:PredictCombos),
+    # predicted on the best quick build: built fully too
+    combos = []
+    if ranked and os.environ.get("NO_COMBOS") != "1":
+        xml = os.path.join(save_dir, f"{skill.replace(' ', '')}_{asc}_ENDGAME_quick_{ranked[0]['archetype']}.xml")
+        if os.path.exists(xml):
+            env = dict(lua_env(), OURS=xml, STEP="combos", INVEST="ENDGAME")
+            if "playerKnowledge=false" in os.environ.get("GEN_OPTS", ""):
+                env["PLAYER_KNOWLEDGE"] = "0"
+            p = subprocess.run(["luajit", os.path.join(ROOT, "bench", "stage_test.lua")], cwd=src, env=env, capture_output=True, text=True, timeout=1800)
+            for line in p.stdout.splitlines():
+                if line.startswith("COMBO "):
+                    combos.append(line.split()[1])
+    for c in combos:
+        if len([x for x in picked if "+" in x]) >= 2:
+            break
+        if "+" in c and c not in picked:
+            picked.append(c)
     with ThreadPoolExecutor(max_workers=jobs) as pool:
         full = list(pool.map(lambda a: dict(run_bench(src, skill, asc, budget, "full", a, save_dir), archetype=a), picked))
     best = max([f for f in full if f.get("score") is not None], key=lambda f: f["score"], default=None)
     if best:
         best["scan"] = [{"archetype": q["archetype"], "quick": q.get("score")} for q in ranked]
         best["fullTried"] = [{"archetype": f["archetype"], "score": f.get("score")} for f in full]
+        best["combos"] = combos
     return best or {"error": "no full build"}
 
 
