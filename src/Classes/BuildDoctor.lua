@@ -738,17 +738,29 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 	return combos
 end
 
+-- The build's real score: without any commitment lens (lenses steer the
+-- build while it is made, a plan is judged on what the build really is)
+function BuildDoctorClass:TrueScore()
+	local scorer = self.gen.scorer
+	local l1, l2, lx = scorer.lens, scorer.lens2, scorer.lensExtra
+	scorer.lens, scorer.lens2, scorer.lensExtra = nil, nil, nil
+	local score = self.gen:FullScore()
+	scorer.lens, scorer.lens2, scorer.lensExtra = l1, l2, lx
+	return score
+end
+
 -- Builds a plan for real and keeps it when the finished build scores better.
 -- Returns the gain kept (0 if none)
 function BuildDoctorClass:Execute(plan)
 	local gen = self.gen
 	local spec = self.build.spec
 	gen:AutoConfigure()
-	local before = gen:FullScore()
+	local before = self:TrueScore()
 	local snap = gen:Snapshot()
 	local savedForbidden = gen.forbiddenNodes
 	local savedBlocked = gen.blockedSupports and copyTable(gen.blockedSupports, true) or nil
 	local savedLens2 = gen.scorer.lens2
+	local savedExtra = gen.scorer.lensExtra
 	local savedLog = #gen.log
 	local ok, err = pcall(function()
 		gen.forbiddenNodes = { }
@@ -775,7 +787,12 @@ function BuildDoctorClass:Execute(plan)
 		end
 		if plan.lens then gen.scorer.lens2 = plan.lens end
 		-- (joint plans: every committed layer valued at once)
-		if plan.lenses then gen.scorer.lensExtra = plan.lenses end
+		if plan.lenses then
+			local list = { }
+			for _, l in ipairs(savedExtra or { }) do t_insert(list, l) end
+			for _, l in ipairs(plan.lenses) do t_insert(list, l) end
+			gen.scorer.lensExtra = list
+		end
 		-- keystones the plan commits to (Chaos Inoculation for an energy shield pool)
 		gen.protectedNodes = gen.protectedNodes or { }
 		for _, name in ipairs(plan.take or { }) do
@@ -797,14 +814,14 @@ function BuildDoctorClass:Execute(plan)
 		if plan.rares and gen.options.finalRares ~= false then gen:FinalRares() end
 		gen:RefineTree(8)
 		gen.scorer.lens2 = savedLens2
-		gen.scorer.lensExtra = nil
+		gen.scorer.lensExtra = savedExtra
 		gen:AutoConfigure()
 		gen:RefineTree(6)
 	end)
 	gen.scorer.lens2 = savedLens2
-	gen.scorer.lensExtra = nil
+	gen.scorer.lensExtra = savedExtra
 	for j = #gen.log, savedLog + 1, -1 do table.remove(gen.log, j) end
-	local after = ok and gen:FullScore() or before
+	local after = ok and self:TrueScore() or before
 	if gen.options.debugTiming then
 		ConPrintf("[doctor] plan %s: %.3f -> %.3f%s", plan.id, before, after, ok and "" or (" failed: " .. tostring(err)))
 		if os.getenv("DOCTOR_DEBUG") and ok then

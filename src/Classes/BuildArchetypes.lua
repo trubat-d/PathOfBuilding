@@ -114,12 +114,15 @@ BuildArchetypesClass.list = {
 	},
 	{
 		id = "CRIT", label = "Critical strikes",
-		summary = "Crit chance and multiplier supports linked; tree and gear follow.",
+		summary = "Crit chance and multiplier built together; Elemental Overload and supports that lower crit chance left out; tree and gear follow.",
 		-- (crit pays off only when chance and multiplier are both high: the
 		-- crit damage factor counts on its own while the build is made, so
 		-- neither is judged alone. Winter Orb: top players x7.9, ours x1)
 		lens = { stat = "CritEffect", base = 1, label = "Crit damage factor" },
-		supports = { "Increased Critical Strikes", "Increased Critical Damage" },
+		-- (no forced crit supports: linked first, they pushed the main link's
+		-- more multipliers out - x10.6 on top Winter Orbs, x2.3 on ours; the
+		-- supports are chosen by the build's real score)
+		blockSupports = { "Controlled Destruction", "Awakened Controlled Destruction" },
 		excludeKeystones = { "Elemental Overload", "Resolute Technique" },
 		applies = function(info) return info.hits and not info.minion end,
 	},
@@ -419,7 +422,7 @@ function BuildArchetypesClass.Hybrid(a, b)
 		summary = (a.summary or "") .. " Together with: " .. (b.summary or ""),
 		keystones = union(a.keystones, b.keystones), excludeKeystones = union(a.excludeKeystones, b.excludeKeystones),
 		uniques = union(a.uniques, b.uniques), uniqueLines = union(a.uniqueLines, b.uniqueLines),
-		auras = union(a.auras, b.auras), supports = union(a.supports, b.supports),
+		auras = union(a.auras, b.auras), supports = union(a.supports, b.supports), blockSupports = union(a.blockSupports, b.blockSupports),
 		jewels = union(a.jewels, b.jewels), jewelStat = a.jewelStat or b.jewelStat,
 		lens = a.lens or b.lens, lens2 = a.lens and b.lens or nil,
 		-- (lenses past the second: valued too, as the scorer's lensExtra)

@@ -2971,6 +2971,27 @@ function BuildGeneratorClass:TreeSolverMove()
 	return gain or 0
 end
 
+-- Commitment lenses scaled by a factor (0: gone); copies, the archetype's
+-- own tables untouched
+function BuildGeneratorClass:FadeLenses(factor)
+	local scorer = self.scorer
+	if not scorer then return end
+	local function fade(lens)
+		if not lens or factor <= 0 then return nil end
+		local copy = copyTable(lens, true)
+		copy.func = lens.func
+		copy.weight = (lens.weight or 0.3) * factor
+		return copy
+	end
+	scorer.lens = fade(scorer.lens)
+	scorer.lens2 = fade(scorer.lens2)
+	if scorer.lensExtra then
+		local list = { }
+		for _, l in ipairs(scorer.lensExtra) do t_insert(list, fade(l)) end
+		scorer.lensExtra = #list > 0 and list or nil
+	end
+end
+
 -- The build doctor (Classes/BuildDoctor): the main skill's damage as a
 -- product of layers (crit, speed, resistance, pools...), each measured with a
 -- test dose and a full commitment, the ones with the most damage per point
@@ -6246,6 +6267,11 @@ function BuildGeneratorClass:SetupScorer()
 		end
 		self:Note(string.format("Commitment: %s is valued on its own while the build is made (gear, passives, jewels follow it)", opts.archetype.lens.label or opts.archetype.lens.stat))
 	end
+	-- supports the archetype can't use (Controlled Destruction for crit)
+	for _, name in ipairs(opts.archetype and opts.archetype.blockSupports or { }) do
+		self.blockedSupports = self.blockedSupports or { }
+		self.blockedSupports[name] = true
+	end
 	-- (a hybrid's second stacked stat)
 	if opts.archetype and opts.archetype.lens2 and opts.statLens ~= false then
 		self.scorer.lens2 = opts.archetype.lens2
@@ -6380,6 +6406,10 @@ function BuildGeneratorClass:Run()
 	self:FullScore()
 	self:MakeRares(true)
 
+	-- the commitment lenses fade: they get the build out of a local optimum
+	-- early, they don't decide the finished build (three lenses at full weight
+	-- made a Winter Orb that scored 17.3 with them and 14.9 without)
+	if opts.lensFade ~= false then self:FadeLenses(0.5) end
 	-- the build doctor: the damage layers balanced (Classes/BuildDoctor)
 	if opts.doctor ~= false then self:DoctorMove() end
 
@@ -6504,6 +6534,8 @@ function BuildGeneratorClass:Run()
 		ok, err = pcall(function() self:PopularPassivesMove() end)
 		if not ok then ConPrintf("Popular passives failed: %s", tostring(err)) end
 	end
+	-- (from here on, the real score alone)
+	if opts.lensFade ~= false then self:FadeLenses(0) end
 	stage(12, "Finishing: ascendancy, supports and passive tree")
 	self:Move(1, 6, "Choosing the ascendancy again")
 	if opts.ascendancyRecheck ~= false then self:AscendancyRecheck() end
