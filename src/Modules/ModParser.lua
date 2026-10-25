@@ -3763,6 +3763,7 @@ local specialModList = {
 	["melee strike skills deal splash damage to surrounding targets"] = { flag("MeleeSplash") },
 	-- (enemy damage rolled twice, the lower kept: about 7% less on a +-20% roll)
 	["damage of enemies hitting you is unlucky"] = { mod("DamageTaken", "MORE", -7) },
+	["you take (%d+)%% reduced extra damage from critical strikes per endurance charge"] = function(num) return { mod("ReduceCritExtraDamage", "BASE", num, { type = "Multiplier", var = "EnduranceCharge" }) } end,
 	-- Ghost Dance: a shroud every 2 seconds, each recovering 3% of evasion as energy shield when hit
 	["every 2 seconds, gain a ghost shroud, up to a maximum of 3"] = { flag("UseGhostShrouds") },
 	["when hit, lose a ghost shroud to recover energy shield equal to (%d+)%% of your evasion rating"] = function(num) return { mod("EnergyShieldRegen", "BASE", 1, { type = "PercentStat", stat = "Evasion", percent = num / 2 }, { type = "MultiplierThreshold", var = "GhostShroud", threshold = 1 }) } end,

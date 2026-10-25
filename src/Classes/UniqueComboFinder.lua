@@ -36,7 +36,7 @@ UniqueComboFinderClass.states = {
 	{ var = "buffPhasing", label = "Phasing", enable = { "gain phasing", "you have phasing", "grants phasing" }, payoff = { "while phasing", "while you have phasing" } },
 	{ var = "buffAdrenaline", label = "Adrenaline", enable = { "gain adrenaline" }, payoff = { "while you have adrenaline" } },
 	{ var = "buffChaoticMight", label = "Chaotic Might", enable = { "gain chaotic might", "grants chaotic might" }, payoff = { "while you have chaotic might" } },
-	{ var = "buffDivinity", label = "Divinity", enable = { "gain divinity" }, payoff = { "while you have divinity" } },
+	{ var = "buffDivinity", label = "Divinity", enable = { "gain divinity", "gain a divine charge on hit" }, payoff = { "while you have divinity" } },
 	{ var = "conditionOnConsecratedGround", label = "Consecrated Ground", enable = { "create consecrated ground", "creates consecrated ground", "you have consecrated ground around you" }, payoff = { "while on consecrated ground", "on consecrated ground" } },
 }
 

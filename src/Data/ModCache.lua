@@ -23190,7 +23190,7 @@ c["You take 0 Chaos Damage per second for 3 seconds on Kill"]={{[1]={[1]={type="
 c["You take 10% of Damage from Blocked Hits"]={{[1]={flags=0,keywordFlags=0,name="BlockEffect",type="BASE",value=10}},nil}
 c["You take 10% of your maximum Life as Chaos Damage on use"]={nil,"You take 10% of your maximum Life as Chaos Damage on use "}
 c["You take 10% of your maximum Life as Chaos Damage on use You take 50% of your maximum Life as Chaos Damage on use"]={nil,"You take 10% of your maximum Life as Chaos Damage on use You take 50% of your maximum Life as Chaos Damage on use "}
-c["You take 10% reduced Extra Damage from Critical Strikes per Endurance Charge"]={nil,"You take 10% reduced Extra Damage from Critical Strikes per Endurance Charge "}
+c["You take 10% reduced Extra Damage from Critical Strikes per Endurance Charge"]={{[1]={[1]={type="Multiplier",var="EnduranceCharge"},flags=0,keywordFlags=0,name="ReduceCritExtraDamage",type="BASE",value=10}},nil}
 c["You take 100% of Elemental Damage from Blocked Hits"]={nil,"You take 100% of Elemental Damage from Blocked Hits "}
 c["You take 100% of Elemental Damage from Blocked Hits 40% of Elemental Damage from Hits taken as Physical Damage"]={nil,"You take 100% of Elemental Damage from Blocked Hits 40% of Elemental Damage from Hits taken as Physical Damage "}
 c["You take 100% reduced Extra Damage from Critical Strikes"]={{[1]={flags=0,keywordFlags=0,name="ReduceCritExtraDamage",type="BASE",value=100}},nil}
