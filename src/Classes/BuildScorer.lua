@@ -290,7 +290,47 @@ function BuildScorerClass:GetDPS(output)
 	if self.resourceSustain ~= false and not self.ignoreCosts then
 		dps = dps * (self:SkillSustain(output))
 	end
+	-- a boss fight as it is played: moving and dodging stop the hits
+	if self.fightSim then
+		dps = dps * (self:FightUptime(output))
+	end
 	return dps
+end
+
+-- The share of a boss fight the main skill's damage keeps going, as it is
+-- played: a fifth of the fight is spent moving at normal movement speed
+-- (less when faster: positioning, following the boss, ground effects), and
+-- each big telegraphed hit (one every 10 seconds) the build can't take is
+-- dodged for 0.8 seconds (none when it takes the hit twice over, all of it
+-- below 60%). While moving, only damage that doesn't need the player keeps
+-- going: totems, brands, traps, mines, minions, a channelled skill that moves
+-- (Cyclone), and damage over time (ailments last through a short move).
+-- Returns the share, and the moving and dodging shares of the fight.
+local moveShare, bigHitEvery, dodgeTime = 0.2, 10, 0.8
+function BuildScorerClass:FightUptime(output)
+	local env = self.build.calcsTab and self.build.calcsTab.mainEnv
+	local skill = env and env.player.mainSkill
+	local flags = skill and skill.skillFlags or { }
+	local types = skill and skill.skillTypes or { }
+	local persist
+	if flags.totem or flags.brand or flags.trap or flags.mine or flags.minion
+		or (types[SkillType.Channel] and types[SkillType.Movement]) then
+		persist = 1
+	else
+		-- (the damage over time share keeps going)
+		-- (culling strike's share follows the hits)
+		local total = (output.CombinedDPS or 0) - (output.CullingDPS or 0)
+		local hits = output.TotalDPS or 0
+		persist = total > 0 and m_max(0, m_min(1, 1 - hits / total)) or 0
+	end
+	local moving = moveShare / m_max(0.5, output.EffectiveMovementSpeedMod or 1)
+	local ratio = self:BossHitRatio(output)
+	local dodge = 0
+	if ratio then
+		local need = ratio >= 2 and 0 or ratio <= 0.6 and 1 or (2 - ratio) / 1.4
+		dodge = need * dodgeTime / bigHitEvery
+	end
+	return 1 - (moving + dodge) * (1 - persist), moving, dodge
 end
 
 -- Effective hit pool, capped: immunities make PoB report infinite EHP, which

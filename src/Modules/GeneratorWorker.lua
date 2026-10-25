@@ -131,7 +131,7 @@ return function(jobJson, userPath, scriptBase)
 			ehpFloor = sc.ehpFloor, hitFloor = sc.hitFloor, bossTier = sc.bossTier, killsPerSecond = sc.killsPerSecond, flaskRealism = sc.flaskRealism,
 		})
 		for _, key in ipairs({ "hitScale", "resourceSustain", "ignoreCosts", "ignoreAttributes", "ignoreReservation", "useChecklist",
-			"lens", "lens2", "avoidanceWeight", "pastTarget", "fightWeight", "smoothBuffs", "reservationSlope", "clearBoost", "clearBuffs" }) do
+			"lens", "lens2", "avoidanceWeight", "pastTarget", "fightWeight", "smoothBuffs", "reservationSlope", "clearBoost", "clearBuffs", "fightSim" }) do
 			scorer[key] = sc[key]
 		end
 		if sc.focusEhp and scorer.focus and scorer.focus.ehp ~= sc.focusEhp then
@@ -195,7 +195,7 @@ return function(jobJson, userPath, scriptBase)
 		synergies = job.synergies, quick = job.quick, meta = job.meta, learnFromPlayers = job.learnFromPlayers, variant = job.variant,
 		excludedUniques = job.excludedUniques, forcedUniques = job.forcedUniques, totalBudget = job.totalBudget,
 		-- (knowledge read here, written by the main thread from the result)
-		knowledge = job.knowledge, knowledgeWrite = false, learntNote = job.learntNote,
+		knowledge = job.knowledge, knowledgeWrite = false, learntNote = job.learntNote, leaguePhase = job.leaguePhase,
 		yieldEvery = 1e9,
 	}
 	local archetypes = new("BuildArchetypes"):BuildArchetypes()

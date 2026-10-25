@@ -79,6 +79,8 @@ local gen = new("BuildGenerator"):BuildGenerator(build, {
 	totalBudget = tonumber(os.getenv("BUDGET") or ""),
 	-- KNOWLEDGE=1: what earlier generations learnt is used and written (Modules/GeneratorKnowledge)
 	knowledge = os.getenv("KNOWLEDGE") == "1",
+	-- PHASE=START|WEEK1|MID|LATE: prices for that moment of the league (PriceSource.phases)
+	leaguePhase = os.getenv("PHASE"),
 	gemId = gemId, classId = asc.classId, ascendClassId = asc.ascendClassId, level = 92,
 	investment = investment, focus = focus,
 	quick = mode == "quick", synergies = os.getenv("SYNERGIES") == "1", archetype = archetype, yieldEvery = 1e9,

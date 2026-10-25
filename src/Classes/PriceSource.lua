@@ -83,6 +83,8 @@ end
 function PriceSourceClass.Available(level, title)
 	if not level or not title then return true end
 	if level.scarce == false and PriceSourceClass.scarceUniques[title] then return false end
+	-- (early in a league they aren't found at any budget)
+	if main and main.priceSource and main.priceSource:PhaseScarce() and PriceSourceClass.scarceUniques[title] then return false end
 	return true
 end
 
@@ -113,7 +115,7 @@ function PriceSourceClass:SaveCache()
 	local path = self:CachePath()
 	local file = path and io.open(path, "w")
 	if not file then return end
-	file:write(dkjson.encode({ time = self.time, league = self.league, uniques = self.uniques, tattoos = self.tattoos, oils = self.oils, gems = self.gems }))
+	file:write(dkjson.encode({ time = self.time, league = self.league, leagueStart = self.leagueStart, uniques = self.uniques, tattoos = self.tattoos, oils = self.oils, gems = self.gems }))
 	file:close()
 end
 
@@ -124,6 +126,7 @@ function PriceSourceClass:SetData(data)
 	self.tattoos = data.tattoos or { }
 	self.oils = data.oils or { }
 	self.gems = data.gems or { }
+	self.leagueStart = data.leagueStart
 	local count = 0
 	for _ in pairs(self.uniques) do count = count + 1 end
 	self.uniqueCount = count
@@ -246,6 +249,13 @@ function PriceSourceClass:Refresh(callback, leagueOverride)
 		end
 		local list = leagues[1] and leagues or leagues.leagues or { }
 		self.league = leagueOverride or (list[1] and (list[1].id or list[1].name)) or "Standard"
+		-- (when the league started, if poe.ninja says: how far into its economy we are)
+		data.leagueStart = nil
+		for _, key in ipairs({ "startAt", "startDate", "start_date", "start", "startTime" }) do
+			local v = list[1] and list[1][key]
+			local y, mo, d = type(v) == "string" and v:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)")
+			if y then data.leagueStart = os.time({ year = tonumber(y), month = tonumber(mo), day = tonumber(d), hour = 20 }) break end
+		end
 		local league = self.league:gsub(" ", "+")
 		for _, itemType in ipairs(itemTypes) do
 			t_insert(queue, { url = apiBase .. "stash/current/item/overview?league=" .. league .. "&type=" .. itemType, parse = function(json) parseItems(json, data.uniques) end })
@@ -262,34 +272,132 @@ end
 -- Lookups (prices in divines, nil = not listed)
 ------------------------------------------------------------------------------
 
+------------------------------------------------------------------------------
+-- League economy: prices move a lot over a league. poe.ninja's prices are
+-- today's; the generator can price a build for another moment of the league
+-- (options.leaguePhase). Prices relative to mid league, by kind of item, at
+-- a few days into the league (in between: interpolated on the log of the
+-- day); chase uniques are rare and costly early, everything bought with
+-- crafting currency costs more while currency is scarce.
+------------------------------------------------------------------------------
+
+PriceSourceClass.phases = {
+	{ id = "NOW", label = "Now (poe.ninja)" },
+	{ id = "START", label = "League start", day = 2 },
+	{ id = "WEEK1", label = "First week", day = 5 },
+	{ id = "MID", label = "Mid league", day = 21 },
+	{ id = "LATE", label = "Late league", day = 70 },
+}
+local phaseDays = { 2, 5, 21, 70 }
+local phaseCurves = {
+	chase = { 5, 2.5, 1, 0.7 },   -- uniques worth 20+ div at mid league
+	unique = { 2.5, 1.6, 1, 0.8 }, -- 1 to 20 div
+	cheap = { 1.5, 1.2, 1, 1 },    -- under 1 div
+	rare = { 2, 1.5, 1, 0.8 },     -- crafted rares, anoints, gems, tattoos
+}
+local function curveAt(curve, day)
+	day = math.max(phaseDays[1], math.min(phaseDays[#phaseDays], day))
+	for i = 1, #phaseDays - 1 do
+		if day <= phaseDays[i + 1] then
+			local t = (math.log(day) - math.log(phaseDays[i])) / (math.log(phaseDays[i + 1]) - math.log(phaseDays[i]))
+			return math.exp(math.log(curve[i]) * (1 - t) + math.log(curve[i + 1]) * t)
+		end
+	end
+	return curve[#curve]
+end
+
+-- Days into the league of today's prices (mid league when unknown)
+function PriceSourceClass:CurrentDay()
+	if self.leagueStart and self.time then return math.max(1, (self.time - self.leagueStart) / 86400) end
+	return 21
+end
+
+-- Factor from today's price to the chosen phase's, for a kind of item
+-- ("rare", or a unique by its price today)
+function PriceSourceClass:PhaseFactor(kind, priceNow)
+	local phase = self.phase
+	if not phase or phase == "NOW" then return 1 end
+	local target
+	for _, p in ipairs(self.phases) do if p.id == phase then target = p.day end end
+	if not target then return 1 end
+	local curve
+	if kind == "rare" then
+		curve = phaseCurves.rare
+	else
+		local now = curveAt(phaseCurves.unique, self:CurrentDay())
+		local mid = (priceNow or 0) / now
+		curve = mid >= 20 and phaseCurves.chase or mid >= 1 and phaseCurves.unique or phaseCurves.cheap
+	end
+	return curveAt(curve, target) / curveAt(curve, self:CurrentDay())
+end
+
+-- Early in a league the scarce uniques aren't found at any price
+function PriceSourceClass:PhaseScarce()
+	return self.phase == "START" or self.phase == "WEEK1"
+end
+
 function PriceSourceClass:UniquePrice(item)
 	local title = item.title or (item.name and item.name:match("^([^,]+),")) or item.name
-	return title and self.uniques[title]
+	local price = title and self.uniques[title]
+	if price and self.phase and self.phase ~= "NOW" then price = price * self:PhaseFactor("unique", price) end
+	return price
+end
+
+-- A rare's price (divines), estimated from what it has: the level's typical
+-- rare, scaled by how many good mods it has against what the level expects,
+-- influences, Eldritch implicits, extra bench crafts, the kind of slot
+-- (weapons cost the most), and the league phase. A rough guide: poe.ninja
+-- doesn't price rares.
+function PriceSourceClass:RarePrice(item, level)
+	level = level or { }
+	local base = level.rarePrice or 1
+	if not item then return base end
+	local good, crafted = 0, 0
+	for _, l in ipairs(item.explicitModLines or { }) do
+		if l.crafted then crafted = crafted + 1 else good = good + 1 end
+	end
+	local expected = level.rareAffixes or 6
+	local price = base * math.max(0.3, (good / math.max(1, expected))) ^ 2
+	local influences = 0
+	for _, key in ipairs({ "shaper", "elder", "adjudicator", "basilisk", "crusader", "eyrie", "cleansing", "tangle" }) do
+		if item[key] then influences = influences + 1 end
+	end
+	price = price * (influences == 0 and 1 or influences == 1 and 1.5 or 3)
+	local eldritch = 0
+	for _, l in ipairs(item.implicitModLines or { }) do
+		if l.line and (l.exarch or l.eater or l.line:match("Searing Exarch") or l.line:match("Eater of Worlds")) then eldritch = eldritch + 1 end
+	end
+	if eldritch > 0 then price = price * 1.3 end
+	if crafted > 1 then price = price + 2 * (crafted - 1) end
+	if item.base and item.base.weapon then price = price * 1.8 elseif item.type == "Body Armour" then price = price * 1.2 end
+	return price * self:PhaseFactor("rare")
 end
 
 -- Price of a gem at a level (the nearest listed level at or below it); nil = not listed
 function PriceSourceClass:GemPrice(name, level)
 	for l = level or 20, 1, -1 do
 		local price = self.gems[name .. ":" .. l]
-		if price then return price end
+		if price then return price * self:PhaseFactor("rare") end
 	end
 	return nil
 end
 
 function PriceSourceClass:TattooPrice(name)
-	return self.tattoos[name]
+	local price = self.tattoos[name]
+	return price and price * self:PhaseFactor("rare")
 end
 
 -- Anoint price: the three oils of the notable's recipe ("GoldenOil" -> "Golden Oil")
 function PriceSourceClass:AnointPrice(node)
 	if not node.recipe then return nil end
+	local phase = self:PhaseFactor("rare")
 	local total = 0
 	for _, oil in ipairs(node.recipe) do
 		local price = self.oils[(oil:gsub("(%l)(%u)", "%1 %2"))]
 		if not price then return nil end
 		total = total + price
 	end
-	return total
+	return total * phase
 end
 
 -- Is a price within an investment level's cap? kind = "unique" / "anoint" / "tattoo"

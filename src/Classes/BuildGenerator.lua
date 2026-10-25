@@ -1648,7 +1648,7 @@ function BuildGeneratorClass:RunRaresParallel(finder, options)
 		-- (the generator's own settings: the threads must score as it does)
 		lens = sc.lens, lens2 = sc.lens2, avoidanceWeight = sc.avoidanceWeight, pastTarget = sc.pastTarget, fightWeight = sc.fightWeight,
 		smoothBuffs = sc.smoothBuffs, reservationSlope = sc.reservationSlope, focusEhp = sc.focus and sc.focus.ehp,
-		clearBoost = sc.clearBoost, clearBuffs = sc.clearBuffs,
+		clearBoost = sc.clearBoost, clearBuffs = sc.clearBuffs, fightSim = sc.fightSim,
 	}
 	local xml = self.build:SaveDB("code")
 	-- weapons first (their seeded fills take longest), then round robin
@@ -3756,7 +3756,8 @@ function BuildGeneratorClass:BuildCost()
 				add({ kind = kind, slot = slot.slotName, label = item.title or item.name, price = prices:UniquePrice(item), item = item, unique = true })
 			elseif item.rarity == "RARE" then
 				-- (rares made at a cheaper level, by the total budget, at that level's price)
-				local own = self.rarePriceById and self.rarePriceById[item.id] or rare
+				-- (estimated from its mods, influences and the league phase: PriceSource.RarePrice)
+				local own = self.rarePriceById and self.rarePriceById[item.id] or prices:RarePrice(item, level)
 				local price = kind == "gear" and own or (item.clusterJewel and own * 0.5) or own * 0.25
 				add({ kind = kind, slot = slot.slotName, label = "rare " .. (item.baseName or item.type or "item"), price = price, item = item, estimate = true })
 			end
@@ -3827,7 +3828,7 @@ function BuildGeneratorClass:CheapVersion(entry)
 		if best then
 			local item = self:Equip(best.item, entry.slot)
 			self.rarePriceById = self.rarePriceById or { }
-			self.rarePriceById[item.id] = entry.cheapLevel and entry.cheapLevel.rarePrice or (self.options.investment or { }).rarePrice
+			self.rarePriceById[item.id] = GetPriceSource():RarePrice(item, entry.cheapLevel or self.options.investment)
 		elseif entry.kind == "gear" and data.itemBases[entry.item.baseName] then
 			-- (no rare helps there: the plain base, so the slot isn't left empty)
 			self:Equip(makeBase(entry.item.baseName), entry.slot)
@@ -3885,11 +3886,12 @@ function BuildGeneratorClass:PartValues(minPrice, withRares, withUnknown)
 	for _, entry in ipairs(entries) do
 		local wanted
 		if entry.estimate then
-			wanted = withRares and entry.kind == "gear" and cheapLevel and cheapLevel.rarePrice < entry.price
+			local cheapPrice = cheapLevel and cheapLevel.rarePrice * GetPriceSource():PhaseFactor("rare")
+			wanted = withRares and entry.kind == "gear" and cheapLevel and cheapPrice < entry.price
 			if wanted then
 				entry.cheapLevel = cheapLevel
 				entry.label = entry.label .. " (" .. (investment.baseId or investment.id or "") .. " rare instead of " .. cheapLevel.id .. ")"
-				entry.price = entry.price - cheapLevel.rarePrice
+				entry.price = entry.price - cheapPrice
 			end
 		elseif entry.known then
 			wanted = entry.price >= (minPrice or 0.5)
@@ -3968,8 +3970,10 @@ function BuildGeneratorClass:UpgradeOrder()
 	t_sort(unknown, function(a, b) return a.loss > b.loss end)
 	local base = total
 	for _, e in ipairs(values) do base = base - e.price end
-	self:Note(string.format("Cost: about %s (uniques at their cheapest poe.ninja copy: chosen mods and seeds cost more; rares about %s each). Upgrade order, best score per divine first, from about %s:",
-		prices.FormatPrice(total), prices.FormatPrice((self.options.investment or { }).rarePrice), prices.FormatPrice(base)))
+	local phaseLabel = ""
+	for _, p in ipairs(prices.phases) do if p.id == prices.phase and p.id ~= "NOW" then phaseLabel = ", priced for " .. p.label:lower() end end
+	self:Note(string.format("Cost: about %s (uniques at their cheapest poe.ninja copy: chosen mods and seeds cost more; rares estimated from their mods%s). Upgrade order, best score per divine first, from about %s:",
+		prices.FormatPrice(total), phaseLabel, prices.FormatPrice(base)))
 	local spent = base
 	for i, e in ipairs(values) do
 		if i > 12 then break end
@@ -5804,6 +5808,8 @@ function BuildGeneratorClass:PrepareOptions()
 		for title in pairs(opts.excludedUniques or { }) do rules.userExcluded[title] = true end
 		for _, title in ipairs(opts.forcedUniques or { }) do rules.userForced[title] = true end
 	end
+	-- the moment of the league prices are for (PriceSource.phases)
+	GetPriceSource().phase = opts.leaguePhase or "NOW"
 	-- Investment level decides rare quality and influences unless set
 	local probe = new("PriceSource"):PriceSource()
 	opts.investment = opts.investment or probe.levels[probe.defaultLevel]
@@ -5822,6 +5828,8 @@ function BuildGeneratorClass:SetupScorer()
 	self.scorer = new("BuildScorer"):BuildScorer(self.build, { focus = opts.focus, chargesPerSecond = opts.chargesPerSecond, overlap = self.overlap, ehpFloor = opts.ehpFloor, hitFloor = opts.hitFloor,
 		bossTier = opts.investment and opts.investment.awakenedGems and "uber" or "pinnacle" })
 	self.scorer.useChecklist = false -- on from the flask stage
+	-- (a boss fight as it is played: time moving and dodging costs damage)
+	self.scorer.fightSim = bossFight and opts.fightSim ~= false or nil
 	-- (Clearing + bossing: clear speed counts more than the focus says)
 	if opts.configScenario and opts.configScenario.clear then self.scorer.clearBoost = opts.clearBoost or 0.35 end
 	-- (buffs that only exist while clearing - Headhunter's stolen modifiers -
@@ -6174,6 +6182,10 @@ function BuildGeneratorClass:Run()
 	self:FinishKnowledge(final)
 	-- defence summary: boss hits and the checklist
 	local output = self.build.calcsTab.mainOutput
+	if self.scorer.fightSim then
+		local share, moving, dodge = self.scorer:FightUptime(output)
+		self:Note(string.format("Boss fight as played: %d%% of the damage kept (%d%% of the fight moving, %d%% dodging big hits the build can't take)", share * 100 + 0.5, moving * 100 + 0.5, dodge * 100 + 0.5))
+	end
 	local bossRatio, bossName = self.scorer:BossHitRatio(output)
 	if bossRatio then
 		self:Note(string.format("Toughest %s boss hit (%s): taken %.1f times over (max hits: physical %s, fire %s, cold %s, lightning %s, chaos %s)",
@@ -6231,8 +6243,10 @@ function BuildGeneratorClass:Run()
 		local buildTotal, entries = self:BuildCost()
 		local noPrice = 0
 		for _, e in ipairs(entries) do if not e.known then noPrice = noPrice + 1 end end
-		costLine = string.format("Estimated cost of the build: %s (uniques, anoints, tattoos and gems at poe.ninja prices, rares about %s each)%s",
-			prices.FormatPrice(buildTotal), prices.FormatPrice(opts.investment.rarePrice), noPrice > 0 and string.format(", plus %d part%s with no price", noPrice, noPrice == 1 and "" or "s") or "")
+		local phaseLabel = "today's poe.ninja prices"
+		for _, p in ipairs(prices.phases) do if p.id == prices.phase and p.id ~= "NOW" then phaseLabel = "poe.ninja prices moved to " .. p.label:lower() end end
+		costLine = string.format("Estimated cost of the build: %s (uniques, anoints, tattoos and gems at %s; rares estimated from their mods, influences and implicits)%s",
+			prices.FormatPrice(buildTotal), phaseLabel, noPrice > 0 and string.format(", plus %d part%s with no price", noPrice, noPrice == 1 and "" or "s") or "")
 	end
 	return {
 		log = self.log,

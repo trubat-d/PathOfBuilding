@@ -633,6 +633,19 @@ function BuildIdeasPopupClass:OpenGenerator()
 	controls.level = new("EditControl"):EditControl({"TOPLEFT",nil,"TOPLEFT"}, {800, 20, 50, 20}, "92", nil, "%D", 3)
 	controls.level.enabled = idle
 
+	-- the moment of the league the build is priced for (PriceSource.phases)
+	local phaseList = { }
+	for _, p in ipairs(GetPriceSource().phases) do t_insert(phaseList, { label = p.label, id = p.id }) end
+	controls.phaseLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {866, 22, 0, 16}, "^7Economy:")
+	controls.phase = new("DropDownControl"):DropDownControl({"TOPLEFT",nil,"TOPLEFT"}, {930, 20, 100, 20}, phaseList)
+	controls.phase.enabled = idle
+	controls.phase.tooltipFunc = function(tooltip)
+		tooltip:Clear()
+		tooltip:AddLine(16, "^7When in the league the build will be bought. Prices move a lot: chase uniques cost several times")
+		tooltip:AddLine(16, "^7more in the first days, crafting currency is scarce, and scarce uniques (Mageblood, Headhunter,")
+		tooltip:AddLine(16, "^7Forbidden jewels...) aren't found at all in the first week. \"Now\" uses today's poe.ninja prices;")
+		tooltip:AddLine(16, "^7the others move them from today's point of the league (mid league when its start is unknown).")
+	end
 	controls.focusLabel = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 50, 0, 16}, "^7Aim for:")
 	local focusList = focusDropList()
 	-- (the player's own mix: movement speed and tankiness, block and life...)
@@ -874,6 +887,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 			synergies = controls.synergies.state,
 			-- what earlier generations learnt (Modules/GeneratorKnowledge)
 			knowledge = true,
+			leaguePhase = controls.phase.list[controls.phase.selIndex].id,
 			totalBudget = tonumber(controls.totalBudget.buf) and tonumber(controls.totalBudget.buf) > 0 and tonumber(controls.totalBudget.buf) or nil,
 			-- (the generation runs between frames: longer slices leave more of
 			-- the time to it; the window still redraws about 12 times a second)
@@ -1636,7 +1650,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 		main.onFrameFuncs["BuildGeneratorPanel"] = nil
 		main:ClosePopup()
 	end)
-	popup = main:OpenPopup(920, 496, "Generate Build", controls, nil, nil, "close")
+	popup = main:OpenPopup(1040, 496, "Generate Build", controls, nil, nil, "close")
 
 	-- While a generation or scan runs, the window folds into a panel on the
 	-- right of the screen: the build stays visible on its passive tree (no
