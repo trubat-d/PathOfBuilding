@@ -241,7 +241,10 @@ function UniqueComboFinderClass:Find(opts)
 		end
 		return score
 	end
-	-- pairs worth a calculation: two strong ones, or an enabler with a payoff
+	-- pairs worth a calculation: two strong ones, or an enabler with a payoff;
+	-- pairs earlier generations found working together first (Modules/GeneratorModel)
+	local okModel, model = pcall(LoadModule, "Modules/GeneratorModel")
+	if not okModel or not model or not model.Load() then model = nil end
 	local candidatesPairs = { }
 	for i = 1, #pool do
 		for j = i + 1, #pool do
@@ -250,6 +253,8 @@ function UniqueComboFinderClass:Find(opts)
 				local vars, dataLinked = stateVars(a, b)
 				local linked = next(vars) ~= nil or dataLinked
 				local priority = (linked and 1 or 0) + a.gain + b.gain
+				local learnt = model and model.PairSynergy(a.item.title or a.item.name, b.item.title or b.item.name)
+				if learnt then priority = priority + 5 * learnt end
 				t_insert(candidatesPairs, { a = a, b = b, vars = vars, linked = linked, priority = priority })
 			end
 		end
@@ -275,6 +280,12 @@ function UniqueComboFinderClass:Find(opts)
 		if n > maxPairs then break end
 		local joint = scoreWith(p.vars, { repItems = { [p.a.slot] = p.a.item, [p.b.slot] = p.b.item } }) - current
 		local synergy = joint - p.a.gain - p.b.gain
+		-- (decision log: every pair measured, the training data of a pair model)
+		if gen.decisions then
+			gen:Decision("unique_pair", (p.a.item.title or "?") .. " + " .. (p.b.item.title or "?"), joint, synergy > 0.01,
+				{ slots = { p.a.slot, p.b.slot }, ga = math.floor(p.a.gain * 1e5 + 0.5) / 1e5, gb = math.floor(p.b.gain * 1e5 + 0.5) / 1e5,
+					syn = math.floor(synergy * 1e5 + 0.5) / 1e5, linked = p.linked or nil, priority = p.priority and math.floor(p.priority * 1e5 + 0.5) / 1e5 or nil })
+		end
 		if joint > 0.01 and synergy > 0.01 and joint > m_max(p.a.gain, p.b.gain) + 0.01 then
 			t_insert(pairsList, { a = p.a, b = p.b, joint = joint, synergy = synergy, linked = p.linked, vars = p.vars })
 		end

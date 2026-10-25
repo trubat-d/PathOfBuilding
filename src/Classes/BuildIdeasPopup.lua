@@ -762,8 +762,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 			local learning = LoadModule("Modules/GeneratorLearning")
 			for _, entry in ipairs(list) do
 				if entry.scan and entry.scan.built and entry.scan.score then
-					entry.priority = learning.Priority(entry.archetype.id, entry.scan.score)
-					entry.label = entry.label .. string.format(", full build expected about %.1f", entry.scan.score + learning.Uplift(entry.archetype.id))
+					entry.priority = learning.Priority(entry.archetype.id, entry.scan.score, state.learningContext())
+					entry.label = entry.label .. string.format(", full build expected about %.1f", entry.scan.score + learning.Uplift(entry.archetype.id, state.learningContext()))
 				end
 			end
 			table.sort(list, function(x, y)
@@ -1290,7 +1290,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 		for _, entry in ipairs(controls.archetype.list) do
 			local scan = entry.scan
 			if entry.archetype and scan and scan.built and not scan.error and scan.score then
-				t_insert(ranked, { archetype = entry.archetype, quick = scan.score, priority = learning.Priority(entry.archetype.id, scan.score) })
+				t_insert(ranked, { archetype = entry.archetype, quick = scan.score, priority = learning.Priority(entry.archetype.id, scan.score, state.learningContext()) })
 			end
 		end
 		table.sort(ranked, function(a, b)
@@ -1371,7 +1371,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 			-- (learnt: how much the full build gained over the quick one)
 			local quick = state.quickScores and state.quickScores[archetype.id]
 			if quick and summary.score and (variant or 1) == 1 then
-				pcall(function() LoadModule("Modules/GeneratorLearning").Record(archetype.id, skill.label, quick, summary.score) end)
+				pcall(function() LoadModule("Modules/GeneratorLearning").Record(archetype.id, skill.label, quick, summary.score, state.learningContext()) end)
 			end
 			-- (each archetype's best build kept: the close ones are offered as alternatives)
 			state.builtByArchetype = state.builtByArchetype or { }
@@ -1610,10 +1610,42 @@ function BuildIdeasPopupClass:OpenGenerator()
 		tooltip:AddLine(16, "^7Mark the open build's key stats too low, fine or too high. \"Improve\" upgrades it with")
 		tooltip:AddLine(16, "^7those weights moved; every review is kept and slowly moves the generator's weights.")
 	end
+	-- the kind of skill and investment level, for the learnt uplift (Modules/GeneratorLearning)
+	state.learningContext = function()
+		local skill = controls.skill.list[controls.skill.selIndex]
+		local gem = skill and data.gems[skill.gemId]
+		local tags = gem and gem.tags or { }
+		local level = controls.investment.list[controls.investment.selIndex].level
+		return { kind = tags.minion and "minion" or tags.attack and "attack" or "spell", investment = level and level.id }
+	end
 	-- (after a generation or an upgrade, when the player wants it)
 	state.askReview = function()
+		state.maybeTrain()
 		local data = new("BuildReview"):BuildReview().Load()
 		if data.askAfter ~= false then reviewOpen() end
+	end
+	-- the candidate model trained again from this computer's decision log
+	-- every 10 new generations, in the background (Modules/GeneratorModelTrainer)
+	state.maybeTrain = function()
+		if main.onFrameFuncs["BuildModelTrain"] then return end
+		local last = GetTime()
+		local function tick()
+			if GetTime() - last > 40 then
+				coroutine.yield()
+				last = GetTime()
+			end
+		end
+		runInBackground("BuildModelTrain", popup, function()
+			local trainer = LoadModule("Modules/GeneratorModelTrainer")
+			if not trainer.Due() then return nil end
+			local _, line = trainer.Run(tick)
+			pcall(function() LoadModule("Modules/GeneratorModel").Load(true) end)
+			return line
+		end, function(line)
+			if line then ConPrintf("%s", line) state.modelNote = line end
+		end, function(err)
+			ConPrintf("Training the candidate model failed: %s", tostring(err))
+		end)
 	end
 	controls.upgrade.tooltipFunc = function(tooltip)
 		tooltip:Clear()

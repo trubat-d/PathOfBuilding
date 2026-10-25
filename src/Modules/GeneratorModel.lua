@@ -15,11 +15,14 @@
 local dkjson = require "dkjson"
 local M = { }
 
-function M.Load()
-	if M.loaded then return M.model end
+function M.Load(force)
+	if M.loaded and not force then return M.model end
+	M.model, M.featureCache = nil, nil
 	M.loaded = true
 	local base = (GetScriptPath and GetScriptPath() or ".") .. "/Data/GeneratorModel.json"
-	for _, path in ipairs({ base, "Data/GeneratorModel.json" }) do
+	-- (the one trained on this computer first: Modules/GeneratorModelTrainer)
+	local own = (main and main.userPath or "") .. "GeneratorModel.json"
+	for _, path in ipairs({ own, base, "Data/GeneratorModel.json" }) do
 		local f = io.open(path, "r")
 		if f then
 			local ok, value = pcall(dkjson.decode, f:read("*a"))
@@ -66,6 +69,17 @@ function M.SkipSupport(name, gem)
 	if not feats then feats = M.Features(gem) M.featureCache[gem] = feats end
 	local p, n = M.SupportChance(name, feats)
 	return p ~= nil and n >= (model.minSeen or 30) and p < model.skipBelow
+end
+
+-- Mean synergy measured for a pair of uniques (names in either order), and
+-- how many times; nil when never measured
+function M.PairSynergy(a, b)
+	local model = M.Load()
+	if not model or not model.pairs or not a or not b then return nil end
+	if b < a then a, b = b, a end
+	local e = model.pairs[a .. " + " .. b]
+	if e then return e.syn, e.n end
+	return nil
 end
 
 return M

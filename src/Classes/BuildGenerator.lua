@@ -476,7 +476,13 @@ function BuildGeneratorClass:WithChargesOf(gem, fn)
 	return a, b
 end
 
-function BuildGeneratorClass:ChooseSupports(maxSupports)
+-- restrict: only the supports that helped this main skill in at least one
+-- of the earlier full choices of this generation (two at least), plus any
+-- never measured (the build's own memory: options.supportMemory = false to
+-- try all). Used by the steps that choose the supports again after small
+-- changes (repair rounds, Pearl of Tsoatha, a 4-link, sockets); the full
+-- choices (the supports stages, FinalSupports) always try every support.
+function BuildGeneratorClass:ChooseSupports(maxSupports, restrict)
 	local group = self.mainGroup
 	-- (fewer sockets when the main skill left the body armour)
 	maxSupports = m_min(maxSupports, self.mainLinkLimit or maxSupports)
@@ -560,8 +566,12 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 	-- (Modules/GeneratorModel; options.useModel = false to try them all)
 	local tryList = supports
 	if self.options.useModel ~= false then
-		local okModel, model = pcall(LoadModule, "Modules/GeneratorModel")
-		if okModel and model and model.Load() then
+		if self.modelModule == nil then
+			local okModel, module = pcall(LoadModule, "Modules/GeneratorModel")
+			self.modelModule = okModel and module or false
+		end
+		local model = self.modelModule
+		if model and model.Load() then
 			tryList = { }
 			local skipped = 0
 			for _, gemId in ipairs(supports) do
@@ -570,6 +580,19 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 			self.modelSkipped = (self.modelSkipped or 0) + skipped
 		end
 	end
+	local memoryKey = self.mainGem and self.mainGem.name or "?"
+	self.supportMemory = self.supportMemory or { }
+	local memory = self.supportMemory[memoryKey]
+	if not memory then memory = { calls = 0, best = { } } self.supportMemory[memoryKey] = memory end
+	if restrict and self.options.supportMemory ~= false and memory.calls >= 2 then
+		local narrowed = { }
+		for _, gemId in ipairs(tryList) do
+			local best = memory.best[gemId]
+			if best == nil or best > 0.0005 then t_insert(narrowed, gemId) end
+		end
+		tryList = narrowed
+	end
+	local bestThisCall = { }
 	for pick = 1, maxSupports - forcedCount do
 		self:Inner((pick - 1) / m_max(1, maxSupports - forcedCount))
 		local best, bestScore, bestSeen
@@ -581,6 +604,7 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 				local score = self:WithChargesOf(gem, function() return self:Score() end)
 				t_remove(group.gemList)
 				if self.decisions then self:Decision("support", gem.name, score - current, false, { pick = pick }) end
+				if not restrict then bestThisCall[gemId] = m_max(bestThisCall[gemId] or -math.huge, score - current) end
 				-- (variants: gains seen through their factor)
 				local seen = current + (score - current) * (score > current and self:Jitter("support" .. gemId) or 1)
 				if not bestScore or seen > bestSeen + 1e-9 then
@@ -612,6 +636,11 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 		self.build.configTab:BuildModList()
 	end
 	self.build.skillsTab:ProcessSocketGroup(group)
+	-- (the build's memory of which supports help this skill)
+	if not restrict and next(bestThisCall) then
+		memory.calls = memory.calls + 1
+		for gemId, g in pairs(bestThisCall) do memory.best[gemId] = m_max(memory.best[gemId] or -math.huge, g) end
+	end
 	-- The supports most players of this skill link (poe.ninja), tried as a set:
 	-- some only work together (e.g. Lifetap gives Righteous Fire a duration,
 	-- which Swift Affliction then shortens), so one-at-a-time picking misses them
@@ -888,7 +917,7 @@ function BuildGeneratorClass:FillMainLinkMove()
 	local savedLog = { }
 	for i, l in ipairs(self.log) do savedLog[i] = l end
 	self.scorer.ignoreCosts = true
-	local ok, err = pcall(function() self:ChooseSupports(5) end)
+	local ok, err = pcall(function() self:ChooseSupports(5, true) end)
 	self.scorer.ignoreCosts = false
 	if ok then
 		self:AutoConfigure()
@@ -2114,7 +2143,7 @@ function BuildGeneratorClass:Perturb(kind, finder)
 			t_remove(group.gemList, supports[self:Random(#supports)])
 		end
 		self.build.skillsTab:ProcessSocketGroup(group)
-		self:ChooseSupports(5)
+		self:ChooseSupports(5, true)
 		self:RefineTree(6)
 		label = "main link supports chosen again"
 	end
@@ -4376,7 +4405,7 @@ function BuildGeneratorClass:FitSockets()
 				self.mainLinkLimit = sockets - 1
 				while #main.gemList > sockets do t_remove(main.gemList) end
 				skillsTab:ProcessSocketGroup(main)
-				self:ChooseSupports(5)
+				self:ChooseSupports(5, true)
 			end
 		end
 	end
@@ -4633,7 +4662,7 @@ function BuildGeneratorClass:RelocateMainLink()
 	group.slot = best
 	self.mainLinkLimit = bestSockets - 1
 	self:Recalculate()
-	self:ChooseSupports(5)
+	self:ChooseSupports(5, true)
 	self:ChooseUtilityGems()
 	self:Note(string.format("Main skill linked in the %s (%d sockets): the body armour has none", best, bestSockets))
 	return true
@@ -4721,7 +4750,7 @@ function BuildGeneratorClass:PearlMove()
 			group.slot = slotName
 			self.mainLinkLimit = 3
 			self:Recalculate()
-			self:ChooseSupports(5)
+			self:ChooseSupports(5, true)
 			-- 2. the ring's two supports, one after the other
 			-- (every support for the first slot tried; the best 8 of it for the others)
 			local chosen = { }
@@ -4768,7 +4797,7 @@ function BuildGeneratorClass:PearlMove()
 	group.slot = best.slot
 	self.mainLinkLimit = 3
 	self:Recalculate()
-	self:ChooseSupports(5)
+	self:ChooseSupports(5, true)
 	self:Equip(pearlItem(best.slot, best.supports[1], best.supports[2]), ringSlot)
 	self.itemsTab:PopulateSlots()
 	self:Recalculate()
