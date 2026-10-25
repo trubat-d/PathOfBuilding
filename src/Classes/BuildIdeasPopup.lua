@@ -81,6 +81,39 @@ local function saveUniqueChoices()
 	for _, title in ipairs(uniqueChoices.forced) do rules.userForced[title] = true end
 end
 
+-- Archetype scans remembered (BuildIdeasScans.json in the settings folder): the
+-- automatic mode reuses the scan of the same skill, ascendancy and settings
+-- for a few days instead of building every archetype again ("Scan
+-- archetypes" always scans again). A new generator version (SCAN_MEMORY_VERSION)
+-- or league phase makes a new scan.
+local SCAN_MEMORY_VERSION = 1
+local SCAN_MEMORY_DAYS = 3
+local function scanMemoryPath() return main.userPath and (main.userPath .. "BuildIdeasScans.json") or nil end
+local function loadScanMemory()
+	local path = scanMemoryPath()
+	local file = path and io.open(path, "r")
+	if not file then return { } end
+	local ok, data = pcall(require("dkjson").decode, file:read("*a"))
+	file:close()
+	return ok and type(data) == "table" and data or { }
+end
+local function saveScanMemory(memory)
+	local path = scanMemoryPath()
+	local file = path and io.open(path, "w")
+	if file then
+		file:write(require("dkjson").encode(memory))
+		file:close()
+	end
+end
+local function scanMemoryKey(options)
+	local focus = options.focus or { }
+	return table.concat({ tostring(options.gemId), tostring(options.ascendClassId), tostring(options.level),
+		tostring(focus.id or focus.label), tostring(options.hitFloor), tostring(options.investment and options.investment.id),
+		tostring(options.totalBudget), tostring(options.scenario and options.scenario.id), tostring(options.configScenario and options.configScenario.id),
+		tostring(options.allowAnoints), tostring(options.allowTattoos), tostring(options.timeless), tostring(options.synergies),
+		tostring(options.leaguePhase) }, "|")
+end
+
 -- The player's own mix of goals (the generator's "Aim for: Custom mix..."),
 -- kept between sessions in the settings folder
 local goalWeights
@@ -837,7 +870,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 		controls.archetype.selIndex = 1
 	end
 	controls.scan = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {750, 134, 154, 20}, "Scan archetypes", function()
-		state.startScan()
+		-- (the button always scans again; the automatic mode reuses a recent scan)
+		state.startScan(true)
 	end)
 	controls.scan.enabled = idle
 	controls.scan.tooltipFunc = function(tooltip)
@@ -1105,7 +1139,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 	end
 
 	-- Archetype scan: a quick build per archetype, each in its own new build
-	state.startScan = function()
+	state.startScan = function(fresh)
 		if main.uniqueDB.loading then
 			state.status = "^7The unique database is still loading, try again in a moment."
 			return
@@ -1136,8 +1170,25 @@ function BuildIdeasPopupClass:OpenGenerator()
 		state.running = true
 		local meta
 		local t0 = GetTime()
+		local memoryKey = scanMemoryKey(makeOptions())
+		local remembered
 		local function finish()
 			state.running = false
+			-- (remembered for the next automatic run with the same settings)
+			if not remembered and next(results) then
+				local memory = loadScanMemory()
+				local stored = { }
+				for id, r in pairs(results) do
+					stored[id] = { score = r.score, dps = r.dps, ehp = r.ehp, minHit = r.minHit, notes = r.notes, built = r.built, estimated = r.estimated, error = r.error }
+				end
+				memory[memoryKey] = { time = os.time(), version = SCAN_MEMORY_VERSION, skill = skill.label, ascendancy = asc.ascendName, results = stored }
+				-- (only the 50 most recent scans kept)
+				local keys = { }
+				for k, v in pairs(memory) do if type(v) == "table" and v.time then t_insert(keys, k) end end
+				table.sort(keys, function(a, b) return memory[a].time > memory[b].time end)
+				for i = 51, #keys do memory[keys[i]] = nil end
+				saveScanMemory(memory)
+			end
 			controls.archetype.list = archetypeList(results)
 			controls.archetype.selIndex = 1
 			local lines = { string.format("^7Archetype scan for %s (%s), best first. Pick one in the Archetype list and click Generate:", skill.label, asc.ascendName) }
@@ -1150,7 +1201,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 			t_insert(lines, "^xC0C0C0Built: quick builds (no bloodline, jewels, flasks or synergies yet; the full build adds them). Estimated: planned on top of")
 			t_insert(lines, "^xC0C0C0the first quick build with 20 units of investment spent on the best stats; not comparable with built scores.")
 			setLog(lines)
-			state.status = string.format("^7Scan finished in %d s.", m_floor((GetTime() - t0) / 1000))
+			state.status = remembered and string.format("^7Using the archetype scan from %s (\"Scan archetypes\" scans again).", os.date("%d %b %H:%M", remembered.time))
+				or string.format("^7Scan finished in %d s.", m_floor((GetTime() - t0) / 1000))
 			-- Automatic: go on with the full build of the best archetype
 			local after = state.afterScan
 			state.afterScan = nil
@@ -1265,6 +1317,20 @@ function BuildIdeasPopupClass:OpenGenerator()
 			main.onFrameFuncs["BuildMetaWait"] = nil
 			meta = entry
 			state.meta = entry
+			-- a recent scan with the same settings: used instead of scanning again
+			if not fresh then
+				local memory = loadScanMemory()[memoryKey]
+				if memory and memory.version == SCAN_MEMORY_VERSION and type(memory.results) == "table"
+					and os.time() - (memory.time or 0) < SCAN_MEMORY_DAYS * 86400 then
+					remembered = memory
+					for id, r in pairs(memory.results) do
+						r.log = r.notes
+						results[id] = r
+					end
+					finish()
+					return
+				end
+			end
 			nextOne()
 		end
 		main.onFrameFuncs["BuildMetaWait"] = function()
