@@ -37,7 +37,7 @@ UniqueComboFinderClass.states = {
 	{ var = "buffAdrenaline", label = "Adrenaline", enable = { "gain adrenaline" }, payoff = { "while you have adrenaline" } },
 	{ var = "buffChaoticMight", label = "Chaotic Might", enable = { "gain chaotic might", "grants chaotic might" }, payoff = { "while you have chaotic might" } },
 	{ var = "buffDivinity", label = "Divinity", enable = { "gain divinity" }, payoff = { "while you have divinity" } },
-	{ var = "conditionOnConsecratedGround", label = "Consecrated Ground", enable = { "create consecrated ground", "creates consecrated ground" }, payoff = { "while on consecrated ground", "on consecrated ground" } },
+	{ var = "conditionOnConsecratedGround", label = "Consecrated Ground", enable = { "create consecrated ground", "creates consecrated ground", "you have consecrated ground around you" }, payoff = { "while on consecrated ground", "on consecrated ground" } },
 }
 
 -- the chance a line gives a state, and whether it only comes from kills

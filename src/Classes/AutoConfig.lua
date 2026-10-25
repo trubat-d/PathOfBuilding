@@ -403,6 +403,24 @@ function AutoConfigClass:Run()
 			local option = self.optionByVar[var]
 			if option and self:IsUsed(option) then self:Set(var, value, reason) end
 		end
+		-- fortification from the build's own lines ("Melee Hits have 20% chance to
+		-- Fortify", "Melee Hits with Maces... Fortify"): a melee main skill
+		-- fortifying about once a second or more keeps it up
+		if flags.melee then
+			local perSecond = 0
+			local source
+			for _, line in ipairs(lines) do
+				if line:find("fortify", 1, true) and line:find("hit", 1, true) and not line:find("fortifying hits", 1, true) and not line:find("cannot", 1, true) then
+					local chance = (tonumber(line:match("(%d+)%% chance")) or 100) / 100
+					if line:find("which stun", 1, true) then chance = chance * 0.3 end
+					local rate = speedOf(output) * chance
+					if rate > perSecond then perSecond, source = rate, line end
+				end
+			end
+			if source and perSecond >= 1 then
+				self:Set("buffFortification", true, string.format("fortifying about %.1f times a second from \"%s\"", perSecond, source))
+			end
+		end
 		-- buffs the supports linked to the main skill grant it
 		local mainGroup = self.build.skillsTab.socketGroupList[self.build.mainSocketGroup]
 		local mainTypes = skill and skill.skillTypes

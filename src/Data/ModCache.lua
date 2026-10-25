@@ -15588,7 +15588,7 @@ c["Every 4 seconds, Regenerate 35% of Life over one second if 2 Hunter Items are
 c["Every 4 seconds, Regenerate 50% of Life over one second"]={{[1]={[1]={type="Condition",var="LifeRegenBurstFull"},flags=0,keywordFlags=0,name="LifeRegenPercent",type="BASE",value=50},[2]={[1]={type="Condition",var="LifeRegenBurstAvg"},flags=0,keywordFlags=0,name="LifeRegenPercent",type="BASE",value=12.5}},nil}
 c["Every 4 seconds, Regenerate Energy Shield equal to 1% of Evasion Rating over 1 second"]={{[1]={[1]={type="Condition",var="LifeRegenBurstFull"},[2]={percent="1",stat="Evasion",type="PercentStat"},flags=0,keywordFlags=0,name="EnergyShieldRegen",type="BASE",value=1},[2]={[1]={type="Condition",var="LifeRegenBurstAvg"},[2]={percent="1",stat="Evasion",type="PercentStat"},flags=0,keywordFlags=0,name="EnergyShieldRegen",type="BASE",value=0.25}},nil}
 c["Every 4 seconds, Regenerate Life equal to 1% of Armour and Evasion Rating over 1 second"]={{[1]={[1]={type="Condition",var="LifeRegenBurstFull"},[2]={percent="1",stat="Armour",type="PercentStat"},flags=0,keywordFlags=0,name="LifeRegen",type="BASE",value=1},[2]={[1]={type="Condition",var="LifeRegenBurstAvg"},[2]={percent="1",stat="Armour",type="PercentStat"},flags=0,keywordFlags=0,name="LifeRegen",type="BASE",value=0.25},[3]={[1]={type="Condition",var="LifeRegenBurstFull"},[2]={percent="1",stat="Evasion",type="PercentStat"},flags=0,keywordFlags=0,name="LifeRegen",type="BASE",value=1},[4]={[1]={type="Condition",var="LifeRegenBurstAvg"},[2]={percent="1",stat="Evasion",type="PercentStat"},flags=0,keywordFlags=0,name="LifeRegen",type="BASE",value=0.25}},nil}
-c["Every 4 seconds, remove Curses and Ailments from you"]={nil,"Every 4 seconds, remove Curses and Ailments from you "}
+c["Every 4 seconds, remove Curses and Ailments from you"]={{[1]={flags=0,keywordFlags=0,name="AvoidAilments",type="BASE",value=40}},nil}
 c["Every 4 seconds, remove Curses and Ailments from you Every 4 seconds, Regenerate 100% of Life over one second"]={nil,"Every 4 seconds, remove Curses and Ailments from you Every 4 seconds, Regenerate 100% of Life over one second "}
 c["Every 5 seconds, gain one of the following for 5 seconds:"]={nil,"Every 5 seconds, gain one of the following for 5 seconds: "}
 c["Every 5 seconds, gain one of the following for 5 seconds: Your Hits are always Critical Strikes"]={nil,"Every 5 seconds, gain one of the following for 5 seconds: Your Hits are always Critical Strikes "}
@@ -19574,7 +19574,7 @@ c["Remembrancing 8000 songworthy deeds by the line of Vorana"]={{[1]={flags=0,ke
 c["Remove Bleeding when you use a Guard Skill"]={nil,"Remove Bleeding when you use a Guard Skill "}
 c["Remove Bleeding when you use a Guard Skill Remove Corrupted Blood when you use a Guard Skill"]={nil,"Remove Bleeding when you use a Guard Skill Remove Corrupted Blood when you use a Guard Skill "}
 c["Remove Bleeding when you use a Guard Skill Remove Corrupted Blood when you use a Guard Skill Guard Skills have 25% increased Duration"]={nil,"Remove Bleeding when you use a Guard Skill Remove Corrupted Blood when you use a Guard Skill Guard Skills have 25% increased Duration "}
-c["Remove Bleeding when you use a Life Flask"]={nil,"Remove Bleeding when you use a Life Flask "}
+c["Remove Bleeding when you use a Life Flask"]={{[1]={[1]={type="Condition",var="UsingLifeFlask"},flags=0,keywordFlags=0,name="AvoidBleed",type="BASE",value=50}},nil}
 c["Remove Chill and Freeze when you use a Flask"]={nil,"Remove Chill and Freeze when you use a Flask "}
 c["Remove Corrupted Blood when you use a Guard Skill"]={nil,"Remove Corrupted Blood when you use a Guard Skill "}
 c["Remove Corrupted Blood when you use a Guard Skill Guard Skills have 25% increased Duration"]={nil,"Remove Corrupted Blood when you use a Guard Skill Guard Skills have 25% increased Duration "}
@@ -19617,7 +19617,7 @@ c["Removes 20% of your maximum Energy Shield on use"]={{[1]={[1]={type="Conditio
 c["Removes 20% of your maximum Energy Shield on use Removes 80% of your maximum Energy Shield on use"]={{[1]={[1]={type="Condition",var="{Hand}Attack"},flags=0,keywordFlags=0,name="EnergyShield",type="BASE",value=-20}},"% of your  on use Removes 80% of your maximum Energy Shield on use "}
 c["Removes 80% of your maximum Energy Shield on use"]={{[1]={[1]={type="Condition",var="{Hand}Attack"},flags=0,keywordFlags=0,name="EnergyShield",type="BASE",value=-80}},"% of your  on use "}
 c["Removes 80% of your maximum Energy Shield on use You take 10% of your maximum Life as Chaos Damage on use"]={{[1]={[1]={type="Condition",var="{Hand}Attack"},flags=0,keywordFlags=0,name="EnergyShieldAsChaos",type="BASE",value=-80}},"% of your  on use You take 10% of your maximum Life  on use "}
-c["Removes Bleeding when you use a Flask"]={nil,"Removes Bleeding when you use a Flask "}
+c["Removes Bleeding when you use a Flask"]={{[1]={[1]={type="Condition",var="UsingFlask"},flags=0,keywordFlags=0,name="AvoidBleed",type="BASE",value=75}},nil}
 c["Removes Bleeding when you use a Flask Flasks gain 3 Charges every 3 seconds"]={nil,"Removes Bleeding when you use a Flask Flasks gain 3 Charges every 3 seconds "}
 c["Removes Bleeding when you use a Flask Flasks gain 3 Charges every 3 seconds 25% chance for Flasks you use to not consume Charges"]={nil,"Removes Bleeding when you use a Flask Flasks gain 3 Charges every 3 seconds 25% chance for Flasks you use to not consume Charges "}
 c["Removes Bleeding when you use a Warcry"]={nil,"Removes Bleeding when you use a Warcry "}
@@ -19625,7 +19625,7 @@ c["Removes Burning when you use a Flask"]={nil,"Removes Burning when you use a F
 c["Removes Curses on use"]={{},nil}
 c["Removes Elemental Ailments on Rampage"]={nil,"Removes Elemental Ailments on Rampage "}
 c["Removes Elemental Ailments on Rampage Gain Immunity to Physical Damage for 1.5 seconds on Rampage"]={nil,"Removes Elemental Ailments on Rampage Gain Immunity to Physical Damage for 1.5 seconds on Rampage "}
-c["Removes Elemental Ailments when you use a Flask"]={nil,"Removes Elemental Ailments when you use a Flask "}
+c["Removes Elemental Ailments when you use a Flask"]={{[1]={[1]={type="Condition",var="UsingFlask"},flags=0,keywordFlags=0,name="AvoidElementalAilments",type="BASE",value=75}},nil}
 c["Removes Elemental Ailments when you use a Flask 50% chance for Flasks you use to not consume Charges"]={nil,"Removes Elemental Ailments when you use a Flask 50% chance for Flasks you use to not consume Charges "}
 c["Removes all Burning when used"]={{},nil}
 c["Removes all Energy Shield"]={{[1]={flags=0,keywordFlags=0,name="EnergyShield",type="MORE",value=-100}},nil}
@@ -23037,12 +23037,12 @@ c["You cannot be Chilled for 3 seconds after being Chilled You cannot be Frozen 
 c["You cannot be Cursed with Silence"]={{[1]={flags=0,keywordFlags=0,name="SilenceImmune",type="FLAG",value=true}},nil}
 c["You cannot be Frozen for 3 seconds after being Frozen"]={nil,"You cannot be Frozen for 3 seconds after being Frozen "}
 c["You cannot be Frozen for 3 seconds after being Frozen You cannot be Ignited for 3 seconds after being Ignited"]={nil,"You cannot be Frozen for 3 seconds after being Frozen You cannot be Ignited for 3 seconds after being Ignited "}
-c["You cannot be Frozen if you've been Frozen Recently"]={nil,"You cannot be Frozen if you've been Frozen Recently "}
+c["You cannot be Frozen if you've been Frozen Recently"]={{[1]={flags=0,keywordFlags=0,name="AvoidFreeze",type="BASE",value=50}},nil}
 c["You cannot be Frozen if you've been Frozen Recently Unaffected by Chilled Ground"]={nil,"You cannot be Frozen if you've been Frozen Recently Unaffected by Chilled Ground "}
 c["You cannot be Hindered"]={{[1]={flags=0,keywordFlags=0,name="HinderImmune",type="FLAG",value=true}},nil}
 c["You cannot be Ignited for 3 seconds after being Ignited"]={nil,"You cannot be Ignited for 3 seconds after being Ignited "}
 c["You cannot be Ignited for 3 seconds after being Ignited You cannot be Shocked for 1 second after being Shocked"]={nil,"You cannot be Ignited for 3 seconds after being Ignited You cannot be Shocked for 1 second after being Shocked "}
-c["You cannot be Ignited if you've been Ignited Recently"]={nil,"You cannot be Ignited if you've been Ignited Recently "}
+c["You cannot be Ignited if you've been Ignited Recently"]={{[1]={flags=0,keywordFlags=0,name="AvoidIgnite",type="BASE",value=50}},nil}
 c["You cannot be Ignited if you've been Ignited Recently Unaffected by Burning Ground"]={nil,"You cannot be Ignited if you've been Ignited Recently Unaffected by Burning Ground "}
 c["You cannot be Impaled"]={{[1]={flags=0,keywordFlags=0,name="ImpaleImmune",type="FLAG",value=true}},nil}
 c["You cannot be Maimed"]={{[1]={flags=0,keywordFlags=0,name="MaimImmune",type="FLAG",value=true}},nil}
@@ -23050,7 +23050,7 @@ c["You cannot be Shocked for 1 second after being Shocked"]={nil,"You cannot be 
 c["You cannot be Shocked for 1 second after being Shocked You cannot be Shocked for 3 seconds after being Shocked"]={nil,"You cannot be Shocked for 1 second after being Shocked You cannot be Shocked for 3 seconds after being Shocked "}
 c["You cannot be Shocked for 3 seconds after being Shocked"]={nil,"You cannot be Shocked for 3 seconds after being Shocked "}
 c["You cannot be Shocked for 3 seconds after being Shocked You grant 6 Frenzy Charges to allies on Death"]={nil,"You cannot be Shocked for 3 seconds after being Shocked You grant 6 Frenzy Charges to allies on Death "}
-c["You cannot be Shocked if you've been Shocked Recently"]={nil,"You cannot be Shocked if you've been Shocked Recently "}
+c["You cannot be Shocked if you've been Shocked Recently"]={{[1]={flags=0,keywordFlags=0,name="AvoidShock",type="BASE",value=50}},nil}
 c["You cannot be Shocked if you've been Shocked Recently 30% reduced Effect of Shock on you"]={nil,"You cannot be Shocked if you've been Shocked Recently 30% reduced Effect of Shock on you "}
 c["You cannot be Shocked if you've been Shocked Recently 30% reduced Effect of Shock on you Unaffected by Shocked Ground"]={nil,"You cannot be Shocked if you've been Shocked Recently 30% reduced Effect of Shock on you Unaffected by Shocked Ground "}
 c["You cannot be Shocked while Frozen"]={{[1]={[1]={type="Condition",var="Frozen"},flags=0,keywordFlags=0,name="ShockImmune",type="FLAG",value=true}},nil}

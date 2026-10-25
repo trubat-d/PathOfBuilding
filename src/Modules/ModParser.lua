@@ -3740,6 +3740,17 @@ local specialModList = {
 	["when you kill an ignited enemy, inflict an equivalent ignite on each nearby enemy"] = { flag("IgniteSpreadOnKill") },
 	["when you kill a poisoned enemy during any flask effect, enemies within ([%d%.]+) metres are poisoned"] = { flag("PoisonSpreadOnKill") },
 	["when your hits impale enemies, also impale other enemies near them"] = { flag("ImpaleSpread") },
+	-- Ailments removed rather than avoided, counted as part avoidance for the
+	-- build generator's defence checklist (approximations: removal on every
+	-- flask use 75%, on life flask use or on a timer 40-50%, immunity after
+	-- being affected recently 50%)
+	["removes bleeding when you use a flask"] = { mod("AvoidBleed", "BASE", 75, { type = "Condition", var = "UsingFlask" }) },
+	["remove bleeding when you use a life flask"] = { mod("AvoidBleed", "BASE", 50, { type = "Condition", var = "UsingLifeFlask" }) },
+	["removes elemental ailments when you use a flask"] = { mod("AvoidElementalAilments", "BASE", 75, { type = "Condition", var = "UsingFlask" }) },
+	["every (%d+) seconds, remove curses and ailments from you"] = function(num) return { mod("AvoidAilments", "BASE", math.floor(math.min(80, 160 / num))) } end,
+	["you cannot be shocked if you've been shocked recently"] = { mod("AvoidShock", "BASE", 50) },
+	["you cannot be frozen if you've been frozen recently"] = { mod("AvoidFreeze", "BASE", 50) },
+	["you cannot be ignited if you've been ignited recently"] = { mod("AvoidIgnite", "BASE", 50) },
 	["(%d+)%% chance for ignites inflicted with lightning strike or frost blades to deal (%d+)%% more damage"] = function(num, _, more) return {
 		mod("Damage", "MORE", tonumber(more) * num / 100, nil, 0, KeywordFlag.Ignite, { type = "SkillName", skillNameList = { "Lightning Strike", "Frost Blades" }, includeTransfigured = true }),
 	} end,
