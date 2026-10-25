@@ -2897,6 +2897,69 @@ function BuildGeneratorClass:AddJewels(maxJewels, maxPath)
 	return added, best
 end
 
+-- Requirements moved off the tree: passives that only give resistances or
+-- attributes (leaves, and the leaves they leave behind) are given back, the
+-- rares and jewels made again to cover what they gave (an affix tier, a
+-- jewel with a resistance next to its crit multiplier), and the points spent
+-- on what the build scales with. Passive points and sockets are the scarcest
+-- budget: a lone fire resistance node is the dearest way to cap it. Kept
+-- only if the whole build is better.
+function BuildGeneratorClass:RequirementsToGearMove()
+	local spec = self.build.spec
+	local before = self:FullScore()
+	local snap = self:Snapshot()
+	local savedLog = #self.log
+	local function reqOnly(node)
+		if node.ascendancyName or node.type == "Mastery" or node.type == "Keystone" or node.type == "ClassStart" or node.type == "Socket" then return false end
+		if self.protectedNodes and self.protectedNodes[node.id] then return false end
+		local any = false
+		for _, l in ipairs(node.sd or { }) do
+			any = true
+			local ll = l:lower()
+			local req = ll:find("resistance") and not ll:find("enem") and not ll:find("penetrat")
+				or ll:find("to strength") or ll:find("to dexterity") or ll:find("to intelligence") or ll:find("to all attributes")
+				or ll:find("^%+%d+ to strength and") or ll:find("^%+%d+ to dexterity and")
+			if not req then return false end
+		end
+		return any
+	end
+	local removed, names = 0, { }
+	for _ = 1, 8 do
+		local cut = { }
+		for _, node in pairs(spec.allocNodes) do
+			if reqOnly(node) and node.depends and #node.depends <= 1 then t_insert(cut, node) end
+		end
+		if #cut == 0 then break end
+		for _, node in ipairs(cut) do
+			if node.alloc then spec:DeallocNode(node) removed = removed + 1 names[node.dn] = (names[node.dn] or 0) + 1 end
+		end
+		spec:BuildAllDependsAndPaths()
+	end
+	if removed == 0 then return 0 end
+	self:Recalculate()
+	local ok, err = pcall(function()
+		self:FinalRares()
+		self:AllocateTree(true, false, true)
+		self:RefineTree(6)
+		self:LateJewelsMove(2)
+	end)
+	if not ok then ConPrintf("Requirements move failed: %s", tostring(err)) end
+	local after = ok and self:FullScore() or before
+	if self.options.debugTiming then ConPrintf("[requirements] %d resistance / attribute passives given back: %.3f -> %.3f", removed, before, after) end
+	if ok and after > before + 0.01 then
+		for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+		local list = { }
+		for name, n in pairs(names) do t_insert(list, n > 1 and string.format("%s x%d", name, n) or name) end
+		t_sort(list)
+		self:Note(string.format("Requirements moved to gear: %d resistance / attribute passives given back (%s), rares and jewels made to cover them, the points spent on damage: score %+.3f", removed, table.concat(list, ", "), after - before))
+		return after - before
+	end
+	self:Restore(snap)
+	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+	self:Recalculate()
+	return 0
+end
+
 -- Jewels on the finished build: a rare jewel made for it (its crit, its
 -- resistances...), put in place of the jewels worth less, then in more
 -- sockets wherever one pays for its path. Top Winter Orbs run six rare
@@ -6939,6 +7002,11 @@ function BuildGeneratorClass:Run()
 		self:Move(4, 6, "Jewels for the finished build")
 		local ok, err = pcall(function() self:LateJewelsMove(opts.lateJewelCount or 6) end)
 		if not ok then ConPrintf("Late jewels failed: %s", tostring(err)) end
+	end
+	if opts.requirementsToGear ~= false then
+		self:Move(4, 6, "Resistances and attributes moved from passives to gear")
+		local ok, err = pcall(function() self:RequirementsToGearMove() end)
+		if not ok then ConPrintf("Requirements move failed: %s", tostring(err)) end
 	end
 	-- (the build doctor again on the finished build: later steps can undo a
 	-- layer it built, and the balance has moved; one or two plans)
