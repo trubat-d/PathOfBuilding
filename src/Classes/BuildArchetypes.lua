@@ -153,6 +153,16 @@ BuildArchetypesClass.list = {
 		applies = function(info) return not info.minion end,
 	},
 	{
+		-- (all three top Winter Orb players of the league: Malachai's Loop, Tulfall,
+		-- Ralakesh's Impatience, Willclash)
+		id = "POWER", label = "Power charge stacking (Malachai's Loop, Tulfall, Ralakesh's Impatience)",
+		lens = { stat = "PowerChargesMax", base = 3, label = "Maximum power charges" },
+		summary = "Many power charges kept at the maximum: damage per power charge (Malachai's Loop, Tulfall, Willclash), Ralakesh's Impatience to count as always having the maximum.",
+		uniques = { "Malachai's Loop", "Ralakesh's Impatience", "Tulfall", "Willclash" },
+		uniqueLines = { "per Power Charge", "[Mm]aximum Power Charges" },
+		applies = function(info) return info.spell and not info.minion end,
+	},
+	{
 		id = "INT", label = "Intelligence stacking (Shaper's Touch, Split Personality)",
 		lens = { stat = "Int", base = 100, label = "Intelligence" },
 		summary = "Stack Intelligence: uniques that scale damage, accuracy, evasion or energy shield per Intelligence.",
