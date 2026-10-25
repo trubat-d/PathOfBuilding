@@ -3839,13 +3839,17 @@ function BuildGeneratorClass:PackageMove(rounds)
 				local room = kind and ((kinds[kind] or 0) < (kind == "Ring" and 2 or 1))
 				if item and room and finder:IsItemAllowed(item, filter) then
 					kinds[kind] = (kinds[kind] or 0) + 1
-					if not equipped[name] then t_insert(uniques, item) end
+					-- (pieces already worn come first, so they keep their slot
+					-- and the new ones don't push them out)
+					if equipped[name] then t_insert(uniques, 1, item) else t_insert(uniques, item) end
 					t_insert(labels, name)
 				else
 					missing = missing + 1
 				end
 			end
-			if #uniques > 0 then
+			local new = 0
+			for _, item in ipairs(uniques) do if not equipped[item.title or item.name] then new = new + 1 end end
+			if new > 0 then
 				t_insert(moves, { label = (part.label or id) .. ": " .. table.concat(labels, " + "), uniques = uniques, share = 0, idea = part })
 			end
 		end
@@ -3864,20 +3868,37 @@ function BuildGeneratorClass:PackageMove(rounds)
 				local uniques = { }
 				for _, name in ipairs(gp.names) do
 					local item = byTitle[name]
-					if item and not equipped[name] then t_insert(uniques, item) end
+					if item then
+						if equipped[name] then t_insert(uniques, 1, item) else t_insert(uniques, item) end
+					end
 				end
 				local label = string.format("%s stacked (scaling graph, x%.2f as a test): %s", gp.stat, gp.ratio, table.concat(gp.names, " + "))
-				if #uniques > 0 and not have[label] then t_insert(moves, { label = label, uniques = uniques, share = 0 }) end
+				local new = 0
+				for _, item in ipairs(uniques) do if not equipped[item.title or item.name] then new = new + 1 end end
+				if new > 0 and not have[label] then t_insert(moves, { label = label, uniques = uniques, share = 0 }) end
 			end
 		end
 	elseif not okG then ConPrintf("Graph packages failed: %s", tostring(graphPackages)) end
+	-- (each package twice: the pieces already worn kept in their slots, or
+	-- only the new pieces, placed where they score best - a worn piece the
+	-- package lists can be worth less than what it pushes out)
+	local variants = { }
+	for _, m in ipairs(moves) do
+		t_insert(variants, m)
+		local fresh = { }
+		for _, item in ipairs(m.uniques) do if not equipped[item.title or item.name] then t_insert(fresh, item) end end
+		if #fresh < #m.uniques and #fresh > 0 then
+			t_insert(variants, { label = m.label .. " (new pieces only)", uniques = fresh, share = 0, idea = m.idea })
+		end
+	end
+	moves = variants
 	if self.options.debugTiming then for _, m in ipairs(moves) do ConPrintf("[package] %s", m.label) end end
 	if #moves == 0 then return end
 	self:EvaluatePackages(moves, rounds or 1, function(best, gain, overAdaptation)
 		return string.format("Uniques of the idea taken together: %s, with passives and supports adapted: score %+.3f", best.label, gain)
 	-- (packages lose before the build adapts to them - the gear they push
 	-- out held resistances and crit - so all are applied and adapted)
-	end, { threshold = 10, tries = 4, baseline = true })
+	end, { threshold = 10, tries = 6, baseline = true })
 end
 
 -- Ideas of the other archetypes tried on the finished build: each one's
