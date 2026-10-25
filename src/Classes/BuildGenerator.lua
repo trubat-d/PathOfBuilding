@@ -589,6 +589,8 @@ function BuildGeneratorClass:ChooseSupports(maxSupports, restrict)
 		if gem.grantedEffect and gem.grantedEffect.support and not gem.grantedEffect.unsupported and affordable
 			-- (supports whose drawback PoB doesn't calculate: Modules/GeneratorRules)
 			and not GetGeneratorRules().excludedSupports[gem.name]
+			-- (supports a build doctor plan took out: Controlled Destruction after committing to crit)
+			and not (self.blockedSupports and self.blockedSupports[gem.name])
 			and (not GetGeneratorRules().ownDamageSupports[gem.name] or GetGeneratorRules().ownDamageSupports[gem.name](self.mainGem))
 			and (self.options.allowTriggerSupports or not self.IsAssumptionTrigger(gem)) then
 			t_insert(supports, gemId)
@@ -2961,6 +2963,20 @@ function BuildGeneratorClass:TreeSolverMove()
 	end
 	if gain and gain > 0.001 then
 		self:Note(string.format("Passive tree %s: score %+.3f", optimizer.globalWon and "chosen again by the whole-tree solver (the best set of passives for the points, chosen at once)" or "rebuilt with shorter paths", gain))
+	end
+	return gain or 0
+end
+
+-- The build doctor (Classes/BuildDoctor): the main skill's damage as a
+-- product of layers (crit, speed, resistance, pools...), each measured with a
+-- test dose and a full commitment, the ones with the most damage per point
+-- left rebuilt for (a plan is kept only if the build scores better)
+function BuildGeneratorClass:DoctorMove()
+	if not self.mainGem then return 0 end
+	local ok, gain = pcall(function() return new("BuildDoctor"):BuildDoctor(self):Run(self.options.doctorPlans or 3) end)
+	if not ok then
+		ConPrintf("Build doctor failed: %s", tostring(gain))
+		return 0
 	end
 	return gain or 0
 end
@@ -5369,7 +5385,7 @@ function BuildGeneratorClass:LearnFromTopBuilds(maxTries)
 					local gem = gemId and data.gems[gemId]
 					local rules = GetGeneratorRules()
 					local ownOk = gem and (not rules.ownDamageSupports[gem.name] or rules.ownDamageSupports[gem.name](self.mainGem))
-					if gem and ownOk and not rules.excludedSupports[gem.name] and (investment.awakenedGems ~= false or not gem.tags.awakened) and (investment.exceptionalGems ~= false or not gem.tags.exceptional) and #list - 1 < (self.mainLinkLimit or 5) then
+					if gem and ownOk and not rules.excludedSupports[gem.name] and not (self.blockedSupports and self.blockedSupports[gem.name]) and (investment.awakenedGems ~= false or not gem.tags.awakened) and (investment.exceptionalGems ~= false or not gem.tags.exceptional) and #list - 1 < (self.mainLinkLimit or 5) then
 						t_insert(list, { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId })
 						t_insert(names, gem.name)
 					end
@@ -6013,7 +6029,7 @@ end
 local skippableSteps = {
 	"ChooseMetaUniques", "UniqueSweep", "ChooseArchetypeJewels", "AddJewels", "ChooseTimelessJewel", "ChooseMetaJewels",
 	"ChooseRadiusJewels", "ChooseClusterJewels", "ChooseAnoint", "ChooseTattoos", "UniqueFlaskSweep", "PermanentFlaskMove",
-	"FlaskEnchantMove", "AuraStackMove", "FillMainLinkMove", "ApplySynergies", "JointMoves", "UniqueCombosMove", "PlayerPackagesMove", "TreeSolverMove",
+	"FlaskEnchantMove", "AuraStackMove", "FillMainLinkMove", "ApplySynergies", "JointMoves", "UniqueCombosMove", "PlayerPackagesMove", "TreeSolverMove", "DoctorMove",
 	"ConditionEnablerMove", "CrossIdeasMove", "LearnFromTopBuilds", "PopularPassivesMove", "AscendancyRecheck",
 	"FinalSupports", "PairAilments", "PearlMove", "CorruptionMove", "SupremeOstentationMove", "BossSkillMove", "PastBuildsMove",
 }
@@ -6354,6 +6370,9 @@ function BuildGeneratorClass:Run()
 	if opts.statPlan ~= false and self.scorer.lens then self:PlanStatTarget("with the first gear") end
 	self:FullScore()
 	self:MakeRares(true)
+
+	-- the build doctor: the damage layers balanced (Classes/BuildDoctor)
+	if opts.doctor ~= false then self:DoctorMove() end
 
 	stage(9, "Choosing gem setups, jewels, anoint and tattoos")
 	-- (from here on, steps are measured and the useless ones skipped: Modules/GeneratorKnowledge)

@@ -739,11 +739,12 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 	-- it before the uniques that pay it back are complete. Left out of the
 	-- final score, which compares archetypes as they are.
 	if self.lens2 and output then
-		local value = output[self.lens2.stat] or 0
+		-- (lens.func: a computed layer, e.g. the build doctor's crit factor)
+		local value = self.lens2.func and self.lens2.func(output) or output[self.lens2.stat] or 0
 		score = score + (self.lens2.weight or 0.2) * m_log(m_max(1, value) / (self.lens2.base or 100))
 	end
 	if self.lens and output then
-		local value = output[self.lens.stat] or 0
+		local value = self.lens.func and self.lens.func(output) or output[self.lens.stat] or 0
 		score = score + (self.lens.weight or 0.3) * m_log(m_max(1, value) / (self.lens.base or 100))
 	end
 	-- surviving a whole boss fight (FightSurvival): dying early costs, a fight

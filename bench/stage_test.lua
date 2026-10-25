@@ -105,6 +105,15 @@ elseif step == "tree" or step == "treeplain" then
 	local opt = new("TreeOptimizer"):TreeOptimizer(gen)
 	local gain, swaps = opt:Run({ global = step == "tree" })
 	print("TREE", gain, swaps, "solver won:", tostring(opt.globalWon), "points", opt.globalPoints, opt.globalCount)
+elseif step == "doctor" or step == "diagnose" then
+	-- (diagnose: the layer report only; doctor: the plans tried too)
+	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
+	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
+	local doctor = new("BuildDoctor"):BuildDoctor(gen)
+	doctor:Diagnose()
+	for _, l in ipairs(doctor:ReportLines(20)) do print(l) end
+	for _, p in ipairs(doctor:Plans()) do print("PLAN", p.id, p.label, p.reason) end
+	if step == "doctor" then print("GAIN", doctor:Run(tonumber(os.getenv("PLANS") or "3"))) end
 elseif step == "repair" then
 	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
 	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
