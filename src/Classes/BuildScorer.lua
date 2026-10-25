@@ -130,6 +130,8 @@ function BuildScorerClass:ClearTerm(output)
 	local ms = m_max(0.2, output.EffectiveMovementSpeedMod or 1)
 	local radius = output.AreaOfEffectRadius
 	local areaFactor = radius and m_min(4, m_max(0.3, (radius / 18) ^ 2)) or 1
+	-- (melee strikes splashing around their target: Tribal Fury)
+	if output.MeleeSplash then areaFactor = m_max(areaFactor, 1.5) end
 	local projectiles = (output.ProjectileCount or 1) - 1 + 0.5 * m_min(4, output.PierceCount or 0) + 0.7 * m_min(4, output.ChainMax or 0)
 	local projFactor = 1 + 0.25 * m_max(0, projectiles)
 	local explode = output.ClearExplodeValue or 0

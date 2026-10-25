@@ -3751,6 +3751,21 @@ local specialModList = {
 	["you cannot be shocked if you've been shocked recently"] = { mod("AvoidShock", "BASE", 50) },
 	["you cannot be frozen if you've been frozen recently"] = { mod("AvoidFreeze", "BASE", 50) },
 	["you cannot be ignited if you've been ignited recently"] = { mod("AvoidIgnite", "BASE", 50) },
+	-- Damage and defence mechanics PoB didn't model, approximated for the build generator
+	-- aggravated bleeding deals damage as though the enemy were moving (200% more)
+	["bleeding you inflict is aggravated"] = { mod("Damage", "MORE", 200, nil, 0, KeywordFlag.Bleed, { type = "ActorCondition", actor = "enemy", var = "Moving", neg = true }, { type = "Condition", var = "NoExtraBleedDamageToMovingEnemy", neg = true }, { type = "Condition", var = "CannotAggravate", neg = true }) },
+	-- (a chance on hit: aggravated once a hit lands it, at about three hits a second over a bleed's few seconds)
+	["(%d+)%% chance to aggravate bleeding on targets you hit with attacks"] = function(num) return { mod("Damage", "MORE", math.floor(200 * math.min(1, num / 100 * 3 * 2.5)), nil, ModFlag.Attack, KeywordFlag.Bleed, { type = "ActorCondition", actor = "enemy", var = "Moving", neg = true }, { type = "Condition", var = "NoExtraBleedDamageToMovingEnemy", neg = true }, { type = "Condition", var = "CannotAggravate", neg = true }) } end,
+	["auras from your skills have (%d+)%% increased effect on you for each herald affecting you, up to a maximum of (%d+)%%"] = function(num, _, max) return { mod("SkillAuraEffectOnSelf", "INC", num, { type = "Multiplier", var = "Herald", limit = tonumber(max) / num }) } end,
+	["impales you inflict gain (%d+)%% increased effect once 1 second of duration has expired"] = function(num) return { mod("ImpaleEffect", "INC", math.floor(num * 7 / 8)) } end,
+	["mines have a (%d+)%% chance to be detonated an additional time"] = function(num) return { mod("DPS", "MORE", num, nil, 0, KeywordFlag.Mine) } end,
+	["(%d+)%% chance for traps to trigger an additional time"] = function(num) return { mod("DPS", "MORE", num, nil, 0, KeywordFlag.Trap) } end,
+	["melee strike skills deal splash damage to surrounding targets"] = { flag("MeleeSplash") },
+	-- (enemy damage rolled twice, the lower kept: about 7% less on a +-20% roll)
+	["damage of enemies hitting you is unlucky"] = { mod("DamageTaken", "MORE", -7) },
+	-- Ghost Dance: a shroud every 2 seconds, each recovering 3% of evasion as energy shield when hit
+	["every 2 seconds, gain a ghost shroud, up to a maximum of 3"] = { flag("UseGhostShrouds") },
+	["when hit, lose a ghost shroud to recover energy shield equal to (%d+)%% of your evasion rating"] = function(num) return { mod("EnergyShieldRegen", "BASE", 1, { type = "PercentStat", stat = "Evasion", percent = num / 2 }, { type = "MultiplierThreshold", var = "GhostShroud", threshold = 1 }) } end,
 	["(%d+)%% chance for ignites inflicted with lightning strike or frost blades to deal (%d+)%% more damage"] = function(num, _, more) return {
 		mod("Damage", "MORE", tonumber(more) * num / 100, nil, 0, KeywordFlag.Ignite, { type = "SkillName", skillNameList = { "Lightning Strike", "Frost Blades" }, includeTransfigured = true }),
 	} end,

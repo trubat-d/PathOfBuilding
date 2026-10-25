@@ -3579,7 +3579,7 @@ c["10 to 18 Added Fire Damage with Wand Attacks"]={{[1]={flags=8388612,keywordFl
 c["10 to 20 Added Cold Damage with Bow Attacks"]={{[1]={flags=131076,keywordFlags=0,name="ColdMin",type="BASE",value=10},[2]={flags=131076,keywordFlags=0,name="ColdMax",type="BASE",value=20}},nil}
 c["10 to 24 Added Physical Damage with Bow Attacks"]={{[1]={flags=131076,keywordFlags=0,name="PhysicalMin",type="BASE",value=10},[2]={flags=131076,keywordFlags=0,name="PhysicalMax",type="BASE",value=24}},nil}
 c["10 to 25 Added Attack Chaos Damage per 100 Maximum Mana"]={{[1]={[1]={div=100,stat="Mana",type="PerStat"},flags=0,keywordFlags=65536,name="ChaosMin",type="BASE",value=10},[2]={[1]={div=100,stat="Mana",type="PerStat"},flags=0,keywordFlags=65536,name="ChaosMax",type="BASE",value=25}},nil}
-c["10% Chance for Traps to Trigger an additional time"]={{},"  to Trigger an additional time "}
+c["10% Chance for Traps to Trigger an additional time"]={{[1]={flags=0,keywordFlags=4096,name="DPS",type="MORE",value=10}},nil}
 c["10% Chance to Block Attack Damage"]={{[1]={flags=0,keywordFlags=0,name="BlockChance",type="BASE",value=10}},nil}
 c["10% Chance to Block Spell Damage"]={{[1]={flags=0,keywordFlags=0,name="SpellBlockChance",type="BASE",value=10}},nil}
 c["10% Chance to Cause Monster to Flee on Block"]={{}," to Cause Monster to Flee on Block "}
@@ -3600,7 +3600,7 @@ c["10% chance that if you would gain Frenzy Charges, you instead gain up to your
 c["10% chance that if you would gain Power Charges, you instead gain up to your maximum number of Power Charges"]={{}," that if you would gain Power Charges, you instead gain up to your maximum number of Power Charges "}
 c["10% chance that if you would gain a Crab Barrier, you instead gain up to"]={{}," that if you would gain a Crab Barrier, you instead gain up to "}
 c["10% chance that if you would gain a Crab Barrier, you instead gain up to your maximum number of Crab Barriers"]={{[1]={flags=0,keywordFlags=0,name="CrabBarriersMax",type="BASE",value=10}}," that if you would gain a Crab Barrier, you instead gain up to your  "}
-c["10% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{}," to Aggravate Bleeding on targets you Hit  "}
+c["10% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{[1]={[1]={actor="enemy",neg=true,type="ActorCondition",var="Moving"},[2]={neg=true,type="Condition",var="NoExtraBleedDamageToMovingEnemy"},[3]={neg=true,type="Condition",var="CannotAggravate"},flags=1,keywordFlags=4194304,name="Damage",type="MORE",value=150}},nil}
 c["10% chance to Avoid Bleeding"]={{[1]={flags=0,keywordFlags=0,name="AvoidBleed",type="BASE",value=10}},nil}
 c["10% chance to Avoid Cold Damage from Hits"]={{[1]={flags=0,keywordFlags=0,name="AvoidColdDamageChance",type="BASE",value=10}},nil}
 c["10% chance to Avoid Elemental Ailments"]={{[1]={flags=0,keywordFlags=0,name="AvoidElementalAilments",type="BASE",value=10}},nil}
@@ -4475,7 +4475,7 @@ c["116% reduced Lightning Damage"]={{[1]={flags=0,keywordFlags=0,name="Lightning
 c["116% reduced Spell Damage"]={{[1]={flags=2,keywordFlags=0,name="Damage",type="INC",value=-116}},nil}
 c["12 to 14 Added Cold Damage per Frenzy Charge"]={{[1]={[1]={type="Multiplier",var="FrenzyCharge"},flags=0,keywordFlags=0,name="ColdMin",type="BASE",value=12},[2]={[1]={type="Multiplier",var="FrenzyCharge"},flags=0,keywordFlags=0,name="ColdMax",type="BASE",value=14}},nil}
 c["12 to 22 Added Physical Damage with Bow Attacks"]={{[1]={flags=131076,keywordFlags=0,name="PhysicalMin",type="BASE",value=12},[2]={flags=131076,keywordFlags=0,name="PhysicalMax",type="BASE",value=22}},nil}
-c["12% Chance for Traps to Trigger an additional time"]={{},"  to Trigger an additional time "}
+c["12% Chance for Traps to Trigger an additional time"]={{[1]={flags=0,keywordFlags=4096,name="DPS",type="MORE",value=12}},nil}
 c["12% Chance to Block Attack Damage"]={{[1]={flags=0,keywordFlags=0,name="BlockChance",type="BASE",value=12}},nil}
 c["12% Chance to Block Spell Damage"]={{[1]={flags=0,keywordFlags=0,name="SpellBlockChance",type="BASE",value=12}},nil}
 c["12% Global chance to Blind Enemies on hit"]={{},"%  chance to Blind Enemies on hit "}
@@ -5148,7 +5148,7 @@ c["15% chance that if you would gain Endurance Charges, you instead gain up to m
 c["15% chance that if you would gain Frenzy Charges, you instead gain up to your maximum number of Frenzy Charges"]={{}," that if you would gainCharges, you instead gain up to your maximum number of Frenzy Charges "}
 c["15% chance that if you would gain Power Charges, you instead gain up to your maximum number of Power Charges"]={{}," that if you would gain Power Charges, you instead gain up to your maximum number of Power Charges "}
 c["15% chance that if you would gain Rage on Hit, you instead gain up to your maximum Rage"]={{[1]={flags=4,keywordFlags=0,name="MaximumRage",type="BASE",value=15}}," that if you would gain Rage , you instead gain up to your  "}
-c["15% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{}," to Aggravate Bleeding on targets you Hit  "}
+c["15% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{[1]={[1]={actor="enemy",neg=true,type="ActorCondition",var="Moving"},[2]={neg=true,type="Condition",var="NoExtraBleedDamageToMovingEnemy"},[3]={neg=true,type="Condition",var="CannotAggravate"},flags=1,keywordFlags=4194304,name="Damage",type="MORE",value=200}},nil}
 c["15% chance to Avoid Bleeding"]={{[1]={flags=0,keywordFlags=0,name="AvoidBleed",type="BASE",value=15}},nil}
 c["15% chance to Avoid Elemental Ailments while you have Elusive"]={{[1]={[1]={type="Condition",var="Elusive"},flags=0,keywordFlags=0,name="AvoidElementalAilments",type="BASE",value=15}},nil}
 c["15% chance to Avoid being Chilled"]={{[1]={flags=0,keywordFlags=0,name="AvoidChill",type="BASE",value=15}},nil}
@@ -6309,7 +6309,7 @@ c["20% chance on reaching Low Life to recover to Full Life"]={{[1]={[1]={type="C
 c["20% chance on reaching Low Life to recover to Full Life Limited to 1 Runegraft of the River"]={{[1]={[1]={type="Condition",var="LowLife"},flags=0,keywordFlags=0,name="Life",type="BASE",value=20}},"  to recover to Full  Limited to 1 Runegraft of the River "}
 c["20% chance that if you would gain Rage on Hit, you instead gain up to your maximum Rage"]={{[1]={flags=4,keywordFlags=0,name="MaximumRage",type="BASE",value=20}}," that if you would gain Rage , you instead gain up to your  "}
 c["20% chance that if you would gain Rage on Hit, you instead gain up to your maximum Rage +3 to Level of all Melee Skill Gems"]={{[1]={flags=4,keywordFlags=0,name="MaximumRage",type="BASE",value=20}}," that if you would gain Rage , you instead gain up to your  +3 to Level of all Melee Skill Gems "}
-c["20% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{}," to Aggravate Bleeding on targets you Hit  "}
+c["20% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{[1]={[1]={actor="enemy",neg=true,type="ActorCondition",var="Moving"},[2]={neg=true,type="Condition",var="NoExtraBleedDamageToMovingEnemy"},[3]={neg=true,type="Condition",var="CannotAggravate"},flags=1,keywordFlags=4194304,name="Damage",type="MORE",value=200}},nil}
 c["20% chance to Avoid Bleeding"]={{[1]={flags=0,keywordFlags=0,name="AvoidBleed",type="BASE",value=20}},nil}
 c["20% chance to Avoid Elemental Ailments"]={{[1]={flags=0,keywordFlags=0,name="AvoidElementalAilments",type="BASE",value=20}},nil}
 c["20% chance to Avoid Elemental Ailments while holding a Shield"]={{[1]={[1]={type="Condition",varList={[1]="UsingShield"}},flags=0,keywordFlags=0,name="AvoidElementalAilments",type="BASE",value=20}},nil}
@@ -7255,7 +7255,7 @@ c["25% chance that if you would gain Endurance Charges, you instead gain up to m
 c["25% chance that if you would gain Power Charges, you instead gain up to"]={{}," that if you would gain Power Charges, you instead gain up to "}
 c["25% chance that if you would gain Power Charges, you instead gain up to your maximum number of Power Charges"]={{}," that if you would gain Power Charges, you instead gain up to your maximum number of Power Charges "}
 c["25% chance to Aggravate Bleeding on targets you Critically Strike with Attacks"]={{}," to Aggravate Bleeding on targets you Critically Strike  "}
-c["25% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{}," to Aggravate Bleeding on targets you Hit  "}
+c["25% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{[1]={[1]={actor="enemy",neg=true,type="ActorCondition",var="Moving"},[2]={neg=true,type="Condition",var="NoExtraBleedDamageToMovingEnemy"},[3]={neg=true,type="Condition",var="CannotAggravate"},flags=1,keywordFlags=4194304,name="Damage",type="MORE",value=200}},nil}
 c["25% chance to Aggravate Bleeding on targets you Hit with Attacks Gain 50% Chance to Block from Equipped Shield instead of the Shield's value"]={{[1]={flags=0,keywordFlags=65536,name="BlockChance",type="BASE",value=25}}," to Aggravate Bleeding on targets you Hit  Gain 50%  from Equipped Shield instead of the Shield's value "}
 c["25% chance to Aggravate Bleeding on targets you Hit with Attacks Gain 50% Chance to Block from Equipped Shield instead of the Shield's value Inherent Bonuses from Dual Wielding are doubled"]={{[1]={flags=0,keywordFlags=65536,name="BlockChance",type="BASE",value=25}}," to Aggravate Bleeding on targets you Hit  Gain 50%  from Equipped Shield instead of the Shield's value Inherent Bonuses from Dual Wielding are doubled "}
 c["25% chance to Aggravate Bleeding on targets you Hit with Attacks Gain 50% Chance to Block from Equipped Shield instead of the Shield's value Inherent Bonuses from Dual Wielding are doubled Deal 1% more Damage with Hits and Ailments to Rare and Unique Enemies for every 2 seconds they've ever been in your Presence, up to a maximum of 50%"]={{[1]={flags=0,keywordFlags=65536,name="BlockChance",type="BASE",value=25}}," to Aggravate Bleeding on targets you Hit  Gain 50%  from Equipped Shield instead of the Shield's value Inherent Bonuses from Dual Wielding are doubled Deal 1% more Damage with Hits and Ailments to Rare and Unique Enemies for every 2 seconds they've ever been in your Presence, up to a maximum of 50% "}
@@ -8114,7 +8114,7 @@ c["30% chance for Energy Shield Recharge to start when you Block"]={{[1]={flags=
 c["30% chance on Melee Hit for the Strongest Impale on target to last for 1 additional Hit"]={{},"  for the Strongest Impale on target to last for 1 additional Hit "}
 c["30% chance on Melee Hit for the Strongest Impale on target to last for 1 additional Hit 50% less Impale Duration"]={{[1]={flags=260,keywordFlags=0,name="ImpaleDuration",type="BASE",value=30}},"  for the Strongest Impale on target to last for 1 additional Hit 50% less  "}
 c["30% chance on Skill use to not Sacrifice Life but still gain benefits as though you had"]={{[1]={flags=0,keywordFlags=0,name="Life",type="BASE",value=30}}," on Skill use to not Sacrifice  but still gain benefits as though you had "}
-c["30% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{}," to Aggravate Bleeding on targets you Hit  "}
+c["30% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{[1]={[1]={actor="enemy",neg=true,type="ActorCondition",var="Moving"},[2]={neg=true,type="Condition",var="NoExtraBleedDamageToMovingEnemy"},[3]={neg=true,type="Condition",var="CannotAggravate"},flags=1,keywordFlags=4194304,name="Damage",type="MORE",value=200}},nil}
 c["30% chance to Avoid Bleeding"]={{[1]={flags=0,keywordFlags=0,name="AvoidBleed",type="BASE",value=30}},nil}
 c["30% chance to Avoid Elemental Ailments"]={{[1]={flags=0,keywordFlags=0,name="AvoidElementalAilments",type="BASE",value=30}},nil}
 c["30% chance to Avoid Elemental Ailments while Phasing"]={{[1]={[1]={type="Condition",var="Phasing"},flags=0,keywordFlags=0,name="AvoidElementalAilments",type="BASE",value=30}},nil}
@@ -8737,7 +8737,7 @@ c["340% increased Evasion Rating"]={{[1]={flags=0,keywordFlags=0,name="Evasion",
 c["35 Mana gained when you Block"]={{[1]={flags=0,keywordFlags=0,name="ManaOnBlock",type="BASE",value=35}},nil}
 c["35% chance for Elemental Resistances to count as being 90% against Enemy Hits"]={{[1]={flags=0,keywordFlags=0,name="ElementalResist",type="BASE",value=35}}," for  to count as being 90% against Enemy Hits "}
 c["35% chance for Energy Shield Recharge to start when you Block"]={{[1]={flags=0,keywordFlags=0,name="EnergyShield",type="BASE",value=35}}," for  Recharge to start when you Block "}
-c["35% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{}," to Aggravate Bleeding on targets you Hit  "}
+c["35% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{[1]={[1]={actor="enemy",neg=true,type="ActorCondition",var="Moving"},[2]={neg=true,type="Condition",var="NoExtraBleedDamageToMovingEnemy"},[3]={neg=true,type="Condition",var="CannotAggravate"},flags=1,keywordFlags=4194304,name="Damage",type="MORE",value=200}},nil}
 c["35% chance to Chill Attackers for 4 seconds on Block"]={{}," to Chill Attackers  on Block "}
 c["35% chance to Extinguish Enemies on Hit"]={{}," to Extinguish Enemies  "}
 c["35% chance to Freeze"]={{[1]={flags=0,keywordFlags=0,name="EnemyFreezeChance",type="BASE",value=35}},nil}
@@ -9261,7 +9261,7 @@ c["40% chance for Elemental Ailments inflicted on you to"]={{}," for Elemental A
 c["40% chance for Elemental Ailments inflicted on you to be inflicted on a nearby Minion instead"]={{}," for Elemental Ailments inflicted on you to be inflicted on a nearby  instead "}
 c["40% chance for Elemental Ailments inflicted on you to be inflicted on a nearby Minion instead Limited to 1 Runegraft of Loyalty"]={{}," for Elemental Ailments inflicted on you to be inflicted on a nearby  instead Limited to 1 Runegraft of Loyalty "}
 c["40% chance for Elemental Resistances to count as being 90% against Enemy Hits"]={{[1]={flags=0,keywordFlags=0,name="ElementalResist",type="BASE",value=40}}," for  to count as being 90% against Enemy Hits "}
-c["40% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{}," to Aggravate Bleeding on targets you Hit  "}
+c["40% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{[1]={[1]={actor="enemy",neg=true,type="ActorCondition",var="Moving"},[2]={neg=true,type="Condition",var="NoExtraBleedDamageToMovingEnemy"},[3]={neg=true,type="Condition",var="CannotAggravate"},flags=1,keywordFlags=4194304,name="Damage",type="MORE",value=200}},nil}
 c["40% chance to Avoid Bleeding"]={{[1]={flags=0,keywordFlags=0,name="AvoidBleed",type="BASE",value=40}},nil}
 c["40% chance to Avoid Elemental Ailments"]={{[1]={flags=0,keywordFlags=0,name="AvoidElementalAilments",type="BASE",value=40}},nil}
 c["40% chance to Avoid being Frozen"]={{[1]={flags=0,keywordFlags=0,name="AvoidFreeze",type="BASE",value=40}},nil}
@@ -9661,7 +9661,7 @@ c["45% chance that if you would gain Endurance Charges, you instead gain up to y
 c["45% chance that if you would gain Frenzy Charges, you instead gain up to your maximum number of Frenzy Charges"]={{}," that if you would gainCharges, you instead gain up to your maximum number of Frenzy Charges "}
 c["45% chance that if you would gain Frenzy Charges, you instead gain up to your maximum number of Frenzy Charges +1 to Maximum Power Charges"]={{[1]={[1]={includeTransfigured=true,skillName="Frenzy",type="SkillName"},flags=0,keywordFlags=0,name="PowerChargesMax",type="BASE",value=45}}," that if you would gainCharges, you instead gain up to your maximum number of Frenzy Charges +1 to  "}
 c["45% chance that if you would gain Power Charges, you instead gain up to your maximum number of Power Charges"]={{}," that if you would gain Power Charges, you instead gain up to your maximum number of Power Charges "}
-c["45% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{}," to Aggravate Bleeding on targets you Hit  "}
+c["45% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{[1]={[1]={actor="enemy",neg=true,type="ActorCondition",var="Moving"},[2]={neg=true,type="Condition",var="NoExtraBleedDamageToMovingEnemy"},[3]={neg=true,type="Condition",var="CannotAggravate"},flags=1,keywordFlags=4194304,name="Damage",type="MORE",value=200}},nil}
 c["45% chance to Avoid Bleeding"]={{[1]={flags=0,keywordFlags=0,name="AvoidBleed",type="BASE",value=45}},nil}
 c["45% chance to Avoid being Frozen"]={{[1]={flags=0,keywordFlags=0,name="AvoidFreeze",type="BASE",value=45}},nil}
 c["45% chance to Avoid being Ignited"]={{[1]={flags=0,keywordFlags=0,name="AvoidIgnite",type="BASE",value=45}},nil}
@@ -9886,7 +9886,7 @@ c["5% additional Physical Damage Reduction during any Flask Effect"]={{[1]={[1]=
 c["5% additional Physical Damage Reduction while affected by Determination"]={{[1]={[1]={type="Condition",var="AffectedByDetermination"},flags=0,keywordFlags=0,name="PhysicalDamageReduction",type="BASE",value=5}},nil}
 c["5% additional Physical Damage Reduction while moving"]={{[1]={[1]={type="Condition",var="Moving"},flags=0,keywordFlags=0,name="PhysicalDamageReduction",type="BASE",value=5}},nil}
 c["5% additional Physical Damage Reduction while you have at least 150 Devotion"]={{[1]={[1]={stat="Devotion",threshold=150,type="StatThreshold"},flags=0,keywordFlags=0,name="PhysicalDamageReduction",type="BASE",value=5}},nil}
-c["5% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{}," to Aggravate Bleeding on targets you Hit  "}
+c["5% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{[1]={[1]={actor="enemy",neg=true,type="ActorCondition",var="Moving"},[2]={neg=true,type="Condition",var="NoExtraBleedDamageToMovingEnemy"},[3]={neg=true,type="Condition",var="CannotAggravate"},flags=1,keywordFlags=4194304,name="Damage",type="MORE",value=75}},nil}
 c["5% chance to Avoid Elemental Ailments"]={{[1]={flags=0,keywordFlags=0,name="AvoidElementalAilments",type="BASE",value=5}},nil}
 c["5% chance to Avoid Lightning Damage from Hits"]={{[1]={flags=0,keywordFlags=0,name="AvoidLightningDamageChance",type="BASE",value=5}},nil}
 c["5% chance to Blind Enemies on Hit"]={{}," to Blind Enemies  "}
@@ -10115,7 +10115,7 @@ c["50% chance for Impales on Enemies you Kill to Reflect Damage to surrounding E
 c["50% chance for Spell Hits against you to inflict Poison"]={{}," for  Hits  to inflict Poison "}
 c["50% chance for Spell Hits against you to inflict Poison 15% increased Movement Speed while Poisoned"]={{[1]={flags=0,keywordFlags=0,name="EnemyModifier",type="LIST",value={mod={[1]={actor="enemy",type="Condition",var="Poisoned"},flags=2,keywordFlags=0,name="MovementSpeed",type="BASE",value=50}}}}," for  Hits  to inflict Poison 15% increased   "}
 c["50% chance for used Retaliation Skills to remain Usable and not consume a Cooldown Use"]={{[1]={flags=0,keywordFlags=0,name="AdditionalCooldownUses",type="BASE",value=50}}," for used Retaliation Skills to remain Usable and not consume a  "}
-c["50% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{}," to Aggravate Bleeding on targets you Hit  "}
+c["50% chance to Aggravate Bleeding on targets you Hit with Attacks"]={{[1]={[1]={actor="enemy",neg=true,type="ActorCondition",var="Moving"},[2]={neg=true,type="Condition",var="NoExtraBleedDamageToMovingEnemy"},[3]={neg=true,type="Condition",var="CannotAggravate"},flags=1,keywordFlags=4194304,name="Damage",type="MORE",value=200}},nil}
 c["50% chance to Aggravate Bleeding on targets you Stun with Attacks Hits"]={{}," to Aggravate Bleeding on targets you Stun  Hits "}
 c["50% chance to Aggravate Bleeding on targets you Stun with Attacks Hits Attack Hits Aggravate any Bleeding on targets which is older than 4 seconds"]={{}," to Aggravate Bleeding on targets you Stun  Hits Attack Hits Aggravate any Bleeding on targets which is older than 4 seconds "}
 c["50% chance to Aggravate Bleeding on targets you Stun with Attacks Hits Attack Hits Aggravate any Bleeding on targets which is older than 4 seconds 80% increased Critical Strike Chance against Bleeding Enemies"]={{[1]={[1]={actor="enemy",type="ActorCondition",var="Bleeding"},flags=0,keywordFlags=65536,name="CritChance",type="BASE",value=50}}," to Aggravate Bleeding on targets you Stun  Hits Attack Hits Aggravate any Bleeding on targets which is older than 4 seconds 80% increased   "}
@@ -11485,7 +11485,7 @@ c["8 to 14 Fire Damage per Endurance Charge"]={{[1]={[1]={type="Multiplier",var=
 c["8 to 150 Added Lightning Damage with Wand Attacks"]={{[1]={flags=8388612,keywordFlags=0,name="LightningMin",type="BASE",value=8},[2]={flags=8388612,keywordFlags=0,name="LightningMax",type="BASE",value=150}},nil}
 c["8 to 18 Added Physical Damage with Bow Attacks"]={{[1]={flags=131076,keywordFlags=0,name="PhysicalMin",type="BASE",value=8},[2]={flags=131076,keywordFlags=0,name="PhysicalMax",type="BASE",value=18}},nil}
 c["8 to 23 Added Attack Chaos Damage per 100 Maximum Mana"]={{[1]={[1]={div=100,stat="Mana",type="PerStat"},flags=0,keywordFlags=65536,name="ChaosMin",type="BASE",value=8},[2]={[1]={div=100,stat="Mana",type="PerStat"},flags=0,keywordFlags=65536,name="ChaosMax",type="BASE",value=23}},nil}
-c["8% Chance for Traps to Trigger an additional time"]={{},"  to Trigger an additional time "}
+c["8% Chance for Traps to Trigger an additional time"]={{[1]={flags=0,keywordFlags=4096,name="DPS",type="MORE",value=8}},nil}
 c["8% Chance for Traps to Trigger an additional time Can have up to 5 additional Traps placed at a time"]={{[1]={flags=0,keywordFlags=4096,name="TrapThrowCount",type="BASE",value=8}},"  to Trigger an additional time Can have up to 5  placed at a time "}
 c["8% Chance for Traps to Trigger an additional time Can have up to 5 additional Traps placed at a time 60% increased Trap Trigger Area of Effect"]={{[1]={flags=0,keywordFlags=4096,name="TrapThrowCount",type="BASE",value=8}},"  to Trigger an additional time Can have up to 5  placed at a time 60% increased Trap Trigger Area of Effect "}
 c["8% Chance for Traps to Trigger an additional time Can have up to 5 additional Traps placed at a time 60% increased Trap Trigger Area of Effect Recover 30 Life when your Trap is triggered by an Enemy"]={{[1]={[1]={type="Condition",var="TriggeredTrapsRecently"},flags=0,keywordFlags=4096,name="TrapThrowCount",type="BASE",value=8}},"  to Trigger an additional time Can have up to 5  placed at a time 60% increased Trap Trigger Area of Effect Recover 30 Life  "}
@@ -14381,7 +14381,7 @@ c["Auras from your Skills have 10% increased Effect on you"]={{[1]={flags=0,keyw
 c["Auras from your Skills have 30% increased Effect on you"]={{[1]={flags=0,keywordFlags=0,name="SkillAuraEffectOnSelf",type="INC",value=30}},nil}
 c["Auras from your Skills have 40% increased Effect on you"]={{[1]={flags=0,keywordFlags=0,name="SkillAuraEffectOnSelf",type="INC",value=40}},nil}
 c["Auras from your Skills have 8% increased Effect on you for"]={nil,"Auras from your Skills have 8% increased Effect on you for "}
-c["Auras from your Skills have 8% increased Effect on you for each Herald affecting you, up to a maximum of 40%"]={nil,"Auras from your Skills have 8% increased Effect on you for each Herald affecting you, up to a maximum of 40% "}
+c["Auras from your Skills have 8% increased Effect on you for each Herald affecting you, up to a maximum of 40%"]={{[1]={[1]={limit=5,type="Multiplier",var="Herald"},flags=0,keywordFlags=0,name="SkillAuraEffectOnSelf",type="INC",value=8}},nil}
 c["Auras from your Skills which affect Allies also affect Enemies"]={{[1]={flags=0,keywordFlags=0,name="AurasAffectEnemies",type="FLAG",value=true}},nil}
 c["Avatar of Fire"]={{[1]={flags=0,keywordFlags=0,name="Keystone",type="LIST",value="Avatar of Fire"},[2]={flags=0,keywordFlags=0,name="Condition:HaveAvatarOfFire",type="FLAG",value=true}},nil}
 c["Avoid Projectiles that have Chained"]={nil,"Avoid Projectiles that have Chained "}
@@ -14448,7 +14448,7 @@ c["Bleeding you inflict deals Damage 6% faster"]={{[1]={flags=0,keywordFlags=0,n
 c["Bleeding you inflict deals Damage 7% faster"]={{[1]={flags=0,keywordFlags=0,name="BleedFaster",type="INC",value=7}},nil}
 c["Bleeding you inflict deals Damage 8% faster"]={{[1]={flags=0,keywordFlags=0,name="BleedFaster",type="INC",value=8}},nil}
 c["Bleeding you inflict deals Damage 9% faster"]={{[1]={flags=0,keywordFlags=0,name="BleedFaster",type="INC",value=9}},nil}
-c["Bleeding you inflict is Aggravated"]={nil,"Bleeding you inflict is Aggravated "}
+c["Bleeding you inflict is Aggravated"]={{[1]={[1]={actor="enemy",neg=true,type="ActorCondition",var="Moving"},[2]={neg=true,type="Condition",var="NoExtraBleedDamageToMovingEnemy"},[3]={neg=true,type="Condition",var="CannotAggravate"},flags=0,keywordFlags=4194304,name="Damage",type="MORE",value=200}},nil}
 c["Bleeding you inflict is Reflected to you"]={nil,"Bleeding you inflict is Reflected to you "}
 c["Bleeding you inflict is Reflected to you +1% to Chaos Resistance per Poison on you"]={nil,"Bleeding you inflict is Reflected to you +1% to Chaos Resistance per Poison on you "}
 c["Blight has 25% increased Hinder Duration"]={{[1]={[1]={includeTransfigured=true,skillName="Blight",type="SkillName"},flags=0,keywordFlags=0,name="Duration",type="INC",value=25}}," Hinder  "}
@@ -15084,7 +15084,7 @@ c["Damage Penetrates 9% Lightning Resistance"]={{[1]={flags=0,keywordFlags=0,nam
 c["Damage Penetrates Fire Resistance equal to your Overcapped Fire Resistance, up to a maximum of 200%"]={{[1]={[1]={limit=200,limitTotal=true,stat="FireResistOverCap",type="PerStat"},flags=0,keywordFlags=0,name="FirePenetration",type="BASE",value=1}},nil}
 c["Damage cannot be Reflected"]={{[1]={[1]={effectType="Global",type="GlobalEffect",unscalable=true},flags=0,keywordFlags=0,name="ReflectedDamageTaken",type="MORE",value=-100}},nil}
 c["Damage from your Critical Strikes cannot be Reflected"]={nil,"Damage from your Critical Strikes cannot be Reflected "}
-c["Damage of Enemies Hitting you is Unlucky"]={nil,"Damage of Enemies Hitting you is Unlucky "}
+c["Damage of Enemies Hitting you is Unlucky"]={{[1]={flags=0,keywordFlags=0,name="DamageTaken",type="MORE",value=-7}},nil}
 c["Damage of Enemies Hitting you is Unlucky Damage with Hits is Unlucky"]={nil,"Damage of Enemies Hitting you is Unlucky Damage with Hits is Unlucky "}
 c["Damage of Enemies Hitting you is Unlucky while you are Cursed with Vulnerability"]={nil,"Damage of Enemies Hitting you is Unlucky while you are Cursed with Vulnerability "}
 c["Damage of Enemies Hitting you is Unlucky while you are Cursed with Vulnerability You count as on Full Life while you are Cursed with Vulnerability"]={nil,"Damage of Enemies Hitting you is Unlucky while you are Cursed with Vulnerability You count as on Full Life while you are Cursed with Vulnerability "}
@@ -15566,7 +15566,7 @@ c["Every 10 seconds:"]={{},nil}
 c["Every 10 seconds: Gain 2% of Life per Enemy Hit with Attacks for 5 seconds Gain 5% of Life per Enemy Killed for 5 seconds"]={nil,"Every 10 seconds: Gain 2% of Life per Enemy Hit with Attacks for 5 seconds Gain 5% of Life per Enemy Killed for 5 seconds "}
 c["Every 16 seconds you gain Elemental Overload for 8 seconds"]={{[1]={flags=0,keywordFlags=0,name="Condition:HaveAugyre",type="FLAG",value=true}},nil}
 c["Every 16 seconds you gain Iron Reflexes for 8 seconds"]={{[1]={flags=0,keywordFlags=0,name="Condition:HaveArborix",type="FLAG",value=true}},nil}
-c["Every 2 seconds, gain a Ghost Shroud, up to a maximum of 3"]={nil,"Every 2 seconds, gain a Ghost Shroud, up to a maximum of 3 "}
+c["Every 2 seconds, gain a Ghost Shroud, up to a maximum of 3"]={{[1]={flags=0,keywordFlags=0,name="UseGhostShrouds",type="FLAG",value=true}},nil}
 c["Every 2 seconds, gain a Ghost Shroud, up to a maximum of 3 When Hit, lose a Ghost Shroud to Recover Energy Shield equal to 3% of your Evasion Rating"]={nil,"Every 2 seconds, gain a Ghost Shroud, up to a maximum of 3 When Hit, lose a Ghost Shroud to Recover Energy Shield equal to 3% of your Evasion Rating "}
 c["Every 2 seconds, gain a Ghost Shroud, up to a maximum of 3 When Hit, lose a Ghost Shroud to Recover Energy Shield equal to 3% of your Evasion Rating Limited to 1 Keystone Tattoo"]={nil,"Every 2 seconds, gain a Ghost Shroud, up to a maximum of 3 When Hit, lose a Ghost Shroud to Recover Energy Shield equal to 3% of your Evasion Rating Limited to 1 Keystone Tattoo "}
 c["Every 3 seconds, Consume a nearby Corpse to Recover 10% of Life"]={nil,"Every 3 seconds, Consume a nearby Corpse to Recover 10% of Life "}
@@ -17231,7 +17231,7 @@ c["Immunity to Shock during Effect"]={{[1]={[1]={type="Condition",var="UsingFlas
 c["Impale Damage dealt to Enemies Impaled by you Overwhelms 10% Physical Damage Reduction"]={{[1]={flags=0,keywordFlags=0,name="EnemyImpalePhysicalDamageReduction",type="BASE",value=-10}},nil}
 c["Impale Damage dealt to Enemies Impaled by you ignores Enemy Physical Damage Reduction"]={{[1]={flags=0,keywordFlags=0,name="IgnoreEnemyImpalePhysicalDamageReduction",type="FLAG",value=true}},nil}
 c["Impales removed this way multiply their Reflected Damage for this Hit by the number of Hits they have left"]={nil,"Impales removed this way multiply their Reflected Damage for this Hit by the number of Hits they have left "}
-c["Impales you inflict gain 50% increased Effect once 1 second of Duration has expired"]={nil,"Impales you inflict gain 50% increased Effect once 1 second of Duration has expired "}
+c["Impales you inflict gain 50% increased Effect once 1 second of Duration has expired"]={{[1]={flags=0,keywordFlags=0,name="ImpaleEffect",type="INC",value=43}},nil}
 c["Impales you inflict last 1 additional Hit"]={{[1]={flags=0,keywordFlags=0,name="ImpaleStacksMax",type="BASE",value=1}},nil}
 c["Impales you inflict last 2 additional Hits while using Pride"]={{[1]={[1]={type="Condition",var="AffectedByPride"},flags=0,keywordFlags=0,name="ImpaleStacksMax",type="BASE",value=2}},nil}
 c["Implicit Modifier magnitudes are doubled"]={{},nil}
@@ -17867,7 +17867,7 @@ c["Melee Hits with Strike Skills always Knockback"]={nil,"Melee Hits with Strike
 c["Melee Skills have 10% increased Area of Effect"]={{[1]={[1]={skillType=20,type="SkillType"},flags=0,keywordFlags=0,name="AreaOfEffect",type="INC",value=10}},nil}
 c["Melee Skills have 12% increased Area of Effect"]={{[1]={[1]={skillType=20,type="SkillType"},flags=0,keywordFlags=0,name="AreaOfEffect",type="INC",value=12}},nil}
 c["Melee Skills have 20% increased Area of Effect"]={{[1]={[1]={skillType=20,type="SkillType"},flags=0,keywordFlags=0,name="AreaOfEffect",type="INC",value=20}},nil}
-c["Melee Strike Skills deal Splash Damage to surrounding targets"]={nil,"Melee Strike Skills deal Splash Damage to surrounding targets "}
+c["Melee Strike Skills deal Splash Damage to surrounding targets"]={{[1]={flags=0,keywordFlags=0,name="MeleeSplash",type="FLAG",value=true}},nil}
 c["Melee Strike Skills deal Splash Damage to surrounding targets +100 to Strength"]={nil,"Melee Strike Skills deal Splash Damage to surrounding targets +100 to Strength "}
 c["Melee Strike Skills deal Splash Damage to surrounding targets 25% reduced Mana Burn rate"]={nil,"Melee Strike Skills deal Splash Damage to surrounding targets 25% reduced Mana Burn rate "}
 c["Melee Strikes Curse Enemies with Flammability on Hit, ignoring Curse Limit"]={nil,"Melee Strikes Curse Enemies with Flammability on Hit, ignoring Curse Limit "}
@@ -17898,8 +17898,8 @@ c["Mines have 30% increased Detonation Speed"]={nil,"Mines have 30% increased De
 c["Mines have 45% increased Detonation Speed"]={nil,"Mines have 45% increased Detonation Speed "}
 c["Mines have 50% increased Detonation Speed"]={nil,"Mines have 50% increased Detonation Speed "}
 c["Mines have 50% increased Detonation Speed Skills which throw Mines throw up to 1 additional Mine if you have at least 800 Dexterity"]={nil,"Mines have 50% increased Detonation Speed Skills which throw Mines throw up to 1 additional Mine if you have at least 800 Dexterity "}
-c["Mines have a 10% chance to be Detonated an Additional Time"]={nil,"Mines have a 10% chance to be Detonated an Additional Time "}
-c["Mines have a 15% chance to be Detonated an Additional Time"]={nil,"Mines have a 15% chance to be Detonated an Additional Time "}
+c["Mines have a 10% chance to be Detonated an Additional Time"]={{[1]={flags=0,keywordFlags=8192,name="DPS",type="MORE",value=10}},nil}
+c["Mines have a 15% chance to be Detonated an Additional Time"]={{[1]={flags=0,keywordFlags=8192,name="DPS",type="MORE",value=15}},nil}
 c["Minion Instability"]={{[1]={flags=0,keywordFlags=0,name="Keystone",type="LIST",value="Minion Instability"},[2]={flags=0,keywordFlags=0,name="Condition:HaveMinionInstability",type="FLAG",value=true}},nil}
 c["Minion Life is increased by their Overcapped Fire Resistance"]={{[1]={flags=0,keywordFlags=0,name="MinionModifier",type="LIST",value={mod={[1]={div=1,stat="FireResistOverCap",type="PerStat"},flags=0,keywordFlags=0,name="Life",type="INC",value=1}}}},nil}
 c["Minion Spells Triggered by this Item have a 0.25 second Cooldown with 5 Uses"]={nil,"Minion Spells Triggered by this Item have a 0.25 second Cooldown with 5 Uses "}
@@ -22683,7 +22683,7 @@ c["When 90% of your Hex's Duration Expires on an Enemy, Eat 1 Soul per Enemy Pow
 c["When Hit during effect, 25% of Life loss from Damage taken occurs over 4 seconds instead"]={{[1]={[1]={type="Condition",var="UsingFlask"},flags=0,keywordFlags=0,name="LifeLossPrevented",type="BASE",value=25}},nil}
 c["When Hit, gain a random Movement Speed modifier from 20% reduced to 50% increased, until Hit again"]={nil,"a random Movement Speed modifier from 20% reduced to 50% increased, until Hit again "}
 c["When Hit, gain a random Movement Speed modifier from 40% reduced to 100% increased, until Hit again"]={nil,"a random Movement Speed modifier from 40% reduced to 100% increased, until Hit again "}
-c["When Hit, lose a Ghost Shroud to Recover Energy Shield equal to 3% of your Evasion Rating"]={nil,"lose a Ghost Shroud to Recover Energy Shield equal to 3% of your Evasion Rating "}
+c["When Hit, lose a Ghost Shroud to Recover Energy Shield equal to 3% of your Evasion Rating"]={{[1]={[1]={percent=1.5,stat="Evasion",type="PercentStat"},[2]={threshold=1,type="MultiplierThreshold",var="GhostShroud"},flags=0,keywordFlags=0,name="EnergyShieldRegen",type="BASE",value=1}},nil}
 c["When Hit, lose a Ghost Shroud to Recover Energy Shield equal to 3% of your Evasion Rating Limited to 1 Keystone Tattoo"]={nil,"lose a Ghost Shroud to Recover Energy Shield equal to 3% of your Evasion Rating Limited to 1 Keystone Tattoo "}
 c["When a nearby Minion dies, gain Rotten Bulwark equal to 8% of its maximum Life"]={nil,"When a nearby Minion dies, gain Rotten Bulwark equal to 8% of its maximum Life "}
 c["When a nearby Minion dies, gain Rotten Bulwark equal to 9% of its maximum Life"]={nil,"When a nearby Minion dies, gain Rotten Bulwark equal to 9% of its maximum Life "}

@@ -364,7 +364,7 @@ function calcs.offence(env, actor, activeSkill)
 	for _, name in ipairs({ "IgniteSpreadRadius", "ShockSpreadRadius", "FreezeSpreadRadius", "ChillSpreadRadius" }) do
 		output[name] = m_max(output[name] or 0, skillModList:Sum("BASE", skillCfg, name))
 	end
-	for _, name in ipairs({ "IgniteSpreadOnKill", "PoisonSpreadOnKill", "ImpaleSpread" }) do
+	for _, name in ipairs({ "IgniteSpreadOnKill", "PoisonSpreadOnKill", "ImpaleSpread", "MeleeSplash" }) do
 		if skillModList:Flag(skillCfg, name) then output[name] = true end
 	end
 	if skillData.showAverage then
