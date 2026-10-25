@@ -226,6 +226,8 @@ function M.Validate(rows, tick, repeats)
 			if fold[r.run or "?"] == k then testRows[#testRows + 1] = r else trainRows[#trainRows + 1] = r end
 		end
 		if #trainRows > 0 and #testRows > 0 then
+			-- (each round's tables freed before the next: over a million measurements)
+			collectgarbage("collect")
 			local model = train(trainRows, tick)
 			local familiar = familiarSkills(trainRows)
 			local useless = uselessPairs(trainRows)
