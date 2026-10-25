@@ -22524,12 +22524,12 @@ c["Trigger level 20 Suspend in Time on Casting a Spell"]={nil,"Trigger level 20 
 c["Trigger level 20 Suspend in Time on Casting a Spell 80% increased Spell Damage"]={nil,"Trigger level 20 Suspend in Time on Casting a Spell 80% increased Spell Damage "}
 c["Trigger level 25 Ceaseless Flesh once every second"]={{[1]={flags=0,keywordFlags=0,name="ExtraSkill",type="LIST",value={level=25,skillId="CeaselessFleshUnique",triggered=true}}},nil}
 c["Triggered Spells Poison on Hit"]={{[1]={[1]={skillType=37,type="SkillType"},flags=0,keywordFlags=131072,name="PoisonChance",type="BASE",value=100}},nil}
-c["Triggered Spells deal 11% increased Spell Damage"]={nil,"Triggered Spells deal 11% increased Spell Damage "}
-c["Triggered Spells deal 14% increased Spell Damage"]={nil,"Triggered Spells deal 14% increased Spell Damage "}
-c["Triggered Spells deal 21% increased Spell Damage"]={nil,"Triggered Spells deal 21% increased Spell Damage "}
-c["Triggered Spells deal 25% increased Spell Damage"]={nil,"Triggered Spells deal 25% increased Spell Damage "}
-c["Triggered Spells deal 30% increased Spell Damage"]={nil,"Triggered Spells deal 30% increased Spell Damage "}
-c["Triggered Spells deal 36% increased Spell Damage"]={nil,"Triggered Spells deal 36% increased Spell Damage "}
+c["Triggered Spells deal 11% increased Spell Damage"]={{[1]={[1]={skillType=37,type="SkillType"},flags=2,keywordFlags=131072,name="Damage",type="INC",value=11}},nil}
+c["Triggered Spells deal 14% increased Spell Damage"]={{[1]={[1]={skillType=37,type="SkillType"},flags=2,keywordFlags=131072,name="Damage",type="INC",value=14}},nil}
+c["Triggered Spells deal 21% increased Spell Damage"]={{[1]={[1]={skillType=37,type="SkillType"},flags=2,keywordFlags=131072,name="Damage",type="INC",value=21}},nil}
+c["Triggered Spells deal 25% increased Spell Damage"]={{[1]={[1]={skillType=37,type="SkillType"},flags=2,keywordFlags=131072,name="Damage",type="INC",value=25}},nil}
+c["Triggered Spells deal 30% increased Spell Damage"]={{[1]={[1]={skillType=37,type="SkillType"},flags=2,keywordFlags=131072,name="Damage",type="INC",value=30}},nil}
+c["Triggered Spells deal 36% increased Spell Damage"]={{[1]={[1]={skillType=37,type="SkillType"},flags=2,keywordFlags=131072,name="Damage",type="INC",value=36}},nil}
 c["Triggers Drowning Domain when Allocated"]={nil,"Triggers Drowning Domain when Allocated "}
 c["Triggers Level 15 Manifest Dancing Dervishes on Rampage"]={{[1]={flags=0,keywordFlags=0,name="ExtraSkill",type="LIST",value={level=15,skillId="ManifestDancingDervishes",triggered=true}}},nil}
 c["Triggers Level 20 Blinding Aura when Equipped"]={{},nil}
