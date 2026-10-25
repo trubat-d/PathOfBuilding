@@ -128,6 +128,10 @@ function BuildGeneratorClass:BuildGenerator(build, options)
 	if self.options.totalBudget and self.options.totalBudget > 0 then
 		self.options.investment = new("PriceSource"):PriceSource().ForBudget(self.options.totalBudget, self.options.raresPerBuild)
 	end
+	-- options.playerKnowledge = false: nothing learnt from top players' builds
+	-- (their archetype, unique packages, layer targets): the build comes from
+	-- the game's math and the generator's own accumulated knowledge only
+	new("BuildArchetypes"):BuildArchetypes().SetPlayerKnowledge(self.options.playerKnowledge ~= false)
 	self.log = { }
 	return self
 end
@@ -4314,7 +4318,7 @@ function BuildGeneratorClass.PlayerPackages()
 end
 
 function BuildGeneratorClass:PlayerPackagesMove(rounds)
-	if not self.mainGem then return end
+	if not self.mainGem or self.options.playerKnowledge == false then return end
 	local packages = self.PlayerPackages()
 	if #packages == 0 then return end
 	-- relevance: builds of this skill, then of skills sharing most of its tags

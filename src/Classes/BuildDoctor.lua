@@ -231,7 +231,9 @@ function BuildDoctorClass:Diagnose()
 	}
 	-- the gap to the skill's top players, layer by layer
 	local profile = self:Profile()
-	local target = self.Targets(gen.mainGem and gen.mainGem.name)
+	-- (top players' targets only with player knowledge on: without it the
+	-- plans come from the test doses alone)
+	local target = gen.options.playerKnowledge ~= false and self.Targets(gen.mainGem and gen.mainGem.name) or nil
 	local gaps
 	if target and target.mode == profile.mode then
 		gaps = { }

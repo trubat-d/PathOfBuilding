@@ -5,6 +5,18 @@ the layers below, measures how far each is invested and what more of it would
 bring, and tries to balance them: the layers multiply, so the weakest one has
 the most to give.
 
+#### The goal: crazy builds from math and own knowledge
+Top players' builds (poe.ninja) are a measuring stick, not an ingredient: the
+generator must reach their level from the game's math and what it learns from
+its own generations. Everything that uses player data can be switched off with
+the generator option `playerKnowledge = false` (their archetype, mined unique
+packages, layer targets; poe.ninja meta was already opt-in), and progress is
+measured in that mode: generate with it off, compare with the players.
+What carries the build without them:
+- the layers above, measured on the build itself (test doses, full commitments for layers that only pay together, caps);
+- enablers found in the game data (mods that add a layer, scale with a stackable stat, remove a drawback, turn one stat into another);
+- what earlier generations learnt (which plans paid off for which kind of skill), accumulated by the data generation runs.
+
 #### Damage modes
 - **Hit** (attack / spell / secondary): (base + added x effectiveness) x increased x more x crit x speed x (1 - resistance) x damage taken.
 - **Direct damage over time** (skill DoTs: Righteous Fire, Essence Drain, Vortex, Death Aura...): base (often a share of life / ES for RF) x increased (generic, damage over time, the type) x more x (1 + DoT multiplier) x (1 - resistance) x damage taken. No crit, no speed (except via duration / stacking), no conversion, no added damage, attack / spell increases don't apply (unless the skill says so).

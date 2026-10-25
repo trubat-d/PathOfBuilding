@@ -319,7 +319,9 @@ function BuildArchetypesClass.ForSkill(gem, meta)
 	-- the skill's top players' archetype (bench/mine_archetypes.py,
 	-- Data/GeneratorPlayerArchetypes.json): one more candidate, built and
 	-- compared like the others
-	local players = BuildArchetypesClass.PlayersArchetype(gem)
+	-- (playerKnowledge false: built from the game's math and the generator's
+	-- own knowledge only, nothing from top players)
+	local players = BuildArchetypesClass.playerKnowledge ~= false and BuildArchetypesClass.PlayersArchetype(gem)
 	if players then t_insert(list, players) end
 	-- ideas found in the game data (Classes/IdeaMiner): stats that uniques scale with
 	if BuildArchetypesClass.minedIdeas ~= false then
@@ -331,6 +333,12 @@ function BuildArchetypesClass.ForSkill(gem, meta)
 		end
 	end
 	return list
+end
+
+-- Player knowledge on or off for the archetypes offered (the generator's
+-- options.playerKnowledge)
+function BuildArchetypesClass.SetPlayerKnowledge(on)
+	BuildArchetypesClass.playerKnowledge = on
 end
 
 -- The archetype most top players of a skill share (keystones, gear uniques,
