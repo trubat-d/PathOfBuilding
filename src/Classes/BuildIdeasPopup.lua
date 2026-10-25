@@ -1191,7 +1191,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 			end
 			controls.archetype.list = archetypeList(results)
 			controls.archetype.selIndex = 1
-			local lines = { string.format("^7Archetype scan for %s (%s), best first. Pick one in the Archetype list and click Generate:", skill.label, asc.ascendName) }
+			local lines = { string.format("^7Archetype scan for %s (%s)%s, best first. Pick one in the Archetype list and click Generate:", skill.label, asc.ascendName,
+				remembered and string.format(" ^xC0C0C0(the scan from %s, same settings: \"Scan archetypes\" scans again)^7", os.date("%d %b %H:%M", remembered.time)) or "") }
 			for _, entry in ipairs(controls.archetype.list) do
 				t_insert(lines, "^7- " .. entry.label)
 				if entry.scan and entry.scan.notes then
