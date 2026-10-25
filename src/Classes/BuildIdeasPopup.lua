@@ -940,7 +940,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 		local parallelTries = tries > 1 and not state.noParallelTries and options.archetype
 			and new("ParallelGenerator"):ParallelGenerator().Available()
 		state.noParallelTries = nil
-		local attempt, bestTry, tryScores = 1, nil, { }
+		local attempt, bestTry, tryScores, tryRecords = 1, nil, { }, { }
 		options.variant = 1
 		local buildName = "Generated " .. skill.label .. " " .. asc.ascendName
 		local startGeneration
@@ -965,6 +965,9 @@ function BuildIdeasPopupClass:OpenGenerator()
 				-- this try kept if it's the best so far; the next try, or the best one opened
 				local record = { score = result.final.score or -math.huge, xml = build:SaveDB("code"), result = result, variant = attempt,
 					overlap = generator.overlap and generator.overlap:GetAssumptions() or { } }
+				-- (each try's build as data, to cross the tries at the end)
+				if tries > 1 then pcall(function() record.state = generator:SerializeState() end) end
+				t_insert(tryRecords, record)
 				t_insert(tryScores, string.format("%.2f", record.score))
 				if not bestTry or record.score > bestTry.score then bestTry = record end
 				if attempt < tries and state.running then
@@ -977,10 +980,21 @@ function BuildIdeasPopupClass:OpenGenerator()
 				if bestTry.variant ~= attempt then
 					main:SetMode("BUILD", false, buildName, bestTry.xml)
 				end
+				-- the tries crossed with each other (population search from all of them)
+				local others = { }
+				for _, r in ipairs(tryRecords) do
+					if r ~= bestTry and r.state then t_insert(others, { state = r.state, label = "try " .. r.variant }) end
+				end
+				state.combineTries(others, options, function(combined)
 				result = bestTry.result
+				local final = combined and combined.final or result.final
 				local lines = { string.format("^7Done%s. Damage %s, effective hit pool %s. The build is open and not saved yet: use Save As to keep it.",
 					tries > 1 and string.format(" (best of %d tries: try %d; scores %s)", tries, bestTry.variant, table.concat(tryScores, ", ")) or "",
-					formatNumSep(string.format("%.0f", result.final.dps)), formatNumSep(string.format("%.0f", result.final.ehp))) }
+					formatNumSep(string.format("%.0f", final.dps)), formatNumSep(string.format("%.0f", final.ehp))) }
+				if combined then
+					t_insert(lines, string.format("^7- Tries combined (passives, gear and links crossed, then partly rebuilt): score %.2f -> %.2f", result.final.score or 0, final.score or 0))
+					for _, l in ipairs(combined.log or { }) do if l:match("^Population search") then t_insert(lines, "^7- " .. l) end end
+				end
 				for _, l in ipairs(result.log) do t_insert(lines, "^7- " .. l) end
 				t_insert(lines, "^xC0C0C0" .. result.costLine)
 				for _, c in ipairs(result.configChanges or { }) do t_insert(lines, "^x66CCFFConfig: ^7" .. c) end
@@ -996,6 +1010,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 				end
 				state.lastFocus = options.focus
 				state.askReview()
+				end)
 			end, function(err)
 				state.running = false
 				state.status = "^1Generation failed: " .. tostring(err)
@@ -1291,6 +1306,35 @@ function BuildIdeasPopupClass:OpenGenerator()
 	end
 	-- Full builds in background threads: each archetype, each try (variant),
 	-- the best one opened. false when background threads aren't available
+	-- The open build (the best try) crossed with the other tries' builds
+	-- (BuildGenerator:Combine); onDone(result) or onDone(nil) without others
+	state.combineTries = function(others, options, onDone)
+		if not others or #others == 0 then onDone(nil) return end
+		state.running = true
+		state.status = string.format("^7Combining the best build with %d other tr%s...", #others, #others == 1 and "y" or "ies")
+		local waited = false
+		main.onFrameFuncs["BuildGenerator"] = function()
+			if not waited then waited = true return end
+			local build = main.modes["BUILD"]
+			local opts = { }
+			for k, v in pairs(options) do opts[k] = v end
+			opts.onProgress = function(stage, index, count, sub)
+				state.progress = sub or 0
+				state.status = string.format("^7Combining the tries (%d%%): %s...", m_floor((sub or 0) * 100), stage)
+			end
+			local generator = new("BuildGenerator"):BuildGenerator(build, opts)
+			runInBackground("BuildGenerator", popup, function() return generator:Combine(others) end, function(result)
+				state.running = false
+				local opened = main.modes["BUILD"]
+				if opened then opened.buildFlag = true opened.modFlag = true end
+				onDone(result)
+			end, function(err)
+				state.running = false
+				ConPrintf("Combining the tries failed: %s", tostring(err))
+				onDone(nil)
+			end)
+		end
+	end
 	state.fullParallel = function(archetypes, tries)
 		local pgStatic = new("ParallelGenerator"):ParallelGenerator()
 		if not pgStatic.Available() then return false end
@@ -1306,6 +1350,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 		state.running = true
 		state.builtByArchetype = { }
 		state.alternatives = nil
+		state.parallelResults = { }
 		local best
 		local failures = { }
 		runParallel(candidates, false, state.meta, function(archetype, summary, xml, variant)
@@ -1323,6 +1368,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 			if not best or (summary.score or -math.huge) > (best.summary.score or -math.huge) then
 				best = { archetype = archetype, summary = summary, xml = xml, variant = variant }
 			end
+			state.parallelResults = state.parallelResults or { }
+			t_insert(state.parallelResults, { archetype = archetype, summary = summary, variant = variant })
 		end, function(archetype, err)
 			t_insert(failures, archetype.label .. ": " .. tostring(err))
 		end, function()
@@ -1337,6 +1384,20 @@ function BuildIdeasPopupClass:OpenGenerator()
 				return
 			end
 			main:SetMode("BUILD", false, "Generated " .. skill.label .. " " .. asc.ascendName .. " (" .. best.archetype.label .. ")", best.xml)
+			-- the best build crossed with the next best ones (other tries and close archetypes)
+			local others = { }
+			local ranked = { }
+			for _, r in ipairs(state.parallelResults or { }) do
+				if r.summary ~= best.summary and r.summary.state and (r.summary.score or -math.huge) >= (best.summary.score or 0) - 1.5 then t_insert(ranked, r) end
+			end
+			table.sort(ranked, function(a, b) return (a.summary.score or 0) > (b.summary.score or 0) end)
+			for i = 1, m_min(3, #ranked) do
+				t_insert(others, { state = ranked[i].summary.state, label = ranked[i].archetype.label .. " try " .. (ranked[i].variant or 1) })
+			end
+			local combineOptions = makeOptions()
+			combineOptions.archetype = best.archetype
+			combineOptions.meta = state.meta
+			state.combineTries(others, combineOptions, function(combined)
 			local result = best.summary
 			local lines = { string.format("^7Done: %d builds fully built at once (%d archetype%s x %d tr%s), the best kept: %s, try %d. Damage %s, effective hit pool %s. The build is open and not saved yet: use Save As to keep it.",
 				#candidates, #archetypes, #archetypes == 1 and "" or "s", m_max(1, tries or 1), (tries or 1) == 1 and "y" or "ies", best.archetype.label, best.variant or 1,
@@ -1366,8 +1427,14 @@ function BuildIdeasPopupClass:OpenGenerator()
 				controls.alternatives:SetList(list)
 				controls.alternatives.selIndex = 1
 			end
+			if combined then
+				t_insert(lines, 2, string.format("^7- Best builds combined (passives, gear and links crossed, then partly rebuilt): score %.2f -> %.2f, damage %s, effective hit pool %s",
+					result.score or 0, combined.final.score or 0, formatNumSep(string.format("%.0f", combined.final.dps or 0)), formatNumSep(string.format("%.0f", combined.final.ehp or 0))))
+				for _, l in ipairs(combined.log or { }) do if l:match("^Population search") then t_insert(lines, 3, "^7- " .. l) end end
+			end
 			setLog(lines)
 			state.status = "^7Finished."
+			end)
 		end)
 		return true
 	end

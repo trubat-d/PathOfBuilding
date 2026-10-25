@@ -223,6 +223,8 @@ return function(jobJson, userPath, scriptBase)
 		log = result.log, costLine = result.costLine, configChanges = result.configChanges,
 		assumptions = result.assumptions,
 		knowledge = result.knowledge,
+		-- (the build as data: the main thread crosses the best builds)
+		state = (function() local ok, st = pcall(function() return generator:SerializeState() end) return ok and st or nil end)(),
 		penalties = { },
 		keystones = { },
 		seconds = os.clock() - startClock,

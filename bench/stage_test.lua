@@ -198,6 +198,13 @@ elseif step == "fullscorecost" then
 	t = os.clock()
 	for _ = 1, 10 do gen:Recalculate() end
 	print(string.format("FULLSCORE %.3f s  SCORE %.3f s  RECALC %.3f s", full, quick, (os.clock() - t) / 10))
+elseif step == "population" then
+	-- SIZE=, GENS=; compared with the repair search from the same start (REPAIR=1)
+	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
+	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
+	if os.getenv("REPAIR") == "1" then print("GAIN", gen:RepairSearch(tonumber(os.getenv("ROUNDS") or "8")))
+	else print("GAIN", gen:PopulationSearch(tonumber(os.getenv("SIZE") or "3"), tonumber(os.getenv("GENS") or "3"))) end
+	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
 elseif step == "prune" then
 	print("REMOVED", gen:PruneUselessGems())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end

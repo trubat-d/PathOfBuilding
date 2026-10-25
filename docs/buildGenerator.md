@@ -103,6 +103,11 @@ Curses are tried on every way to apply them, each with what it costs in play (Po
 
 **Candidate model** ([`GeneratorModel`](../src/Modules/GeneratorModel.lua), `Data/GeneratorModel.json`, trained by `bench/train_model.py` from decision logs): for each support gem, a logistic regression on the main skill's gem tags giving the chance it helps. Supports the model is sure can't help (below 1%, seen at least 30 times) aren't measured. The trainer validates by leaving each skill out in turn and counting the skipped supports that would have helped it.
 
+#### Population search and combined tries
+A generation follows one path: each step improves the build it has, so where it ends depends on where it started (tries of the same build come out up to a few points apart). [`PopulationSearch`](../src/Classes/BuildGenerator.lua) keeps several builds instead: each generation every member is partly rebuilt (`Perturb`: the tree's weakest branches pruned and re-spent, one or two rares made again, two supports chosen again), and the best member is crossed with each other one both ways (`Graft`: one's passives with the other's gear, its gear, or its main link; the tree then adjusted); the best ones that differ from each other (passives and gear, `stateDistance`) go on. Builds are carried as data (`CaptureState` / `ApplyState`: tree, every slot's item text, socket groups, configuration), and between threads as JSON (`SerializeState`).
+
+With several tries, the tries are combined at the end (`Combine`, in the window and `bench/combine_test.lua`): the best try is opened and crossed with the others (with background threads, the three next best builds of any archetype within 1.5 points). Our Endgame Cyclone of Tumult crossed with the previous version's build: 19.33 to 19.40, 36M to 40M DPS (the gear of one with the tree of the other). `options.population` also runs it at the end of a single generation.
+
 #### Several tries
 "Tries" generates the same build several times with small differences: from the second try on, the early choices (supports, passives per point, ascendancy, weapon finalists) see each option's gain through a fixed ±15% factor of its own, which sends the search down other paths; the real scores still decide, and the best try is kept. With background threads the tries run at once.
 

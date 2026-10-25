@@ -2037,6 +2037,385 @@ function BuildGeneratorClass:TreeBranches()
 	return branches
 end
 
+-- One rebuild of part of the build (the repair search's and the population
+-- search's mutation): "tree" prunes weak branches and re-spends the points,
+-- "gear" makes one or two rares again, "links" chooses two supports again.
+-- Returns a label of what was done, or nil when nothing could be
+function BuildGeneratorClass:Perturb(kind, finder)
+	finder = finder or new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local label
+	if kind == "tree" then
+		local branches = self:TreeBranches()
+		local weakest = m_min(#branches, 12)
+		if weakest == 0 then return end
+		-- prune some of the weakest branches, 10 to 20 points
+		local pruned, points = { }, 0
+		local target = 10 + self:Random(11) - 1
+		for _ = 1, 12 do
+			local b = branches[self:Random(weakest)]
+			if b and not pruned[b] then
+				pruned[b] = true
+				for _, node in ipairs(b.nodes) do
+					if node.alloc then self.build.spec:DeallocNode(node); points = points + 1 end
+				end
+			end
+			if points >= target then break end
+		end
+		self.build.spec:BuildAllDependsAndPaths()
+		self:Recalculate()
+		-- (the pruned branches' leaves can't come straight back this round:
+		-- the points go somewhere else, which is the point of the move)
+		local savedForbidden = self.forbiddenNodes
+		self.forbiddenNodes = { }
+		for k, v in pairs(savedForbidden or { }) do self.forbiddenNodes[k] = v end
+		for b in pairs(pruned) do self.forbiddenNodes[b.nodes[1].id] = true end
+		if self.options.debugTiming then ConPrintf("[repair] pruned %d points: %.3f", points, (self:FullScore())) end
+		self:AllocateTree(true)
+		self.forbiddenNodes = savedForbidden
+		if self.options.debugTiming then ConPrintf("[repair] regrown: %.3f (%d allocated, budget %d)", (self:FullScore()), self.build.spec:CountAllocNodes(), self:PointBudget()) end
+		self:RefineTree(6)
+		label = string.format("%d passive points re-spent", points)
+	elseif kind == "gear" then
+		local rares = { }
+		for _, slotName in ipairs(finder:GetActiveSlots()) do
+			local slot = self.itemsTab.slots[slotName]
+			local item = slot and self.itemsTab.items[slot.selItemId]
+			if item and item.rarity == "RARE" and not (self.lockedSlots and self.lockedSlots[slotName]) and not slotName:match("^Weapon") then
+				t_insert(rares, slotName)
+			end
+		end
+		if #rares == 0 then return end
+		local chosen = { rares[self:Random(#rares)] }
+		local second = rares[self:Random(#rares)]
+		if second ~= chosen[1] then t_insert(chosen, second) end
+		for _, slotName in ipairs(chosen) do
+			local item = self.itemsTab.items[self.itemsTab.slots[slotName].selItemId]
+			local influenced = false
+			for _, info in ipairs(finder.rareGenerator.influenceList) do if item[info.key] then influenced = true end end
+			self:Equip(makeBase(item.baseName), slotName)
+			self.itemsTab:PopulateSlots()
+			self:Recalculate()
+			local opts = self:RareOptions(influenced)
+			opts.slots = { slotName }
+			finder:EquipAll(finder:RunRares(opts))
+		end
+		self:Recalculate()
+		self:RefineTree(6)
+		label = "rares made again: " .. table.concat(chosen, ", ")
+	else
+		local group = self.mainGroup
+		if not group or #group.gemList < 3 then return end
+		for _ = 1, 2 do
+			local supports = { }
+			for i, g in ipairs(group.gemList) do
+				if i > 1 and g.gemId and data.gems[g.gemId].grantedEffect.support then t_insert(supports, i) end
+			end
+			if #supports == 0 then break end
+			t_remove(group.gemList, supports[self:Random(#supports)])
+		end
+		self.build.skillsTab:ProcessSocketGroup(group)
+		self:ChooseSupports(5)
+		self:RefineTree(6)
+		label = "main link supports chosen again"
+	end
+	return label
+end
+
+------------------------------------------------------------------------------
+-- Population search
+------------------------------------------------------------------------------
+
+-- The whole build as plain data, independent of item ids (a "genome"): the
+-- tree, every slot's item text, the socket groups, the configuration, the
+-- generator's own state about them. ApplyState puts it back on this build.
+function BuildGeneratorClass:CaptureState()
+	local state = { tree = self.build.spec:CreateUndoState(), items = { }, groups = { }, input = { }, locked = { } }
+	for name, slot in pairs(self.itemsTab.slots) do
+		local item = self.itemsTab.items[slot.selItemId]
+		if item then state.items[name] = item.raw end
+	end
+	local list = self.build.skillsTab.socketGroupList
+	for i, group in ipairs(list) do
+		local copy = { }
+		for k, v in pairs(group) do if k ~= "gemList" and type(v) ~= "table" then copy[k] = v end end
+		copy.gemList = { }
+		for j, g in ipairs(group.gemList) do
+			local gem = { }
+			for k, v in pairs(g) do if type(v) ~= "table" then gem[k] = v end end
+			copy.gemList[j] = gem
+		end
+		state.groups[i] = copy
+		if group == self.mainGroup then state.mainIndex = i end
+	end
+	state.mainSocketGroup = self.build.mainSocketGroup
+	for k, v in pairs(self.build.configTab.input) do state.input[k] = v end
+	for k, v in pairs(self.lockedSlots or { }) do state.locked[k] = v end
+	state.mainLinkLimit = self.mainLinkLimit
+	return state
+end
+
+function BuildGeneratorClass:ApplyState(state)
+	local itemsTab = self.itemsTab
+	local function equipItems()
+		for name, slot in pairs(itemsTab.slots) do
+			local raw = state.items[name]
+			local current = itemsTab.items[slot.selItemId]
+			if raw then
+				if not current or current.raw ~= raw then
+					local item = new("Item"):Item(raw)
+					item:NormaliseQuality()
+					itemsTab:AddItem(item, true)
+					slot:SetSelItemId(item.id)
+				end
+			elseif current then
+				slot:SetSelItemId(0)
+			end
+		end
+	end
+	-- (items, the tree, then the items again: cluster jewels add sockets once the tree has them)
+	equipItems()
+	self.build.spec:RestoreUndoState(state.tree)
+	self.build.spec:BuildClusterJewelGraphs()
+	itemsTab:PopulateSlots()
+	equipItems()
+	self.build.spec:RestoreUndoState(state.tree)
+	self.build.spec:BuildClusterJewelGraphs()
+	self.build.spec:BuildAllDependsAndPaths()
+	itemsTab:PopulateSlots()
+	-- gems
+	local list = self.build.skillsTab.socketGroupList
+	for i = #list, 1, -1 do list[i] = nil end
+	for i, saved in ipairs(state.groups) do
+		local group = { }
+		for k, v in pairs(saved) do if k ~= "gemList" then group[k] = v end end
+		group.gemList = { }
+		for j, g in ipairs(saved.gemList) do
+			local gem = { }
+			for k, v in pairs(g) do gem[k] = v end
+			group.gemList[j] = gem
+		end
+		list[i] = group
+		self.build.skillsTab:ProcessSocketGroup(group)
+		if i == state.mainIndex then self.mainGroup = group end
+	end
+	self.build.mainSocketGroup = state.mainSocketGroup
+	-- configuration and the generator's own state
+	local input = self.build.configTab.input
+	for k in pairs(input) do input[k] = nil end
+	for k, v in pairs(state.input) do input[k] = v end
+	self.build.configTab:BuildModList()
+	self.lockedSlots = { }
+	for k, v in pairs(state.locked) do self.lockedSlots[k] = v end
+	self.mainLinkLimit = state.mainLinkLimit
+	self:Recalculate()
+end
+
+-- A state as JSON-safe data (sent back by background threads): tattoos by
+-- name, number keys as text; DeserializeState makes it a state again
+function BuildGeneratorClass:SerializeState(state)
+	state = state or self:CaptureState()
+	local out = { }
+	for k, v in pairs(state) do out[k] = v end
+	local tree = { }
+	for k, v in pairs(state.tree) do tree[k] = v end
+	tree.hashOverrides = { }
+	for nodeId, override in pairs(state.tree.hashOverrides or { }) do tree.hashOverrides[tostring(nodeId)] = override.dn end
+	tree.masteryEffects = { }
+	for nodeId, effect in pairs(state.tree.masteryEffects or { }) do tree.masteryEffects[tostring(nodeId)] = effect end
+	out.tree = tree
+	return out
+end
+
+function BuildGeneratorClass:DeserializeState(data)
+	local state = { }
+	for k, v in pairs(data) do state[k] = v end
+	local tree = { }
+	for k, v in pairs(data.tree or { }) do tree[k] = v end
+	tree.hashOverrides = { }
+	for nodeId, name in pairs((data.tree or { }).hashOverrides or { }) do
+		local tattoo = self.build.spec.tree.tattoo and self.build.spec.tree.tattoo.nodes[name]
+		if tattoo then
+			local copy = copyTable(tattoo, true)
+			copy.id = tonumber(nodeId)
+			tree.hashOverrides[tonumber(nodeId)] = copy
+		end
+	end
+	tree.masteryEffects = { }
+	for nodeId, effect in pairs((data.tree or { }).masteryEffects or { }) do tree.masteryEffects[tonumber(nodeId)] = effect end
+	state.tree = tree
+	return state
+end
+
+-- How different two states are: share of passives not in common, plus gear
+-- slots and supports that differ (0 = the same build)
+local function stateDistance(a, b)
+	local na, nb = { }, { }
+	for _, id in ipairs(a.tree.hashList or { }) do na[id] = true end
+	local common, total = 0, 0
+	for _, id in ipairs(b.tree.hashList or { }) do nb[id] = true if na[id] then common = common + 1 end end
+	for _ in pairs(na) do total = total + 1 end
+	for id in pairs(nb) do if not na[id] then total = total + 1 end end
+	local d = total > 0 and (1 - common / total) or 0
+	for name, raw in pairs(a.items) do
+		if not name:match("^Jewel") and b.items[name] ~= raw then d = d + 0.05 end
+	end
+	return d
+end
+
+-- Parts of another state grafted on the current build (crossover): "tree"
+-- (its passives, gear kept), "gear" (its gear slots except jewels in the
+-- tree, passives kept) or "links" (its main link supports)
+function BuildGeneratorClass:Graft(other, part)
+	if part == "tree" then
+		self.build.spec:RestoreUndoState(other.tree)
+		self.build.spec:BuildClusterJewelGraphs()
+		self.build.spec:BuildAllDependsAndPaths()
+		-- (the other build's tree jewels come along)
+		for name, raw in pairs(other.items) do
+			local slot = self.itemsTab.slots[name]
+			if slot and name:match("^Jewel") then
+				local item = new("Item"):Item(raw)
+				item:NormaliseQuality()
+				self.itemsTab:AddItem(item, true)
+				slot:SetSelItemId(item.id)
+			end
+		end
+		self.itemsTab:PopulateSlots()
+		self:TrimTree()
+	elseif part == "gear" then
+		for name, raw in pairs(other.items) do
+			local slot = self.itemsTab.slots[name]
+			if slot and not name:match("^Jewel") and not name:match("Swap") then
+				local current = self.itemsTab.items[slot.selItemId]
+				if not current or current.raw ~= raw then
+					local item = new("Item"):Item(raw)
+					item:NormaliseQuality()
+					self.itemsTab:AddItem(item, true)
+					slot:SetSelItemId(item.id)
+				end
+			end
+		end
+		self.itemsTab:PopulateSlots()
+		self:FitSockets()
+	elseif part == "links" then
+		local saved = other.groups[other.mainIndex or 0]
+		if not saved or not self.mainGroup then return false end
+		local list = { }
+		for j, g in ipairs(saved.gemList) do
+			local gem = { }
+			for k, v in pairs(g) do gem[k] = v end
+			list[j] = gem
+		end
+		self.mainGroup.gemList = list
+		self.build.skillsTab:ProcessSocketGroup(self.mainGroup)
+	end
+	self:Recalculate()
+	return true
+end
+
+-- Population search on the finished build: instead of one build improved
+-- round after round (the repair search), a few different builds are kept.
+-- Each generation every member is partly rebuilt (Perturb: the tree's weak
+-- branches, one or two rares, two supports) and pairs of members are crossed
+-- (one's passives with the other's gear, or its main link); the best ones,
+-- kept apart from each other, go on. The search can thus keep a build that is
+-- a little worse now but leads somewhere else. Returns the gain.
+function BuildGeneratorClass:PopulationSearch(size, generations, seeds)
+	size, generations = size or 3, generations or 3
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	self:AutoConfigure()
+	local startScore = self:FullScore()
+	local savedLog = #self.log
+	local population = { { state = self:CaptureState(), score = startScore, label = "start" } }
+	-- (other builds to start from: other tries of the same generation)
+	for i, seed in ipairs(seeds or { }) do
+		local ok, err = pcall(function()
+			self:ApplyState(seed.state)
+			self:AutoConfigure()
+			local score = self:FullScore()
+			t_insert(population, { state = self:CaptureState(), score = score, label = seed.label or ("build " .. (i + 1)) })
+		end)
+		if not ok then ConPrintf("Population seed failed: %s", tostring(err)) end
+	end
+	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+	t_sort(population, function(a, b) return a.score > b.score end)
+	while #population > m_max(size, #(seeds or { }) + 1) do t_remove(population) end
+	local kinds = { "tree", "gear", "links", "tree" }
+	local counter = 0
+	local function evaluate(label)
+		self:AutoConfigure()
+		local score = self:FullScore()
+		for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+		return { state = self:CaptureState(), score = score, label = label }
+	end
+	local children = 0
+	for gen = 1, generations do
+		self:Inner((gen - 1) / generations)
+		local offspring = { }
+		-- mutations: each member partly rebuilt
+		for _, member in ipairs(population) do
+			counter = counter + 1
+			local kind = kinds[(counter - 1) % #kinds + 1]
+			self:ApplyState(member.state)
+			local ok, label = pcall(function() return self:Perturb(kind, finder) end)
+			if ok and label then
+				local child = evaluate(member.label .. " > " .. label)
+				t_insert(offspring, child)
+				children = children + 1
+				if self.options.debugTiming then ConPrintf("[population] gen %d %s: %.3f (parent %.3f)", gen, kind, child.score, member.score) end
+				self:Decision("population", kind, child.score - member.score, false, { gen = gen })
+			elseif not ok then
+				ConPrintf("Population mutation failed: %s", tostring(label))
+			end
+			self:Tick()
+		end
+		-- crossovers: the best member with each other one, both ways
+		for i = 2, #population do
+			for _, pair in ipairs({ { population[1], population[i] }, { population[i], population[1] } }) do
+				for _, part in ipairs({ "tree", "gear", "links" }) do
+					self:ApplyState(pair[1].state)
+					local ok, grafted = pcall(function() return self:Graft(pair[2].state, part) end)
+					if ok and grafted then
+						pcall(function() self:RefineTree(6) end)
+						local child = evaluate(string.format("%s with the %s of %s", pair[1].label, part, pair[2].label))
+						t_insert(offspring, child)
+						children = children + 1
+						if self.options.debugTiming then ConPrintf("[population] gen %d cross %s: %.3f", gen, part, child.score) end
+						self:Decision("population", "cross " .. part, child.score - pair[1].score, false, { gen = gen })
+					elseif not ok then
+						ConPrintf("Population crossover failed: %s", tostring(grafted))
+					end
+					self:Tick()
+				end
+			end
+		end
+		-- the next population: best first, then the best ones far enough from those kept
+		for _, c in ipairs(offspring) do t_insert(population, c) end
+		t_sort(population, function(a, b) return a.score > b.score end)
+		local nextPop = { }
+		for _, cand in ipairs(population) do
+			if #nextPop >= size then break end
+			local distinct = true
+			for _, kept in ipairs(nextPop) do
+				if stateDistance(cand.state, kept.state) < 0.03 then distinct = false break end
+			end
+			if distinct then t_insert(nextPop, cand) end
+		end
+		population = nextPop
+	end
+	local best = population[1]
+	self:ApplyState(best.state)
+	self:AutoConfigure()
+	local after = self:FullScore()
+	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+	self:RemoveUnusedItems()
+	if after > startScore + 0.002 then
+		self:Note(string.format("Population search: %d builds tried over %d generations, the best kept (%s): score %+.3f", children, generations, best.label, after - startScore))
+		return after - startScore
+	end
+	return 0
+end
+
 -- Large neighbourhood search on the finished build: part of it is undone
 -- and rebuilt with everything else in place, and the result kept only if the
 -- build is better. Each round takes one kind of rebuild:
@@ -2062,80 +2441,7 @@ function BuildGeneratorClass:RepairSearch(rounds)
 		local savedLog = #self.log
 		local label
 		local ok, err = pcall(function()
-			if kind == "tree" then
-				local branches = self:TreeBranches()
-				local weakest = m_min(#branches, 12)
-				if weakest == 0 then return end
-				-- prune some of the weakest branches, 10 to 20 points
-				local pruned, points = { }, 0
-				local target = 10 + self:Random(11) - 1
-				for _ = 1, 12 do
-					local b = branches[self:Random(weakest)]
-					if b and not pruned[b] then
-						pruned[b] = true
-						for _, node in ipairs(b.nodes) do
-							if node.alloc then self.build.spec:DeallocNode(node); points = points + 1 end
-						end
-					end
-					if points >= target then break end
-				end
-				self.build.spec:BuildAllDependsAndPaths()
-				self:Recalculate()
-				-- (the pruned branches' leaves can't come straight back this round:
-				-- the points go somewhere else, which is the point of the move)
-				local savedForbidden = self.forbiddenNodes
-				self.forbiddenNodes = { }
-				for k, v in pairs(savedForbidden or { }) do self.forbiddenNodes[k] = v end
-				for b in pairs(pruned) do self.forbiddenNodes[b.nodes[1].id] = true end
-				if self.options.debugTiming then ConPrintf("[repair] pruned %d points: %.3f", points, (self:FullScore())) end
-				self:AllocateTree(true)
-				self.forbiddenNodes = savedForbidden
-				if self.options.debugTiming then ConPrintf("[repair] regrown: %.3f (%d allocated, budget %d)", (self:FullScore()), self.build.spec:CountAllocNodes(), self:PointBudget()) end
-				self:RefineTree(6)
-				label = string.format("%d passive points re-spent", points)
-			elseif kind == "gear" then
-				local rares = { }
-				for _, slotName in ipairs(finder:GetActiveSlots()) do
-					local slot = self.itemsTab.slots[slotName]
-					local item = slot and self.itemsTab.items[slot.selItemId]
-					if item and item.rarity == "RARE" and not (self.lockedSlots and self.lockedSlots[slotName]) and not slotName:match("^Weapon") then
-						t_insert(rares, slotName)
-					end
-				end
-				if #rares == 0 then return end
-				local chosen = { rares[self:Random(#rares)] }
-				local second = rares[self:Random(#rares)]
-				if second ~= chosen[1] then t_insert(chosen, second) end
-				for _, slotName in ipairs(chosen) do
-					local item = self.itemsTab.items[self.itemsTab.slots[slotName].selItemId]
-					local influenced = false
-					for _, info in ipairs(finder.rareGenerator.influenceList) do if item[info.key] then influenced = true end end
-					self:Equip(makeBase(item.baseName), slotName)
-					self.itemsTab:PopulateSlots()
-					self:Recalculate()
-					local opts = self:RareOptions(influenced)
-					opts.slots = { slotName }
-					finder:EquipAll(finder:RunRares(opts))
-				end
-				self:Recalculate()
-				self:RefineTree(6)
-				label = "rares made again: " .. table.concat(chosen, ", ")
-			else
-				local group = self.mainGroup
-				if not group or #group.gemList < 3 then return end
-				for _ = 1, 2 do
-					local supports = { }
-					for i, g in ipairs(group.gemList) do
-						if i > 1 and g.gemId and data.gems[g.gemId].grantedEffect.support then t_insert(supports, i) end
-					end
-					if #supports == 0 then break end
-					t_remove(group.gemList, supports[self:Random(#supports)])
-				end
-				self.build.skillsTab:ProcessSocketGroup(group)
-				self:ChooseSupports(5)
-				self:RefineTree(6)
-				label = "main link supports chosen again"
-			end
+			label = self:Perturb(kind, finder)
 		end)
 		if not ok then ConPrintf("Repair round failed: %s", tostring(err)) end
 		self:AutoConfigure()
@@ -5153,6 +5459,37 @@ end
 -- Main
 ------------------------------------------------------------------------------
 
+-- The tries of one generation combined: the open build (the best try) and
+-- the other tries' finished builds (states from SerializeState) crossed with
+-- each other and partly rebuilt in a population search; the best is kept.
+-- Returns what Run returns.
+function BuildGeneratorClass:Combine(others)
+	local opts = self.options
+	self.lastYield = GetTime()
+	self.startClock = os.clock()
+	self.costs = { }
+	self.stageCount = 1
+	self.stageIndex, self.stage = 1, "Combining the tries"
+	self.subProgress, self.moveFrom, self.moveTo = 0, 0, 1
+	self:PrepareOptions()
+	self:InitFromOpenBuild()
+	self.scorer.useChecklist = true
+	local seeds = { }
+	for i, data in ipairs(others or { }) do
+		local ok, state = pcall(function() return self:DeserializeState(data.state or data) end)
+		if ok then t_insert(seeds, { state = state, label = data.label or ("try " .. (i + 1)) }) end
+	end
+	self:AutoConfigure()
+	local before, beforeResult = self:FullScore()
+	local gain = self:PopulationSearch(m_max(3, #seeds + 1), opts.combineGenerations or 2, seeds)
+	self:AutoConfigure()
+	self:Recalculate()
+	local final = self.scorer:Evaluate(self.calcFunc, { })
+	self.final = final
+	self.build.buildFlag = true
+	return { log = self.log, final = final, before = beforeResult, gain = gain }
+end
+
 -- Upgrades the open build instead of making one: its main skill, class,
 -- tree, gear and gems are the start, and the late steps of a generation run
 -- on it within the investment level (or total budget), each change kept only
@@ -5160,23 +5497,11 @@ end
 -- rares made for the build, jewels, anoint, tattoos, flasks, the tree,
 -- conditions and unique combos, rebuild-and-repair rounds. Returns what Run
 -- returns, plus .before (the build's own numbers) for the comparison.
-function BuildGeneratorClass:Upgrade()
+-- The generator set up on the build that is open (its main skill, class,
+-- level), for the steps that start from a finished build (Upgrade, Combine)
+function BuildGeneratorClass:InitFromOpenBuild()
 	local opts = self.options
 	local build = self.build
-	self.lastYield = GetTime()
-	self.startClock = os.clock()
-	self.costs = { }
-	self.stageCount = 6
-	local function stage(index, label)
-		if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
-		self.stageIndex, self.stage = index, label
-		self.subProgress, self.moveFrom, self.moveTo = 0, 0, 1
-		self:Tick()
-	end
-	self:PrepareOptions()
-	stage(1, "Reading the build")
-	if opts.learntNote then self:Note(opts.learntNote) end
-	if opts.focus and opts.focus.label and opts.focus.label:find("reviewed", 1, true) then self:Note("Aimed at: " .. opts.focus.label) end
 	-- the build's main skill, class and level
 	local skillsTab = build.skillsTab
 	local group = skillsTab.socketGroupList[build.mainSocketGroup]
@@ -5196,6 +5521,28 @@ function BuildGeneratorClass:Upgrade()
 	self.lockedSlots = { }
 	self:SetupScorer()
 	self.scorer.useChecklist = true
+	-- (finished builds are compared as they are: no archetype stat lens)
+	self.scorer.lens, self.scorer.lens2 = nil, nil
+end
+
+function BuildGeneratorClass:Upgrade()
+	local opts = self.options
+	local build = self.build
+	self.lastYield = GetTime()
+	self.startClock = os.clock()
+	self.costs = { }
+	self.stageCount = 6
+	local function stage(index, label)
+		if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
+		self.stageIndex, self.stage = index, label
+		self.subProgress, self.moveFrom, self.moveTo = 0, 0, 1
+		self:Tick()
+	end
+	self:PrepareOptions()
+	stage(1, "Reading the build")
+	if opts.learntNote then self:Note(opts.learntNote) end
+	if opts.focus and opts.focus.label and opts.focus.label:find("reviewed", 1, true) then self:Note("Aimed at: " .. opts.focus.label) end
+	self:InitFromOpenBuild()
 	self:InitKnowledge()
 	self:WrapSteps()
 	self:AutoConfigure()
@@ -5780,6 +6127,11 @@ function BuildGeneratorClass:Run()
 	if (opts.repairRounds or 8) > 0 then
 		self:Move(6, 6, "Rebuilding parts of the build to improve it")
 		self:RepairSearch(opts.repairRounds or 8)
+	end
+	-- (optional: a population search on top, options.population)
+	if opts.population then
+		local ok, err = pcall(function() self:PopulationSearch(opts.populationSize or 3, opts.populationGenerations or 2) end)
+		if not ok then ConPrintf("Population search failed: %s", tostring(err)) end
 	end
 	-- utility gems that add nothing taken out
 	if opts.pruneGems ~= false then
