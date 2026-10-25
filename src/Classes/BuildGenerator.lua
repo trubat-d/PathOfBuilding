@@ -2861,6 +2861,9 @@ function BuildGeneratorClass:AddJewels(maxJewels, maxPath)
 		end
 	end
 	if not best then return end
+	-- (kept: what a socket is worth to anything else - a unique jewel taking
+	-- a new socket must beat this rare there)
+	self.rareJewel = best.item
 	-- 2. sockets, kept only when they pay for their points
 	local added = 0
 	for _, node in ipairs(sockets) do
@@ -3399,6 +3402,24 @@ function BuildGeneratorClass:ChooseMetaJewels(onlyKinds)
 			self:Note(string.format("Possible upgrade (High investment): %s, about %+.0f%% score", result.label, result.gain * 100))
 			result = nil
 		end
+		-- (a socket taken for it, not holding a jewel yet, could hold the build's
+		-- rare jewel instead: the unique must beat that, not an empty socket -
+		-- Split Personality at 40 passives from the start is +60 of two stats,
+		-- below a rare of four crit multiplier mods for most builds)
+		if result and result.gain > 0.01 and self.rareJewel and kind ~= "forbidden" and result.placements then
+			local alt, newSockets = { }, 0
+			for _, p in ipairs(result.placements) do
+				if not (self.build.spec.jewels[p.node.id] and self.build.spec.jewels[p.node.id] ~= 0) then newSockets = newSockets + 1 end
+				t_insert(alt, { node = p.node, item = self.rareJewel })
+			end
+			if newSockets > 0 then
+				local rareScore = finder:TryJewels(alt)
+				if rareScore >= result.score - 0.003 then
+					if self.options.debugTiming then ConPrintf("[meta jewels] %s skipped: the rare jewel there scores %.3f vs %.3f", result.label, rareScore, result.score) end
+					result = nil
+				end
+			end
+		end
 		if result and result.gain > 0.01 then
 			finder:Apply(result)
 			self:Recalculate()
@@ -3481,10 +3502,20 @@ function BuildGeneratorClass:ChooseClusterJewels(maxJewels)
 		self:Note(string.format("%s (%d passive points; a crafted / bought rare, price varies)", result.label, points))
 		return true
 	end
+	-- (the outer sockets take Large or Medium ones: a Medium one is 5 points
+	-- for two notables, which top builds often prefer - two cold penetration
+	-- notables on Winter Orb)
 	for _ = 1, maxJewels or 2 do
 		local base = self:FullScore()
-		gen.values = { } -- values change once a jewel is in
-		local result = gen:Best(base, { maxPath = 6 })
+		local result
+		local outer = gen:Sockets(6, false)[1]
+		if not outer then break end
+		for _, jewelName in ipairs({ "Large Cluster Jewel", "Medium Cluster Jewel" }) do
+			gen.values = { } -- values change once a jewel is in
+			local r = gen:Best(base, { jewel = jewelName, socket = outer })
+			if self.options.debugTiming and r then ConPrintf("[clusters] outer %s: %s estimated %+.3f", jewelName, r.label, r.gain) end
+			if r and (not result or r.gain > result.gain) then result = r end
+		end
 		if not result or result.gain <= 0.01 or not place(result, base) then break end
 	end
 	-- Medium or Small ones in the sockets the Large ones add (whichever is
