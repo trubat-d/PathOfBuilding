@@ -5826,7 +5826,9 @@ end
 -- never helped this kind of build skipped: each method wrapped on this
 -- generator only; a step called from inside another one isn't counted again
 function BuildGeneratorClass:WrapSteps()
-	if not self.know or self.stepsWrapped then return end
+	-- (with a decision log only, the steps are measured but never skipped:
+	-- what each step gains and costs, for a model of when to run it)
+	if (not self.know and not self.decisions) or self.stepsWrapped then return end
 	self.stepsWrapped = true
 	self.stepDepth = 0
 	local know = self.know
@@ -5835,7 +5837,7 @@ function BuildGeneratorClass:WrapSteps()
 		if not original then return end
 		self[name] = function(gen, ...)
 			if gen.stepDepth > 0 then return original(gen, ...) end
-			if canSkip then
+			if canSkip and know then
 				local skip, reason = know.ShouldSkip(gen.knowCtx, name)
 				if skip then
 					t_insert(gen.skippedSteps, name)
@@ -5853,7 +5855,7 @@ function BuildGeneratorClass:WrapSteps()
 			gen.stepDepth = gen.stepDepth - 1
 			if not results[1] then error(results[2], 0) end
 			local after = gen:FullScore()
-			t_insert(gen.knowRecords.steps, { context = gen.knowCtx, step = name, gain = after - before, seconds = os.clock() - t0 })
+			if gen.knowRecords then t_insert(gen.knowRecords.steps, { context = gen.knowCtx, step = name, gain = after - before, seconds = os.clock() - t0 }) end
 			gen:Decision("step", name, after - before, after - before > 0.005, { sec = m_floor((os.clock() - t0) * 10 + 0.5) / 10, before = m_floor(before * 1e4 + 0.5) / 1e4 })
 			return unpack(results, 2)
 		end
