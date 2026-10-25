@@ -286,6 +286,66 @@ function AutoConfigClass:GeneratesCharge(kind, lines, gems, flags)
 	return false
 end
 
+-- How many charges of a kind the build's own lines keep up, from what
+-- triggers them and how often: { count, max, reason } or nil when there is no
+-- line-based source. A chance on kill only counts while mapping; on hit / on
+-- critical strike from the main skill's hit rate; when you block / are hit
+-- from about one enemy hit a second; "every N seconds" as it says. Kept charges
+-- = gained per second x charge duration, up to the maximum.
+local HITS_TAKEN_PER_SECOND = 1
+local KILLS_PER_SECOND = 2
+function AutoConfigClass:ChargeUptime(kind, lines, flags, output, boss)
+	local word = kind:lower()
+	local hitRate = output.Speed or (output.MainHand and output.MainHand.Speed) or 0
+	local crit = ((output.CritChance or (output.MainHand and output.MainHand.CritChance)) or 0) / 100
+	local block = (output.EffectiveBlockChance or output.BlockChance or 0) / 100
+	local rate, sources = 0, { }
+	for _, line in ipairs(lines) do
+		if line:find(word, 1, true) and line:find("charge", 1, true) and (line:find("gain") or line:find("grant") or line:find("generat"))
+			and not line:find("lose") and not line:find("maximum") and not line:find("enemies", 1, true) then
+			local chance = (tonumber(line:match("(%d+)%% chance")) or 100) / 100
+			local every = tonumber(line:match("every ([%d%.]+) seconds?")) or (line:find("every second", 1, true) or line:find("each second", 1, true)) and 1
+			local r
+			if line:find("on kill", 1, true) or line:find("when you kill", 1, true) or line:find("melee kill", 1, true) then
+				r = boss and 0 or KILLS_PER_SECOND * chance
+			elseif line:find("non%-critical strike") then
+				r = hitRate * (1 - crit) * chance
+			elseif line:find("critical strike", 1, true) then
+				r = hitRate * crit * chance
+			elseif line:find("when you block", 1, true) then
+				r = HITS_TAKEN_PER_SECOND * block * chance
+			elseif line:find("when you are hit", 1, true) or line:find("when hit", 1, true) then
+				r = HITS_TAKEN_PER_SECOND * chance
+			elseif every then
+				r = chance / every
+				local skill = self.build.calcsTab.mainEnv and self.build.calcsTab.mainEnv.player.mainSkill
+				if line:find("while channelling", 1, true) and not (skill and skill.skillTypes and skill.skillTypes[SkillType.Channel]) then r = 0 end
+				-- (moving: part of a boss fight)
+				if line:find("while moving", 1, true) and boss then r = r * 0.3 end
+			elseif line:find("on hit", 1, true) or line:find("when you hit", 1, true) then
+				r = hitRate * chance
+			elseif line:find("after spending a total of", 1, true) then
+				local mana = tonumber(line:match("total of (%d+) mana"))
+				r = mana and (output.ManaPerSecondCost or 0) / mana or 0
+			elseif line:find("when you stun", 1, true) then
+				r = hitRate * 0.3 * chance
+			else
+				-- (a trigger not recognised: counted as before, as reliable)
+				r = 10
+			end
+			if r > 0 then
+				rate = rate + r
+				t_insert(sources, line)
+			end
+		end
+	end
+	if #sources == 0 then return nil end
+	local duration = output[kind .. "ChargesDuration"] or 10
+	local max = output[kind .. "ChargesMax"] or 3
+	local count = math.min(max, rate * math.max(1, duration))
+	return { count = count, max = max, reason = string.format("about %.1f per second from \"%s\"%s, %.0f s each", rate, sources[1], #sources > 1 and string.format(" and %d more", #sources - 1) or "", duration) }
+end
+
 -- Main skill output (attacks keep per-hand numbers in MainHand)
 local function skillValue(output, key)
 	if output[key] ~= nil then return output[key] end
@@ -308,8 +368,19 @@ function AutoConfigClass:Run()
 		-- charges
 		for _, kind in ipairs({ "Power", "Frenzy", "Endurance" }) do
 			-- only switched on: charge sources can be indirect, so never switched off
-			if self:GeneratesCharge(kind, lines, gems, flags) then
+			-- (from gems, or lines that keep them up: on hit, on crit, every N seconds...
+			-- a chance on kill or on block alone keeps few or none against a boss)
+			local fromGems = self:GeneratesCharge(kind, { }, gems, flags)
+			local uptime = not fromGems and self:ChargeUptime(kind, lines, flags, output, boss)
+			if fromGems then
 				self:Set("use" .. kind .. "Charges", true, "the build generates them")
+			elseif uptime then
+				if uptime.count >= uptime.max * 0.75 then
+					self:Set("use" .. kind .. "Charges", true, "kept at the maximum: " .. uptime.reason)
+				elseif uptime.count >= 1 then
+					self:Set("use" .. kind .. "Charges", true, string.format("about %d kept: %s", math.floor(uptime.count), uptime.reason))
+					self:Set("override" .. kind .. "Charges", math.floor(uptime.count), string.format("about %d kept: %s", math.floor(uptime.count), uptime.reason))
+				end
 			end
 			-- "Lose all Power Charges on reaching Maximum Power Charges" (Tulfall,
 			-- Malachai's Loop...): the charges cycle from none to the maximum, half
