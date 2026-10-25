@@ -353,6 +353,67 @@ end
 -- influences, Eldritch implicits, extra bench crafts, the kind of slot
 -- (weapons cost the most), and the league phase. A rough guide: poe.ninja
 -- doesn't price rares.
+-- How good a rare's explicit mods are, by tier: each mod matched to the
+-- prefix / suffix of its group that can roll on the item's base (weight > 0
+-- for the first of its tags the mod lists), ranked by item level; 1 = the best
+-- tier, 0 = the worst. Returns the average, the number of mods matched, and
+-- how many are in the top two tiers.
+local tierIndex
+local function buildTierIndex()
+	tierIndex = { }
+	for _, mod in pairs(data.itemMods.Item) do
+		if (mod.type == "Prefix" or mod.type == "Suffix") and type(mod[1]) == "string" then
+			local template = mod[1]:gsub("%(%-?[%d%.]+%-%-?[%d%.]+%)", "#"):gsub("%-?%d+%.?%d*", "#"):lower()
+			local lo = tonumber(mod[1]:match("%((%-?[%d%.]+)%-") or mod[1]:match("(%-?[%d%.]+)"))
+			if lo then
+				tierIndex[template] = tierIndex[template] or { }
+				t_insert(tierIndex[template], { mod = mod, lo = lo })
+			end
+		end
+	end
+end
+local function canRoll(mod, tags)
+	for i, key in ipairs(mod.weightKey or { }) do
+		if tags[key] then return (mod.weightVal[i] or 0) > 0 end
+	end
+	return false
+end
+function PriceSourceClass.RareTierQuality(item)
+	if not tierIndex then buildTierIndex() end
+	local tags = { default = true }
+	for tag in pairs(item.base and item.base.tags or { }) do tags[tag] = true end
+	for _, key in ipairs({ "shaper", "elder", "adjudicator", "basilisk", "crusader", "eyrie" }) do
+		if item[key] and item.base and item.base.influenceTags then
+			for _, t in pairs(item.base.influenceTags) do tags[t] = true end
+		end
+	end
+	local sum, count, top = 0, 0, 0
+	for _, l in ipairs(item.explicitModLines or { }) do
+		if not l.crafted and l.line then
+			local value = tonumber(l.line:match("(%-?[%d%.]+)"))
+			local template = l.line:gsub("%-?%d+%.?%d*", "#"):lower()
+			local candidates = tierIndex[template]
+			if value and candidates then
+				local tiers = { }
+				for _, c in ipairs(candidates) do
+					if canRoll(c.mod, tags) then t_insert(tiers, c) end
+				end
+				if #tiers >= 2 then
+					table.sort(tiers, function(a, b) return a.lo > b.lo end)
+					local rank = #tiers
+					for i, t in ipairs(tiers) do
+						if value >= t.lo then rank = i break end
+					end
+					sum = sum + 1 - (rank - 1) / (#tiers - 1)
+					count = count + 1
+					if rank <= 2 then top = top + 1 end
+				end
+			end
+		end
+	end
+	return count > 0 and sum / count or nil, count, top
+end
+
 function PriceSourceClass:RarePrice(item, level)
 	level = level or { }
 	local base = level.rarePrice or 1
@@ -363,6 +424,18 @@ function PriceSourceClass:RarePrice(item, level)
 	end
 	local expected = level.rareAffixes or 6
 	local price = base * math.max(0.3, (good / math.max(1, expected))) ^ 2
+	-- by the tiers of its mods when enough of them can be matched (not the level
+	-- the item was made at): a perfect rare costs more than a mediocre one of
+	-- the same level. Good mods = tier quality cubed (top tiers count, middling
+	-- ones little; at most six: hybrid and influence lines are part of an
+	-- affix), the unmatched lines counted at the matched average;
+	-- six top tier mods ~ 46 divines before slot, influence and phase factors
+	if self.tierPricing ~= false then
+		local q, matched = PriceSourceClass.RareTierQuality(item)
+		if q and matched >= 2 then
+			price = 0.15 * 2.6 ^ (math.min(6, good) * q ^ 3)
+		end
+	end
 	local influences = 0
 	for _, key in ipairs({ "shaper", "elder", "adjudicator", "basilisk", "crusader", "eyrie", "cleansing", "tangle" }) do
 		if item[key] then influences = influences + 1 end
