@@ -488,6 +488,20 @@ function BuildGeneratorClass:WithChargesOf(gem, fn)
 	return a, b
 end
 
+-- A new context id for the decision log, the build's situation logged with it
+-- ("support_ctx" lines: the trainer reads them for every kind of scan)
+function BuildGeneratorClass:LogContext()
+	if not self.decisions then return nil end
+	self.contextCount = (self.contextCount or 0) + 1
+	local ok, context = pcall(function() return self:SupportContext() end)
+	self:Decision("support_ctx", nil, nil, false, { cx = self.contextCount, f = ok and context or { } })
+	return self.contextCount
+end
+
+local function round4(x)
+	return m_floor(x * 1e4 + 0.5) / 1e4
+end
+
 -- The build's situation when supports are chosen, as features for the
 -- candidate model (Modules/GeneratorModel) and the decision log: mana
 -- sustain, costs, crit, damage types, damage over time and ailments, speed,
@@ -1160,6 +1174,9 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly, warm)
 					local keep = m_max(60, m_floor(#values * 0.3))
 					threshold = values[keep] or -math.huge
 				end
+				-- (full scans logged whole: every passive measured, for a model of
+				-- which passives can't help a build like this one)
+				local scanKeys, scanValues = self.decisions and full and { }, self.decisions and full and { }
 				for _, entry in ipairs(candidates(ascendancy)) do
 					if pathCost(entry.node) <= left then
 						local key = entry.node.id .. (entry.effect and ("_" .. entry.effect.id) or "")
@@ -1177,7 +1194,14 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly, warm)
 						end
 						prev[key] = { value = entry.value, pathLen = pathLen }
 						t_insert(queue, entry)
+						if scanKeys and entry.value and entry.value > -math.huge then
+							t_insert(scanKeys, key)
+							t_insert(scanValues, round4(entry.value))
+						end
 					end
+				end
+				if scanKeys and #scanKeys > 0 then
+					self:Decision("passive_scan", nil, nil, false, { cx = self:LogContext(), asc = ascendancy or nil, left = left, ids = scanKeys, v = scanValues })
 				end
 				sinceRefresh = 0
 			end
@@ -4932,6 +4956,7 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 		self:Inner((slotIndex - 1) / #sweepSlots * 0.7)
 		local slot = self.itemsTab.slots[slotName]
 		local equipped = slot and self.itemsTab.items[slot.selItemId]
+		local scanNames, scanGains = self.decisions and { }, self.decisions and { }
 		if slot and not (self.lockedSlots and self.lockedSlots[slotName]) then
 			for _, item in ipairs(candidates) do
 				-- (no sockets where the main skill is: it moves to a 4-link, scored when tried)
@@ -4949,8 +4974,16 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 					if score > current + 0.01 + self:PriceCost(item) then
 						t_insert(gains, { item = item, slot = slotName, gain = score - current - self:PriceCost(item), relocate = relocate })
 					end
+					if scanNames then
+						t_insert(scanNames, item.title or item.name)
+						t_insert(scanGains, round4(score - current - self:PriceCost(item)))
+					end
 				end
 			end
+		end
+		-- (every unique measured in the slot: for a model of which can't help)
+		if scanNames and #scanNames > 0 then
+			self:Decision("unique_scan", nil, nil, false, { cx = self:LogContext(), slot = slotName, names = scanNames, g = scanGains })
 		end
 	end
 	t_sort(gains, function(a, b)
