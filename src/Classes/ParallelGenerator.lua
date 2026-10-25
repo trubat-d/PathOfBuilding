@@ -124,6 +124,7 @@ function ParallelGeneratorClass.JobFromOptions(options, extra)
 		allowAnoints = options.allowAnoints, allowTattoos = options.allowTattoos, timeless = options.timeless,
 		synergies = options.synergies, quick = options.quick, meta = options.meta, learnFromPlayers = options.learnFromPlayers, variant = options.variant,
 		excludedUniques = options.excludedUniques, forcedUniques = options.forcedUniques, totalBudget = options.totalBudget,
+		knowledge = options.knowledge, learntNote = options.learntNote,
 	}
 	for k, v in pairs(extra or { }) do job[k] = v end
 	return job
@@ -190,6 +191,8 @@ function ParallelGeneratorClass:Fill()
 				if not self.stopped then
 					local ok, summary = pcall(dkjson.decode, summaryJson or "")
 					if ok and type(summary) == "table" and xml then
+						-- (what the worker's generation learnt, written here: Modules/GeneratorKnowledge)
+						if summary.knowledge then pcall(function() LoadModule("Modules/GeneratorKnowledge").Commit(summary.knowledge) end) end
 						callbacks.onDone(entry.index, summary, xml)
 					elseif callbacks.onError then
 						callbacks.onError(entry.index, "the worker returned no build")

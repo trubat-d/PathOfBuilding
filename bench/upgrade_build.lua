@@ -53,7 +53,7 @@ if next(verdicts) then
 end
 local gen = new("BuildGenerator"):BuildGenerator(build, {
 	investment = investment, focus = focus, configScenario = configScenario,
-	totalBudget = tonumber(os.getenv("BUDGET") or ""), yieldEvery = 1e9, hitFloor = focus and focus.raiseHitFloor,
+	totalBudget = tonumber(os.getenv("BUDGET") or ""), yieldEvery = 1e9, knowledge = os.getenv("KNOWLEDGE") == "1", hitFloor = focus and focus.raiseHitFloor,
 	debugTiming = os.getenv("DEBUG_TIMING") == "1",
 })
 local t0 = os.clock()

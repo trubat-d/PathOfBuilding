@@ -856,6 +856,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 			allowTattoos = controls.tattoos.state,
 			timeless = controls.timeless.state,
 			synergies = controls.synergies.state,
+			-- what earlier generations learnt (Modules/GeneratorKnowledge)
+			knowledge = true,
 			totalBudget = tonumber(controls.totalBudget.buf) and tonumber(controls.totalBudget.buf) > 0 and tonumber(controls.totalBudget.buf) or nil,
 			-- (the generation runs between frames: longer slices leave more of
 			-- the time to it; the window still redraws about 12 times a second)

@@ -90,6 +90,18 @@ Supports that bring a damage source of their own are kept to the main skills the
 
 Curses are tried on every way to apply them, each with what it costs in play (PoB counts a curse in full however it is applied): Arcanist Brand and casting by hand take time from the main skill, Hextouch on a movement skill only curses what it hits, Blasphemy reserves mana, a mark on Mark On Hit is free for attacks.
 
+#### Knowledge from earlier generations
+[`GeneratorKnowledge`](../src/Modules/GeneratorKnowledge.lua) keeps, in the user folder, what generations on this computer found out:
+
+- **Steps** (GeneratorKnowledge.json): for each kind of build (investment level; attack, spell or minion), each optional late step's record: how often it improved the build, by how much in total, how long it took. A step that improved none of the last 8 builds of that kind is skipped (and tried again every fifth build, in case builds changed); the log says which ones. FinalRares, OptimizeTree and RepairSearch are measured but never skipped.
+- **Builds** (GeneratorKnowledge.json): the best three builds made for each skill, ascendancy, budget, focus and configuration (gear, main link, passives). A new generation tries their parts in its own build like the top players' gear and passives ("Taken from earlier generations of this build"), so it starts where the earlier ones ended. Upgrades are remembered too.
+- **Decisions** (GeneratorDecisions.jsonl): every choice a generation measured, for training models of the generator's choices. One JSON object per line; a `"type":"run"` line first with the build's context and result, then that run's decisions:
+  - run: `id`, `v` (format version), `mode` (generate, quick, upgrade), `skill`, `tags` (the main skill gem's tags), `class`, `ascendancy`, `level`, `investment`, `budget`, `focus` (`id`, `dps`, `ehp`, `avoid`, `clear`, `hitFloor`, `goals`), `config`, `archetype`, `variant`, `seconds`, `final` (`score`, `dps`, `ehp`, `minHit`, `move`), `before` (upgrades), `decisions` (count).
+  - decision: `run`, `k` (kind), `n` (what), `g` (score gain measured), `kept` (true when applied), `undone` (applied inside a trial that was rolled back), `step` (the generator step or stage it happened in), plus per kind: `support` (`pick`: which link slot was being chosen; every support tried at every pick, the chosen one with `kept`), `passive` (`id`, `type`, `points`, `asc`, `g` = gain per point, `alt`: the four best alternatives it beat, with their values), `unique_screen` (the 20 best uniques of the quick screen, with `slot`), `unique` (tried for real: `slot`, `price`, `kept`), `step` (`g` = score gained by the whole step, `sec`, `before`, or `skipped`), `note` (every log line, which names what each step changed and its gain).
+  The file is renamed .old past 300 MB. Background threads send theirs back with their result; the main thread writes everything.
+
+**Candidate model** ([`GeneratorModel`](../src/Modules/GeneratorModel.lua), `Data/GeneratorModel.json`, trained by `bench/train_model.py` from decision logs): for each support gem, a logistic regression on the main skill's gem tags giving the chance it helps. Supports the model is sure can't help (below 1%, seen at least 30 times) aren't measured. The trainer validates by leaving each skill out in turn and counting the skipped supports that would have helped it.
+
 #### Several tries
 "Tries" generates the same build several times with small differences: from the second try on, the early choices (supports, passives per point, ascendancy, weapon finalists) see each option's gain through a fixed ±15% factor of its own, which sends the search down other paths; the real scores still decide, and the best try is kept. With background threads the tries run at once.
 

@@ -77,6 +77,8 @@ local gen = new("BuildGenerator"):BuildGenerator(build, {
 	excludedUniques = (function() local t = { } for n in (os.getenv("EXCLUDE") or ""):gmatch("[^;]+") do t[n] = true end return t end)(),
 	-- BUDGET=<divines>: a total budget for the whole build
 	totalBudget = tonumber(os.getenv("BUDGET") or ""),
+	-- KNOWLEDGE=1: what earlier generations learnt is used and written (Modules/GeneratorKnowledge)
+	knowledge = os.getenv("KNOWLEDGE") == "1",
 	gemId = gemId, classId = asc.classId, ascendClassId = asc.ascendClassId, level = 92,
 	investment = investment, focus = focus,
 	quick = mode == "quick", synergies = os.getenv("SYNERGIES") == "1", archetype = archetype, yieldEvery = 1e9,
@@ -90,6 +92,8 @@ for pair in (os.getenv("GEN_OPTS") or ""):gmatch("[^,]+") do
 		gen.options[k] = v
 	end
 end
+-- DECISION_LOG=<file>: every choice measured appended as JSON lines (Modules/GeneratorKnowledge, bench/train_model.py)
+gen.options.decisionLog = os.getenv("DECISION_LOG")
 local t0 = os.clock()
 local co = coroutine.create(function() return gen:Run() end)
 local ok, res = coroutine.resume(co)

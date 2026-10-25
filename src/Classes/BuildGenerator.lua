@@ -177,6 +177,7 @@ function BuildGeneratorClass:Inner(fraction)
 end
 
 function BuildGeneratorClass:Note(text)
+	if self.decisions then self:Decision("note", text) end
 	t_insert(self.log, text)
 	if self.options.debugTiming then
 		ConPrintf("[generator] %s", text)
@@ -555,16 +556,31 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 	local forcedCount = #group.gemList - 1
 	self.build.skillsTab:ProcessSocketGroup(group)
 	local current = self:Score()
+	-- the supports the candidate model is sure can't help this skill skipped
+	-- (Modules/GeneratorModel; options.useModel = false to try them all)
+	local tryList = supports
+	if self.options.useModel ~= false then
+		local okModel, model = pcall(LoadModule, "Modules/GeneratorModel")
+		if okModel and model and model.Load() then
+			tryList = { }
+			local skipped = 0
+			for _, gemId in ipairs(supports) do
+				if model.SkipSupport(data.gems[gemId].name, self.mainGem and self.mainGem.tags) then skipped = skipped + 1 else t_insert(tryList, gemId) end
+			end
+			self.modelSkipped = (self.modelSkipped or 0) + skipped
+		end
+	end
 	for pick = 1, maxSupports - forcedCount do
 		self:Inner((pick - 1) / m_max(1, maxSupports - forcedCount))
 		local best, bestScore, bestSeen
-		for _, gemId in ipairs(supports) do
+		for _, gemId in ipairs(tryList) do
 			if not inGroup(gemId) then
 				local gem = data.gems[gemId]
 				t_insert(group.gemList, { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId })
 				self.build.skillsTab:ProcessSocketGroup(group)
 				local score = self:WithChargesOf(gem, function() return self:Score() end)
 				t_remove(group.gemList)
+				if self.decisions then self:Decision("support", gem.name, score - current, false, { pick = pick }) end
 				-- (variants: gains seen through their factor)
 				local seen = current + (score - current) * (score > current and self:Jitter("support" .. gemId) or 1)
 				if not bestScore or seen > bestSeen + 1e-9 then
@@ -580,6 +596,7 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 		end
 		local gem = data.gems[best]
 		t_insert(group.gemList, { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = best })
+		self:Decision("support", gem.name, bestScore - current, true, { pick = pick })
 		current = bestScore
 		-- a charge support: switch its charges on for the rest of the choice
 		local mainTypes = self.mainGem and self.mainGem.grantedEffect.skillTypes or { }
@@ -646,7 +663,7 @@ function BuildGeneratorClass:ChooseSupports(maxSupports)
 				local old = group.gemList[pos]
 				-- (charge supports switched their charges on in the configuration: kept)
 				if not keep[old.gemId] and not data.gems[old.gemId].name:find("Charge", 1, true) then
-					for _, gemId in ipairs(supports) do
+					for _, gemId in ipairs(tryList) do
 						if not inGroup(gemId) then
 							local gem = data.gems[gemId]
 							group.gemList[pos] = { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId }
@@ -1100,6 +1117,15 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly, warm)
 				end
 			else
 				allocate(picked)
+				if self.decisions then
+					local alternatives = { }
+					for i = 2, m_min(5, #queue) do
+						local e = queue[i]
+						if e.value ~= -math.huge then t_insert(alternatives, { n = e.node.dn .. (e.effect and (": " .. table.concat(e.effect.sd or { }, " / ")) or ""), v = m_floor(e.value * 1e5 + 0.5) / 1e5, id = e.node.id }) end
+					end
+					self:Decision("passive", picked.node.dn .. (picked.effect and (": " .. table.concat(picked.effect.sd or { }, " / ")) or ""), picked.value, true,
+						{ id = picked.node.id, type = picked.node.type, points = pathCost(picked.node), asc = ascendancy or nil, alt = alternatives })
+				end
 				if self.treeStats then self.treeStats.picks = self.treeStats.picks + 1 end
 				t_remove(queue, 1)
 				current = self:Score()
@@ -1912,9 +1938,14 @@ function BuildGeneratorClass:Snapshot()
 	for k, v in pairs(self.lockedSlots or { }) do snap.locked[k] = v end
 	snap.itemIds = { }
 	for id in pairs(self.itemsTab.items) do snap.itemIds[id] = true end
+	snap.decisionCount = self.decisions and #self.decisions
 	return snap
 end
 function BuildGeneratorClass:Restore(snap)
+	-- (choices made since the snapshot were undone: still training data, marked)
+	if self.decisions and snap.decisionCount then
+		for i = snap.decisionCount + 1, #self.decisions do self.decisions[i].undone = true end
+	end
 	for name, id in pairs(snap.items) do
 		local slot = self.itemsTab.slots[name]
 		if slot and slot.selItemId ~= id then slot:SetSelItemId(id) end
@@ -4518,6 +4549,11 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 		ConPrintf("[uniques] %d candidates, %d gains", #candidates, #gains)
 		for i = 1, m_min(10, #gains) do ConPrintf("  %.3f %s in %s", gains[i].gain, gains[i].item.title or gains[i].item.name, gains[i].slot) end
 	end
+	if self.decisions then
+		for i = 1, m_min(20, #gains) do
+			self:Decision("unique_screen", gains[i].item.title or gains[i].item.name, gains[i].gain, false, { slot = gains[i].slot })
+		end
+	end
 	local kept, usedSlots, usedItems = { }, { }, { }
 	local tries = 0
 	for _, entry in ipairs(gains) do
@@ -4536,6 +4572,7 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 			self:Recalculate()
 			local after = moved and self:FullScore() or before
 			if self.options.debugTiming then ConPrintf("[uniques] tried %s in %s%s: %.3f -> %.3f", entry.item.title or entry.item.name, entry.slot, entry.relocate and " (main link moved)" or "", before, after) end
+			self:Decision("unique", title, after - before, after > before + self:PriceCost(entry.item) + 0.005, { slot = entry.slot, price = GetPriceSource():UniquePrice(entry.item) })
 			if after > before + self:PriceCost(entry.item) + 0.005 then
 				usedSlots[entry.slot] = true
 				usedItems[title] = true
@@ -4564,6 +4601,8 @@ end
 function BuildGeneratorClass:TopBuildParts(i)
 	local tops = self.options.meta and self.options.meta.details and self.options.meta.details.topBuilds
 	if not tops or not tops[i] then return false, "no build" end
+	-- (builds remembered by earlier generations come as parts already)
+	if tops[i].parts then return true, tops[i].parts end
 	self.topParts = self.topParts or { }
 	if self.topParts[i] == nil then
 		local BC = LoadModule("Modules/BuildComparison")
@@ -4780,7 +4819,7 @@ function BuildGeneratorClass:LearnFromTopBuilds(maxTries)
 		end
 	end
 	if #kept > 0 then
-		self:Note("Taken from the top players of the skill (poe.ninja): " .. table.concat(kept, "; "))
+		self:Note("Taken from " .. (self.topSource or "the top players of the skill (poe.ninja)") .. ": " .. table.concat(kept, "; "))
 	end
 	return #kept
 end
@@ -5145,6 +5184,8 @@ function BuildGeneratorClass:Upgrade()
 	self.lockedSlots = { }
 	self:SetupScorer()
 	self.scorer.useChecklist = true
+	self:InitKnowledge()
+	self:WrapSteps()
 	self:AutoConfigure()
 	local beforeScore, beforeResult = self:FullScore()
 	local beforeCost = self:BuildCost()
@@ -5194,6 +5235,10 @@ function BuildGeneratorClass:Upgrade()
 		if not ok then ConPrintf("Unique combos failed: %s", tostring(err)) end
 	end
 	self:Move(3, 3, "Rebuilding parts of the build")
+	if self.know then
+		local ok, err = pcall(function() self:PastBuildsMove() end)
+		if not ok then ConPrintf("Past builds failed: %s", tostring(err)) end
+	end
 	if (opts.repairRounds or 6) > 0 then self:RepairSearch(opts.repairRounds or 6) end
 
 	stage(6, "Finishing")
@@ -5214,6 +5259,7 @@ function BuildGeneratorClass:Upgrade()
 	local final = self.scorer:Evaluate(self.calcFunc, { })
 	self.final = final
 	build.buildFlag = true
+	self:FinishKnowledge(final, "upgrade", beforeResult)
 	local afterCost = self:BuildCost()
 	self:Note(string.format("Upgraded: score %.2f -> %.2f, DPS %s -> %s, max hit %s -> %s, cost about %s -> %s",
 		beforeScore, final.score, formatNumSep(math.floor(beforeResult.dps or 0)), formatNumSep(math.floor(final.dps or 0)),
@@ -5221,7 +5267,7 @@ function BuildGeneratorClass:Upgrade()
 		GetPriceSource().FormatPrice(beforeCost), GetPriceSource().FormatPrice(afterCost)))
 	local prices = GetPriceSource()
 	return {
-		log = self.log, final = final, before = beforeResult, ideas = { },
+		log = self.log, final = final, before = beforeResult, ideas = { }, knowledge = self.knowRecords,
 		configChanges = self.configChanges or { },
 		costLine = prices.loaded and string.format("Estimated cost of the upgraded build: %s (it was about %s)", prices.FormatPrice(afterCost), prices.FormatPrice(beforeCost))
 			or "Prices not loaded: uniques, anoints and tattoos were not filtered by price",
@@ -5231,6 +5277,162 @@ function BuildGeneratorClass:Upgrade()
 			"Your items, gems and passives were the start; every change was kept only if it scored better",
 		},
 	}
+end
+
+------------------------------------------------------------------------------
+-- Knowledge from earlier generations (Modules/GeneratorKnowledge)
+------------------------------------------------------------------------------
+
+-- Optional late steps: skipped for a kind of build where they never helped
+local skippableSteps = {
+	"ChooseMetaUniques", "UniqueSweep", "ChooseArchetypeJewels", "AddJewels", "ChooseTimelessJewel", "ChooseMetaJewels",
+	"ChooseRadiusJewels", "ChooseClusterJewels", "ChooseAnoint", "ChooseTattoos", "UniqueFlaskSweep", "PermanentFlaskMove",
+	"FlaskEnchantMove", "AuraStackMove", "FillMainLinkMove", "ApplySynergies", "JointMoves", "UniqueCombosMove",
+	"ConditionEnablerMove", "CrossIdeasMove", "LearnFromTopBuilds", "PopularPassivesMove", "AscendancyRecheck",
+	"FinalSupports", "PairAilments", "PearlMove", "CorruptionMove", "SupremeOstentationMove", "BossSkillMove", "PastBuildsMove",
+}
+-- (measured, never skipped)
+local recordedSteps = { "FinalRares", "OptimizeTree", "RepairSearch" }
+
+-- Knowledge on for this generation (full builds; options.knowledge)
+function BuildGeneratorClass:InitKnowledge()
+	local opts = self.options
+	if opts.knowledge ~= true and not opts.decisionLog then return end
+	local ok, know = pcall(LoadModule, "Modules/GeneratorKnowledge")
+	if not ok or not know then return end
+	-- (every choice measured is logged, quick builds included)
+	self.decisions = { }
+	self.knowModule = know
+	if opts.knowledge ~= true then return end
+	self.know = know
+	know.Load()
+	self.knowCtx = know.StepContext(opts, self.mainGem)
+	self.knowRecords = { steps = { }, builds = { } }
+	self.skippedSteps = { }
+end
+
+-- One choice the generation measured (Modules/GeneratorKnowledge decisions):
+-- kind ("support", "passive", "unique", "step", "note"...), what, its score
+-- gain, whether it was kept, and extra fields
+function BuildGeneratorClass:Decision(kind, name, gain, kept, extra)
+	if not self.decisions then return end
+	local d = { k = kind, n = name, step = self.stepName or self.stage }
+	if gain then d.g = m_floor(gain * 1e5 + 0.5) / 1e5 end
+	if kept then d.kept = true end
+	for key, v in pairs(extra or { }) do d[key] = v end
+	t_insert(self.decisions, d)
+end
+
+-- The late steps measured (score before and after, seconds) and the ones that
+-- never helped this kind of build skipped: each method wrapped on this
+-- generator only; a step called from inside another one isn't counted again
+function BuildGeneratorClass:WrapSteps()
+	if not self.know or self.stepsWrapped then return end
+	self.stepsWrapped = true
+	self.stepDepth = 0
+	local know = self.know
+	local function wrap(name, canSkip)
+		local original = BuildGeneratorClass[name]
+		if not original then return end
+		self[name] = function(gen, ...)
+			if gen.stepDepth > 0 then return original(gen, ...) end
+			if canSkip then
+				local skip, reason = know.ShouldSkip(gen.knowCtx, name)
+				if skip then
+					t_insert(gen.skippedSteps, name)
+					gen:Decision("step", name, nil, false, { skipped = true })
+					return 0
+				end
+			end
+			local before = gen:FullScore()
+			local t0 = os.clock()
+			gen.stepDepth = gen.stepDepth + 1
+			local savedStep = gen.stepName
+			gen.stepName = name
+			local results = { pcall(original, gen, ...) }
+			gen.stepName = savedStep
+			gen.stepDepth = gen.stepDepth - 1
+			if not results[1] then error(results[2], 0) end
+			local after = gen:FullScore()
+			t_insert(gen.knowRecords.steps, { context = gen.knowCtx, step = name, gain = after - before, seconds = os.clock() - t0 })
+			gen:Decision("step", name, after - before, after - before > 0.005, { sec = m_floor((os.clock() - t0) * 10 + 0.5) / 10, before = m_floor(before * 1e4 + 0.5) / 1e4 })
+			return unpack(results, 2)
+		end
+	end
+	for _, name in ipairs(skippableSteps) do wrap(name, true) end
+	for _, name in ipairs(recordedSteps) do wrap(name, false) end
+end
+
+-- The best builds earlier generations made for the same skill, ascendancy,
+-- budget, focus and configuration: their gear, main link and passives tried
+-- in this build like the top players' (LearnFromTopBuilds, PopularPassivesMove)
+function BuildGeneratorClass:PastBuildsMove()
+	if not self.know or not self.mainGem then return 0 end
+	local key = self.know.BuildKey(self.options, self.mainGem.name, self.build.spec.curAscendClassName)
+	local past = self.know.Past(key)
+	if #past == 0 then return 0 end
+	local tops = { }
+	for i, entry in ipairs(past) do
+		t_insert(tops, { name = string.format("your earlier build %d (score %.2f)", i, entry.score or 0), parts = entry.parts })
+	end
+	local savedMeta, savedParts, savedSource = self.options.meta, self.topParts, self.topSource
+	self.options.meta = { details = { topBuilds = tops } }
+	self.topParts, self.topSource = nil, "earlier generations of this build"
+	local kept = 0
+	local ok, err = pcall(function()
+		kept = self:LearnFromTopBuilds(4)
+		if #tops >= 3 then kept = kept + self:PopularPassivesMove(3) end
+	end)
+	if not ok then ConPrintf("Past builds move failed: %s", tostring(err)) end
+	self.options.meta, self.topParts, self.topSource = savedMeta, savedParts, savedSource
+	return kept
+end
+
+-- The finished build remembered, and what this generation learnt written
+-- (by the main thread; workers send it back with their result)
+function BuildGeneratorClass:FinishKnowledge(final, mode, before)
+	if not self.knowModule then return end
+	local opts = self.options
+	-- the run line of the decision log: the build's context and its result
+	local tags = { }
+	for tag in pairs(self.mainGem and self.mainGem.tags or { }) do t_insert(tags, tag) end
+	t_sort(tags)
+	local focus = opts.focus or { }
+	local extra = { }
+	for _, e in ipairs(focus.extra or { }) do extra[e.stat] = e.weight end
+	local output = self.build.calcsTab.mainOutput or { }
+	local run = {
+		id = string.format("%d-%06d", os.time(), math.random(0, 999999)), mode = mode or (opts.quick and "quick" or "generate"),
+		skill = self.mainGem and self.mainGem.name, tags = tags, class = self.build.spec.curClassName, ascendancy = self.build.spec.curAscendClassName,
+		level = self.build.characterLevel, investment = opts.investment and (opts.investment.baseId or opts.investment.id), budget = opts.investment and opts.investment.totalBudget,
+		focus = { id = focus.id, dps = focus.dps, ehp = focus.ehp, avoid = focus.avoid, clear = focus.clear, hitFloor = opts.hitFloor or focus.hitFloor, goals = extra },
+		config = opts.configScenario and opts.configScenario.id or "BOSS", archetype = opts.archetype and opts.archetype.id, variant = opts.variant,
+		seconds = m_floor(os.clock() - (self.startClock or os.clock())),
+		final = final and { score = final.score, dps = final.dps, ehp = final.ehp, minHit = (self.scorer:MinMaxHit(output)), move = output.EffectiveMovementSpeedMod } or nil,
+		before = before and { score = before.score, dps = before.dps, ehp = before.ehp } or nil,
+		decisions = #(self.decisions or { }),
+	}
+	if not self.know then
+		-- (decision log only: the benchmark's file)
+		pcall(self.knowModule.AppendDecisions, run, self.decisions, opts.decisionLog)
+		return
+	end
+	self.knowRecords.run, self.knowRecords.decisions = run, self.decisions
+	if #self.skippedSteps > 0 then
+		self:Note(string.format("Skipped, as they improved none of the last builds like this one (learnt): %s", table.concat(self.skippedSteps, ", ")))
+	end
+	if final and final.score and self.mainGem and not opts.quick then
+		local key = self.know.BuildKey(self.options, self.mainGem.name, self.build.spec.curAscendClassName)
+		local ok, parts = pcall(self.know.Parts, self.build)
+		if ok then
+			t_insert(self.knowRecords.builds, { key = key, entry = { score = final.score, dps = final.dps, ehp = final.ehp,
+				archetype = self.options.archetype and self.options.archetype.id, time = os.time(), parts = parts } })
+		end
+	end
+	if self.options.knowledgeWrite ~= false then
+		local ok, err = pcall(self.know.Commit, self.knowRecords)
+		if not ok then ConPrintf("Writing the generator knowledge failed: %s", tostring(err)) end
+	end
 end
 
 -- The player's unique choices, the investment level and rare quality
@@ -5314,6 +5516,7 @@ function BuildGeneratorClass:Run()
 	stage(1, "Setting up the character and configuration")
 	if opts.learntNote then self:Note(opts.learntNote) end
 	self:Setup()
+	self:InitKnowledge()
 	self:SetupScorer()
 	if opts.archetype then
 		self:Note("Archetype: " .. opts.archetype.label)
@@ -5377,6 +5580,7 @@ function BuildGeneratorClass:Run()
 		local final = self.scorer:Evaluate(self.calcFunc, { })
 		self.final = final
 		self.build.buildFlag = true
+		self:FinishKnowledge(final)
 		local analyzer = new("ScalingAnalyzer"):ScalingAnalyzer(self.build, self.scorer, self.calcFunc)
 		local okScale, scaling = pcall(function() return analyzer:Run() end)
 		if okScale and scaling then
@@ -5396,6 +5600,8 @@ function BuildGeneratorClass:Run()
 	self:MakeRares(true)
 
 	stage(9, "Choosing gem setups, jewels, anoint and tattoos")
+	-- (from here on, steps are measured and the useless ones skipped: Modules/GeneratorKnowledge)
+	self:WrapSteps()
 	self:FullScore()
 	self:Move(1, 10, "Choosing gem setups")
 	self:ChooseUtilityGems()
@@ -5497,6 +5703,12 @@ function BuildGeneratorClass:Run()
 		local ok, err = pcall(function() self:CrossIdeasMove(1) end)
 		if not ok then ConPrintf("Cross ideas failed: %s", tostring(err)) end
 	end
+	-- the best builds earlier generations made for the same build
+	if self.know then
+		self:Move(3, 3, "Trying what earlier generations of this build found")
+		local ok, err = pcall(function() self:PastBuildsMove() end)
+		if not ok then ConPrintf("Past builds failed: %s", tostring(err)) end
+	end
 	if opts.learnFromTop ~= false then
 		self:Move(3, 3, "Trying the top players' gear and links")
 		local ok, err = pcall(function() self:LearnFromTopBuilds() end)
@@ -5595,6 +5807,7 @@ function BuildGeneratorClass:Run()
 	local final = self.scorer:Evaluate(self.calcFunc, { })
 	self.final = final
 	self.build.buildFlag = true
+	self:FinishKnowledge(final)
 	-- defence summary: boss hits and the checklist
 	local output = self.build.calcsTab.mainOutput
 	local bossRatio, bossName = self.scorer:BossHitRatio(output)
@@ -5663,6 +5876,7 @@ function BuildGeneratorClass:Run()
 		ideas = self.ideas or { },
 		configChanges = self.configChanges or { },
 		costLine = costLine,
+		knowledge = self.knowRecords,
 		assumptions = {
 			"Investment level: " .. opts.investment.label,
 			"Main skill in a 6-link body armour, utility setups in the helmet, gloves, boots and weapon sockets; gems at their normal maximum level with 20% quality",

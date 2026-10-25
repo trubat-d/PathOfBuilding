@@ -194,6 +194,8 @@ return function(jobJson, userPath, scriptBase)
 		allowAnoints = job.allowAnoints, allowTattoos = job.allowTattoos, timeless = job.timeless,
 		synergies = job.synergies, quick = job.quick, meta = job.meta, learnFromPlayers = job.learnFromPlayers, variant = job.variant,
 		excludedUniques = job.excludedUniques, forcedUniques = job.forcedUniques, totalBudget = job.totalBudget,
+		-- (knowledge read here, written by the main thread from the result)
+		knowledge = job.knowledge, knowledgeWrite = false, learntNote = job.learntNote,
 		yieldEvery = 1e9,
 	}
 	local archetypes = new("BuildArchetypes"):BuildArchetypes()
@@ -220,6 +222,7 @@ return function(jobJson, userPath, scriptBase)
 		minHit = (generator.scorer:MinMaxHit(build.calcsTab.mainOutput)),
 		log = result.log, costLine = result.costLine, configChanges = result.configChanges,
 		assumptions = result.assumptions,
+		knowledge = result.knowledge,
 		penalties = { },
 		keystones = { },
 		seconds = os.clock() - startClock,
