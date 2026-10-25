@@ -21,7 +21,7 @@ gen.scorer.useChecklist = true
 gen.scorer.reservationSlope = tonumber(os.getenv("RES_SLOPE") or "")
 gen.costs = { }
 -- PLAYER_KNOWLEDGE=0: nothing from top players (the generator's playerKnowledge option)
-if os.getenv("PLAYER_KNOWLEDGE") == "0" then gen.options.playerKnowledge = false end
+if os.getenv("PLAYER_KNOWLEDGE") == "0" then gen.options.playerKnowledge = false new("BuildArchetypes"):BuildArchetypes().SetPlayerKnowledge(false) end
 for _, g in ipairs(build.skillsTab.socketGroupList) do
 	if g == build.skillsTab.socketGroupList[build.mainSocketGroup] then gen.mainGroup = g end
 end

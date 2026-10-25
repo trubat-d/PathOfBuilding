@@ -132,6 +132,10 @@ local function layerList(mode)
 		{ id = "mana", label = "Maximum mana", pool = "Mana", lines = { "10% more maximum Mana" }, cost = 6 },
 		{ id = "power", label = "Maximum power charges", lines = { "+1 to Maximum Power Charges" }, cost = 4,
 			commit = { "+5 to Maximum Power Charges" }, commitCost = 18 },
+		-- (frenzy charges: 4% more damage and 4% increased speed each, both
+		-- layers at once; worth testing only when the build keeps them up)
+		{ id = "frenzy", label = "Maximum frenzy charges", lines = { "+1 to Maximum Frenzy Charges" }, cost = 4,
+			commit = { "+5 to Maximum Frenzy Charges" }, commitCost = 18 },
 	}
 	local out = { }
 	for _, l in ipairs(list) do
@@ -164,6 +168,17 @@ function BuildDoctorClass:Diagnose()
 	local mode = self:Mode()
 	local baseScore, baseR = gen:Score()
 	local baseDps = m_max(1, baseR.dps or 0)
+	-- how much recovery per second the skill lacks to be paid for all the
+	-- time (the scorer's sustain rule), and of which resource
+	local scorer = gen.scorer
+	local function deficit(output)
+		if not scorer.SkillSustain or scorer.ignoreCosts then return nil end
+		local fraction, resource = scorer:SkillSustain(output)
+		if not resource or fraction >= 0.999 then return { amount = 0 } end
+		local rate = scorer:SustainableRate(output, resource)
+		return { resource = resource, amount = rate * (1 / m_max(fraction, 0.05) - 1) }
+	end
+	local baseShort = baseR.output and deficit(baseR.output)
 	local function measure(lines, dropNames)
 		local override = { addNodes = { [probeNode(spec.tree, lines)] = true } }
 		if dropNames then
@@ -175,13 +190,34 @@ function BuildDoctorClass:Diagnose()
 			end
 		end
 		local score, r = gen:Score(override)
+		-- (a binding resource: a dose that raises the skill's cost - speed, a
+		-- costlier support - is cut down by the mana it can't pay for. Mana
+		-- recovery is a cheap layer of its own (regeneration nodes, Clarity,
+		-- cost reduction), so the dose is measured with the extra cost paid
+		-- for, and that recovery counted in its cost: otherwise speed looks
+		-- worthless to a build at the edge of its mana)
+		local reliefCost = 0
+		local short = r.output and deficit(r.output)
+		if short and short.amount > 0.5 then
+			local extra = short.amount - (baseShort and baseShort.resource == short.resource and baseShort.amount or 0)
+			if extra > 0.5 then
+				local n = math.ceil(extra * 1.1)
+				local relieved = { }
+				for i, l in ipairs(lines) do relieved[i] = l end
+				t_insert(relieved, string.format("Regenerate %d %s per second", n, short.resource))
+				override.addNodes = { [probeNode(spec.tree, relieved)] = true }
+				score, r = gen:Score(override)
+				reliefCost = n / 15
+			end
+		end
 		if os.getenv("DOCTOR_DEBUG") then
 			local removed = { }
 			for node in pairs(override.removeNodes or { }) do t_insert(removed, node.dn) end
-			ConPrintf("[doctor probe] %s | removed: %s | crit %.1f%% x%.2f, dps %.0f", table.concat(lines, "; "), table.concat(removed, ", "),
-				r.output and r.output.CritChance or -1, r.output and r.output.CritMultiplier or -1, r.dps or 0)
+			ConPrintf("[doctor probe] %s | removed: %s | crit %.1f%% x%.2f, dps %.0f%s", table.concat(lines, "; "), table.concat(removed, ", "),
+				r.output and r.output.CritChance or -1, r.output and r.output.CritMultiplier or -1, r.dps or 0,
+				reliefCost > 0 and string.format(" (with %.0f points of %s recovery)", reliefCost, short.resource:lower()) or "")
 		end
-		return score - baseScore, m_max(1e-9, (r.dps or 0) / baseDps)
+		return score - baseScore, m_max(1e-9, (r.dps or 0) / baseDps), reliefCost
 	end
 	-- supports in the main link that block crit ("less critical strike
 	-- chance": Controlled Destruction): a full crit commitment takes them out,
@@ -214,14 +250,16 @@ function BuildDoctorClass:Diagnose()
 	self.critBlockers = blockers
 	local layers = { }
 	for _, l in ipairs(layerList(mode)) do
-		local gain, ratio = measure(l.lines)
-		local entry = { layer = l, gain = gain, ratio = ratio, perPoint = m_log(ratio) / l.cost }
+		local gain, ratio, relief = measure(l.lines)
+		local entry = { layer = l, gain = gain, ratio = ratio, perPoint = m_log(ratio) / (l.cost + relief), relief = relief }
 		if l.commit then
 			local lines = { }
 			for _, x in ipairs(l.commit) do t_insert(lines, x) end
 			if l.id == "crit" then for _, x in ipairs(cancel) do t_insert(lines, x) end end
-			entry.commitGain, entry.commitRatio = measure(lines, l.drop)
-			entry.commitPerPoint = m_log(entry.commitRatio) / l.commitCost
+			local commitRelief
+			entry.commitGain, entry.commitRatio, commitRelief = measure(lines, l.drop)
+			entry.commitRelief = commitRelief
+			entry.commitPerPoint = m_log(entry.commitRatio) / (l.commitCost + commitRelief)
 		end
 		t_insert(layers, entry)
 		gen:Tick()
@@ -491,6 +529,9 @@ function BuildDoctorClass:Plans()
 		commitPlan("power", "power", function()
 			return { id = "power", label = "more power charges", lens = { stat = "PowerChargesMax", base = 3, label = "Maximum power charges", weight = 0.4 }, rares = true, refine = 16 }
 		end)
+		commitPlan("frenzy", "frenzy", function()
+			return { id = "frenzy", label = "more frenzy charges", lens = { stat = "FrenzyChargesMax", base = 3, label = "Maximum frenzy charges", weight = 0.4 }, rares = true, refine = 16 }
+		end)
 		commitPlan("dotmulti", "dotmulti", function()
 			return { id = "dotmulti", label = "more damage over time multiplier", rares = true, refine = 16 }
 		end)
@@ -608,6 +649,7 @@ function BuildDoctorClass:CommitmentPlans()
 			lens = { stat = "EnergyShield", base = 1000, label = "Energy shield", weight = 0.6 }, rares = true, refine = 40 },
 		life = { id = "life", label = "a life pool", lens = { stat = "Life", base = 1000, label = "Life", weight = 0.6 }, rares = true, refine = 30 },
 		speed = { id = "speed", label = "speed", lens = { stat = "Speed", base = 1, label = "Speed", weight = 0.4 }, rares = true, refine = 16 },
+		frenzy = { id = "frenzy", label = "frenzy charges", lens = { stat = "FrenzyChargesMax", base = 3, label = "Maximum frenzy charges", weight = 0.4 }, rares = true, refine = 16 },
 	}
 end
 
@@ -640,9 +682,39 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 	for _, e in ipairs(r.layers) do byId[e.layer.id] = e end
 	local baseScore, baseR = gen:Score()
 	local baseDps = m_max(1, baseR.dps or 0)
+	-- (a virtual passive's lines never reach the configuration: charges an
+	-- idea's lines generate - "gain a frenzy charge on reaching maximum power
+	-- charges", "count as having maximum number of frenzy charges" - are
+	-- switched on for its test, as the generator's configuration would)
+	local input = self.build.configTab.input
+	local function chargesFrom(lines)
+		local on = { }
+		for _, line in ipairs(lines) do
+			local l = line:lower()
+			for _, kind in ipairs({ "Power", "Frenzy", "Endurance" }) do
+				local w = kind:lower()
+				if (l:find("gain an? " .. w .. " charge") or l:find("count as having maximum number of " .. w .. " charges", 1, true)) and not input["use" .. kind .. "Charges"] then
+					on[kind] = true
+				end
+			end
+		end
+		return on
+	end
 	local function measure(lines)
+		local on = chargesFrom(lines)
+		local changed = next(on) ~= nil
+		if changed then
+			for kind in pairs(on) do input["use" .. kind .. "Charges"] = true end
+			self.build.configTab:BuildModList()
+			gen:Recalculate()
+		end
 		local override = { addNodes = { [probeNode(spec.tree, lines)] = true } }
 		local _, res = gen:Score(override)
+		if changed then
+			for kind in pairs(on) do input["use" .. kind .. "Charges"] = nil end
+			self.build.configTab:BuildModList()
+			gen:Recalculate()
+		end
 		return m_max(1e-9, (res.dps or 0) / baseDps)
 	end
 	-- the payoff lines of an archetype's uniques: the ones mentioning damage
@@ -660,11 +732,16 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 				local line = modLine.line
 				-- (and converters: "Maximum Frenzy Charges is equal to your Maximum
 				-- Power Charges" stacks a second layer for free)
-				local enabler = line and (line:find("[Cc]ount as having") or line:find("is equal to") or line:find("equal to your"))
+				-- (and generators of a second kind of charge: Tulfall's "gain a
+				-- frenzy charge on reaching maximum power charges", with its
+				-- damage per frenzy charge: the item's other charge lines count)
+				local enabler = line and (line:find("[Cc]ount as having") or line:find("is equal to") or line:find("equal to your") or line:find("[Gg]ain an? %a+ Charge"))
 				if current and line and (enabler or (line:find("[Dd]amage") and not line:find("taken"))) then
+					local match = line:find("[Pp]er %a+ Charge") ~= nil
 					for _, pattern in ipairs(a.uniqueLines or { }) do
-						if modLine.line:match(pattern) then t_insert(lines, modLine.line) break end
+						if match or modLine.line:match(pattern) then match = true break end
 					end
+					if match then t_insert(lines, modLine.line) end
 				end
 			end
 			if #lines > 0 then t_insert(scored, { title = item.title or item.name, lines = lines, ratio = measure(lines) }) end
@@ -679,7 +756,7 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 		if stat then t_insert(out, stat) end
 		local used = { }
 		local current = measure(out)
-		for _ = 1, 3 do
+		for _ = 1, 4 do
 			local best, bestRatio
 			for i, sc in ipairs(scored) do
 				if not used[i] then

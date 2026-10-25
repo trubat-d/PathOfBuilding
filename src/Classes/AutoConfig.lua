@@ -394,9 +394,18 @@ function AutoConfigClass:Run()
 			-- (from gems, or lines that keep them up: on hit, on crit, every N seconds...
 			-- a chance on kill or on block alone keeps few or none against a boss)
 			local fromGems = self:GeneratesCharge(kind, { }, gems, flags)
-			local uptime = not fromGems and self:ChargeUptime(kind, lines, flags, output, boss)
+			-- ("gain a frenzy charge on reaching maximum power charges", Tulfall:
+			-- gained every time the other charges cycle to their maximum)
+			local onReaching
+			for _, line in ipairs(lines) do
+				local other = line:match("gain an? " .. kind:lower() .. " charge on reaching maximum (%a+) charges")
+				if other and other ~= kind:lower() then onReaching = other end
+			end
+			local uptime = not fromGems and not onReaching and self:ChargeUptime(kind, lines, flags, output, boss)
 			if fromGems then
 				self:Set("use" .. kind .. "Charges", true, "the build generates them")
+			elseif onReaching then
+				self:Set("use" .. kind .. "Charges", true, "gained each time the build reaches its maximum " .. onReaching .. " charges")
 			elseif uptime then
 				if uptime.count >= uptime.max * 0.75 then
 					self:Set("use" .. kind .. "Charges", true, "kept at the maximum: " .. uptime.reason)
