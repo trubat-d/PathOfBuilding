@@ -707,6 +707,10 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 		local ratio, why
 		if a.id == "CRIT" and byId.crit then
 			ratio, why = byId.crit.commitRatio, "crit chance and multiplier"
+		elseif a.id == "ENEMY" and byId.resistance then
+			ratio, why = byId.resistance.commitRatio, "enemy resistance, penetration and damage taken"
+		elseif a.id == "SPEED" and byId.speed then
+			ratio, why = byId.speed.commitRatio, "speed"
 		elseif a.id == "CI" then
 			-- (Chaos Inoculation: energy shield as the pool; never for a skill
 			-- whose damage follows life)

@@ -127,6 +127,24 @@ BuildArchetypesClass.list = {
 		applies = function(info) return info.hits and not info.minion end,
 	},
 	{
+		-- (the enemy layer committed to: curse, exposure, penetration and damage
+		-- taken valued while the build is made; top Winter Orbs reach x2.6)
+		id = "ENEMY", label = "Enemy resistance and damage taken (curse, exposure, penetration, shock)",
+		summary = "What the enemy lets through valued on its own: curses, exposure, penetration and damage taken sources are taken together.",
+		lens = { func = function(o)
+			local best = 0
+			for _, t in ipairs({ "Physical", "Fire", "Cold", "Lightning", "Chaos" }) do best = math.max(best, o[t .. "EffMult"] or 0) end
+			return best > 0 and best or 1
+		end, base = 0.5, label = "Enemy damage multiplier", weight = 0.5 },
+		applies = function(info) return info.hits and not info.minion end,
+	},
+	{
+		id = "SPEED", label = "Attack / cast speed",
+		summary = "Speed valued on its own: more hits per second from tree, gear, charges and buffs.",
+		lens = { stat = "Speed", base = 1, label = "Speed", weight = 0.4 },
+		applies = function(info) return info.hits and not info.minion end,
+	},
+	{
 		id = "EO", label = "Non-crit: Elemental Overload",
 		summary = "Elemental Overload: 40% more elemental damage after a crit, no crit multiplier needed.",
 		keystones = { "Elemental Overload" },
