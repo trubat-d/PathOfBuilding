@@ -164,6 +164,10 @@ AutoConfigClass.countRules = {
 		local modDB = env and env.player.modDB
 		if not (modDB and modDB:Flag(nil, "Condition:CanGainRage")) then return 0, "the build can't gain rage" end
 		local maxRage = math.floor(modDB:Sum("BASE", nil, "MaximumRage") * modDB:More(nil, "MaximumRage"))
+		-- (all rage lost on reaching the maximum, The Wild Bear: half of it on
+		-- average; its Wild Savagery is up about 29% of the time - rage refills at
+		-- about 4 a second, 1 s of it per 10 lost - so its switch stays off)
+		if modDB:Flag(nil, "WildSavagery") then return math.floor(maxRage / 2), "rage lost at its maximum and built again: half of it on average" end
 		return maxRage, "rage builds stay at maximum while fighting"
 	end,
 	ChannellingTime = function(output, ctx)
