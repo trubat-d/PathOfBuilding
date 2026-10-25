@@ -4251,6 +4251,111 @@ function BuildGeneratorClass:UniqueCombosMove(rounds)
 	end, { threshold = 1.0, tries = 3, baseline = true })
 end
 
+-- Unique packages top players combine (bench/mine_packages.py: 2 to 5 gear
+-- uniques every pair of which is used together far more often than chance,
+-- Data/GeneratorUniquePackages.json): the ones used with this skill or a
+-- similar one (shared gem tags) tried as candidates, each placed with the
+-- build adapted around it, kept only when the build's own score improves
+local playerPackages
+function BuildGeneratorClass.PlayerPackages()
+	if playerPackages then return playerPackages end
+	playerPackages = { }
+	local dkjson = require "dkjson"
+	for _, path in ipairs({ (GetScriptPath and GetScriptPath() or ".") .. "/Data/GeneratorUniquePackages.json", "Data/GeneratorUniquePackages.json" }) do
+		local f = io.open(path, "r")
+		if f then
+			local ok, value = pcall(dkjson.decode, f:read("*a"))
+			f:close()
+			if ok and type(value) == "table" and type(value.packages) == "table" then
+				playerPackages = value.packages
+				break
+			end
+		end
+	end
+	return playerPackages
+end
+
+function BuildGeneratorClass:PlayerPackagesMove(rounds)
+	if not self.mainGem then return end
+	local packages = self.PlayerPackages()
+	if #packages == 0 then return end
+	-- relevance: builds of this skill, then of skills sharing most of its tags
+	local function tagSet(gem)
+		local set, n = { }, 0
+		for tag, on in pairs(gem and gem.tags or { }) do
+			if on == true and tag ~= "grants_active_skill" then set[tag] = true; n = n + 1 end
+		end
+		return set, n
+	end
+	local mine, mineN = tagSet(self.mainGem)
+	local similarity = { }
+	local function similar(name)
+		if similarity[name] == nil then
+			similarity[name] = 0
+			for _, gem in pairs(data.gems) do
+				if gem.name == name and not (gem.grantedEffect and gem.grantedEffect.support) then
+					local other, otherN = tagSet(gem)
+					local shared = 0
+					for tag in pairs(other) do if mine[tag] then shared = shared + 1 end end
+					local union = mineN + otherN - shared
+					similarity[name] = union > 0 and shared / union or 0
+					break
+				end
+			end
+		end
+		return similarity[name]
+	end
+	local byTitle = { }
+	for _, item in pairs(main.uniqueDB.list) do
+		byTitle[item.title or item.name] = byTitle[item.title or item.name] or item
+	end
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local filter = { obtainableOnly = true, levelOnly = true, investment = self.options.investment }
+	local prices = GetPriceSource()
+	local equipped = { }
+	for _, slot in pairs(self.itemsTab.slots) do
+		local item = self.itemsTab.items[slot.selItemId]
+		if item and item.title then equipped[item.title] = true end
+	end
+	local moves = { }
+	for _, package in ipairs(packages) do
+		local relevance = 0
+		for skill, count in pairs(package.skills or { }) do
+			local s = skill == self.mainGem.name and 1 or similar(skill)
+			-- (a skill only loosely like this one says little about it)
+			if s >= 0.5 then relevance = relevance + s * count end
+		end
+		if relevance > 0 then
+			local uniques, missing, new = { }, false, 0
+			for _, name in ipairs(package.uniques) do
+				local item = byTitle[name]
+				if not item or item.type == "Jewel" or item.type == "Flask" or item.type == "Tincture"
+					or not prices.Available(self.options.investment, name) or not finder:IsItemAllowed(item, filter) then
+					missing = true
+					break
+				end
+				if not equipped[name] then
+					t_insert(uniques, item)
+					new = new + 1
+				end
+			end
+			if not missing and new > 0 then
+				t_insert(moves, { label = table.concat(package.uniques, " + "), uniques = uniques, relevance = relevance,
+					reason = string.format("used together by %d top players", package.builds or 0) })
+			end
+		end
+	end
+	if #moves == 0 then return end
+	t_sort(moves, function(a, b) return a.relevance > b.relevance end)
+	for i = #moves, (self.options.playerPackages or 6) + 1, -1 do moves[i] = nil end
+	if self.options.debugTiming then
+		for _, m in ipairs(moves) do ConPrintf("[player packages] %s (relevance %.2f)", m.label, m.relevance) end
+	end
+	self:EvaluatePackages(moves, rounds, function(best, gain, overAdaptation)
+		return string.format("Top players' unique package: %s (%s), with passives and supports adapted: score %+.3f (%+.3f more than adapting them without it)", best.label, best.reason, gain, overAdaptation)
+	end, { threshold = 1.0, tries = 3, baseline = true })
+end
+
 -- Packages (uniques and / or a keystone) screened with the quick score,
 -- the most promising applied for real with the build adapted around them
 -- (passives trimmed and refined, supports again), the best one kept per round
@@ -5825,6 +5930,10 @@ function BuildGeneratorClass:Upgrade()
 		local ok, err = pcall(function() self:UniqueCombosMove(1) end)
 		if not ok then ConPrintf("Unique combos failed: %s", tostring(err)) end
 	end
+	if opts.playerPackages ~= false then
+		local ok, err = pcall(function() self:PlayerPackagesMove(1) end)
+		if not ok then ConPrintf("Player packages failed: %s", tostring(err)) end
+	end
 	self:Move(3, 3, "Rebuilding parts of the build")
 	if self.know then
 		local ok, err = pcall(function() self:PastBuildsMove() end)
@@ -5878,7 +5987,7 @@ end
 local skippableSteps = {
 	"ChooseMetaUniques", "UniqueSweep", "ChooseArchetypeJewels", "AddJewels", "ChooseTimelessJewel", "ChooseMetaJewels",
 	"ChooseRadiusJewels", "ChooseClusterJewels", "ChooseAnoint", "ChooseTattoos", "UniqueFlaskSweep", "PermanentFlaskMove",
-	"FlaskEnchantMove", "AuraStackMove", "FillMainLinkMove", "ApplySynergies", "JointMoves", "UniqueCombosMove",
+	"FlaskEnchantMove", "AuraStackMove", "FillMainLinkMove", "ApplySynergies", "JointMoves", "UniqueCombosMove", "PlayerPackagesMove",
 	"ConditionEnablerMove", "CrossIdeasMove", "LearnFromTopBuilds", "PopularPassivesMove", "AscendancyRecheck",
 	"FinalSupports", "PairAilments", "PearlMove", "CorruptionMove", "SupremeOstentationMove", "BossSkillMove", "PastBuildsMove",
 }
@@ -6311,6 +6420,10 @@ function BuildGeneratorClass:Run()
 		self:Move(3, 3, "Trying unique combos")
 		local ok, err = pcall(function() self:UniqueCombosMove(1) end)
 		if not ok then ConPrintf("Unique combos failed: %s", tostring(err)) end
+	end
+	if opts.playerPackages ~= false then
+		local ok, err = pcall(function() self:PlayerPackagesMove(1) end)
+		if not ok then ConPrintf("Player packages failed: %s", tostring(err)) end
 	end
 	if opts.conditionAudit ~= false then
 		self:Move(3, 3, "Damage behind conditions: what keeps them up")
