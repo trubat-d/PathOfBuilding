@@ -488,6 +488,21 @@ function BuildGeneratorClass:WithChargesOf(gem, fn)
 	return a, b
 end
 
+-- The candidate model (Modules/GeneratorModel) when it has a validated
+-- section for this kind of choice ("passive", "unique"), else nil
+function BuildGeneratorClass:KindModel(kind)
+	if self.options.useModel == false then return nil end
+	if self.modelModule == nil then
+		local okModel, module = pcall(LoadModule, "Modules/GeneratorModel")
+		self.modelModule = okModel and module or false
+	end
+	local module = self.modelModule
+	local model = module and module.Load()
+	local section = model and model.kinds and model.kinds[kind]
+	if section and (section.skipBelow or 0) > 0 and self.mainGem then return module end
+	return nil
+end
+
 -- A new context id for the decision log, the build's situation logged with it
 -- ("support_ctx" lines: the trainer reads them for every kind of scan)
 function BuildGeneratorClass:LogContext()
@@ -1177,6 +1192,9 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly, warm)
 				-- (full scans logged whole: every passive measured, for a model of
 				-- which passives can't help a build like this one)
 				local scanKeys, scanValues = self.decisions and full and { }, self.decisions and full and { }
+				-- (passives the candidate model is sure can't help this build: not measured)
+				local kindModel = self:KindModel("passive")
+				local scanContext = kindModel and self:SupportContext()
 				for _, entry in ipairs(candidates(ascendancy)) do
 					if pathCost(entry.node) <= left then
 						local key = entry.node.id .. (entry.effect and ("_" .. entry.effect.id) or "")
@@ -1184,8 +1202,14 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly, warm)
 						local p = prev[key]
 						-- (a shorter path: the same gain over fewer points at best)
 						local estimate = p and (p.value > 0 and p.value * p.pathLen / pathLen or p.value)
-						if full or not p or estimate >= threshold then
+						local measured = false
+						if kindModel and kindModel.SkipCandidate("passive", key, self.mainGem, scanContext, ascendancy and "asc" or nil) then
+							entry.value = 0
+							self.treeStats = self.treeStats or { refresh = 0, skipped = 0, recheck = 0, picks = 0, refreshes = 0 }
+							self.treeStats.modelSkipped = (self.treeStats.modelSkipped or 0) + 1
+						elseif full or not p or estimate >= threshold then
 							entry.value = ratio(entry)
+							measured = true
 							self.treeStats = self.treeStats or { refresh = 0, skipped = 0, recheck = 0, picks = 0, refreshes = 0 }
 							self.treeStats.refresh = self.treeStats.refresh + 1
 						else
@@ -1194,7 +1218,7 @@ function BuildGeneratorClass:AllocateTree(quiet, ascendancyOnly, warm)
 						end
 						prev[key] = { value = entry.value, pathLen = pathLen }
 						t_insert(queue, entry)
-						if scanKeys and entry.value and entry.value > -math.huge then
+						if scanKeys and measured and entry.value and entry.value > -math.huge then
 							t_insert(scanKeys, key)
 							t_insert(scanValues, round4(entry.value))
 						end
@@ -4957,8 +4981,15 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 		local slot = self.itemsTab.slots[slotName]
 		local equipped = slot and self.itemsTab.items[slot.selItemId]
 		local scanNames, scanGains = self.decisions and { }, self.decisions and { }
+		-- (uniques the candidate model is sure can't help this build in this slot: not measured)
+		local kindModel = self:KindModel("unique")
+		local scanContext = kindModel and self:SupportContext()
 		if slot and not (self.lockedSlots and self.lockedSlots[slotName]) then
 			for _, item in ipairs(candidates) do
+				if kindModel and kindModel.SkipCandidate("unique", item.title or item.name, self.mainGem, scanContext, "slot:" .. slotName) then
+					self.uniqueModelSkipped = (self.uniqueModelSkipped or 0) + 1
+					goto nextUnique
+				end
 				-- (no sockets where the main skill is: it moves to a 4-link, scored when tried)
 				local relocate = noSockets(item) and self.mainGroup and self.mainGroup.slot == slotName and slotName == "Body Armour"
 				if self.itemsTab:IsItemValidForSlot(item, slotName) and not (equipped and equipped.title == item.title)
@@ -4979,6 +5010,7 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 						t_insert(scanGains, round4(score - current - self:PriceCost(item)))
 					end
 				end
+				::nextUnique::
 			end
 		end
 		-- (every unique measured in the slot: for a model of which can't help)

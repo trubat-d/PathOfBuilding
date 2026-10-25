@@ -17,7 +17,7 @@ local M = { }
 
 function M.Load(force)
 	if M.loaded and not force then return M.model end
-	M.model, M.featureCache, M.uselessSets = nil, nil, nil
+	M.model, M.featureCache, M.uselessSets, M.kindUseless = nil, nil, nil, nil
 	M.loaded = true
 	local base = (GetScriptPath and GetScriptPath() or ".") .. "/Data/GeneratorModel.json"
 	-- (the one trained on this computer, Modules/GeneratorModelTrainer, or
@@ -101,6 +101,44 @@ function M.SkipSupport(name, gem, context)
 	end
 	local p, n = M.SupportChance(name, feats)
 	return p ~= nil and n >= (model.minSeen or 30) and p < model.skipBelow
+end
+
+-- Should the generator skip this candidate of another kind ("passive": a
+-- passive node key from a full tree scan, "unique": a unique's name in a slot
+-- scan) for this main skill gem? Same rules as supports, from that kind's
+-- section of the model (Modules/GeneratorModelTrainer); extra: one more
+-- situation feature ("asc", "slot:Ring 1"...). Never when the trainer found
+-- no safe threshold for that kind
+function M.SkipCandidate(kind, name, gem, context, extra)
+	local model = M.Load()
+	local section = model and model.kinds and model.kinds[kind]
+	if not section or (section.skipBelow or 0) <= 0 or not gem then return false end
+	if (section.familiar and section.familiar[gem.name] or 0) < (section.familiarRuns or 2) then return false end
+	-- (only candidates that never helped this skill in two builds or more)
+	M.kindUseless = M.kindUseless or { }
+	local sets = M.kindUseless[kind]
+	if not sets then
+		sets = { }
+		for skill, list in pairs(section.useless or { }) do
+			local set = { }
+			for _, n in ipairs(list) do set[n] = true end
+			sets[skill] = set
+		end
+		M.kindUseless[kind] = sets
+	end
+	local set = sets[gem.name]
+	if not set or not set[name] then return false end
+	local entry = section.candidates and section.candidates[name]
+	if not entry or (entry.n or 0) < (section.minSeen or 30) then return false end
+	M.featureCache = M.featureCache or { }
+	local base = M.featureCache[gem]
+	if not base then base = M.Features(gem) M.featureCache[gem] = base end
+	local z = entry.bias or 0
+	for f in pairs(base) do z = z + (entry.w[f] or 0) end
+	for _, c in ipairs(context or { }) do z = z + (entry.w["c:" .. c] or 0) end
+	if extra then z = z + (entry.w["c:" .. extra] or 0) end
+	z = z + (entry.w["s:" .. gem.name] or 0)
+	return 1 / (1 + math.exp(-z)) < section.skipBelow
 end
 
 -- Mean synergy measured for a pair of uniques (names in either order), and

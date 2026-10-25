@@ -18,6 +18,16 @@ if out then
 		print(string.format("skip below %s: %d skipped, %d that mattered", t, out.validation[t].skipped, out.validation[t].missed))
 		for _, w in ipairs(out.validation[t].worst or { }) do print("    " .. w) end
 	end
+	for kind, section in pairs(out.kinds or { }) do
+		local keys = { }
+		for t in pairs(section.validation) do keys[#keys + 1] = t end
+		table.sort(keys, function(a, b) return tonumber(a) < tonumber(b) end)
+		print(string.format("%s: %d measurements, kept %s", kind, section.measurements, tostring(section.skipBelow)))
+		for _, t in ipairs(keys) do
+			print(string.format("  skip below %s: %d skipped, %d that mattered", t, section.validation[t].skipped, section.validation[t].missed))
+			for i, w in ipairs(section.validation[t].worst or { }) do if i <= 5 then print("      " .. w) end end
+		end
+	end
 	local familiar, pairsCount = 0, 0
 	for _, n in pairs(out.familiar or { }) do if n >= (out.familiarRuns or 2) then familiar = familiar + 1 end end
 	for _ in pairs(out.pairs or { }) do pairsCount = pairsCount + 1 end
