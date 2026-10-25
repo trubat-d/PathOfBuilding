@@ -3894,11 +3894,19 @@ function BuildGeneratorClass:PackageMove(rounds)
 	moves = variants
 	if self.options.debugTiming then for _, m in ipairs(moves) do ConPrintf("[package] %s", m.label) end end
 	if #moves == 0 then return end
+	-- (the slots the archetype's unique step locked are open to a package: it
+	-- replaces those picks on purpose, and is kept only if the build is better)
+	local savedLocks = self.lockedSlots
+	self.lockedSlots = { }
+	local ok, err = pcall(function()
 	self:EvaluatePackages(moves, rounds or 1, function(best, gain, overAdaptation)
 		return string.format("Uniques of the idea taken together: %s, with passives and supports adapted: score %+.3f", best.label, gain)
 	-- (packages lose before the build adapts to them - the gear they push
 	-- out held resistances and crit - so all are applied and adapted)
 	end, { threshold = 10, tries = 6, baseline = true })
+	end)
+	self.lockedSlots = savedLocks
+	if not ok then error(err, 0) end
 end
 
 -- Ideas of the other archetypes tried on the finished build: each one's
