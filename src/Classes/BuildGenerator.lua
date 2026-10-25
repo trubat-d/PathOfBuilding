@@ -210,10 +210,90 @@ function BuildGeneratorClass:Recalculate()
 	self.calcFunc = self.build.calcsTab:GetMiscCalculator()
 end
 
+-- Kinds of charges some lines generate that the configuration doesn't use
+-- yet ("gain a frenzy charge on reaching maximum power charges", "count as
+-- having maximum number of power charges"...). The configuration follows the
+-- build only when AutoConfig runs, so a piece tested in an override, or just
+-- equipped, was scored without the charges it brings: Tulfall and Badge of
+-- the Brotherhood looked weak exactly where they pay off.
+local chargeKinds = { "Power", "Frenzy", "Endurance" }
+local function lineCharges(line, out)
+	local l = line:lower()
+	for _, kind in ipairs(chargeKinds) do
+		local w = kind:lower()
+		-- (what keeps them up on a boss: not kills)
+		if (l:find("gain an? " .. w .. " charge") and not l:find("kill") and not l:find("chance to gain"))
+			or l:find("count as having maximum number of " .. w .. " charges", 1, true) then out[kind] = true end
+	end
+end
+local function itemCharges(item, out)
+	if not item then return end
+	if item.chargeGen == nil then
+		local found = { }
+		for _, list in ipairs({ item.explicitModLines or { }, item.implicitModLines or { } }) do
+			for _, modLine in ipairs(list) do
+				local current = not modLine.variantList or (item.variant and modLine.variantList[item.variant])
+				if current and modLine.line then lineCharges(modLine.line, found) end
+			end
+		end
+		item.chargeGen = found
+	end
+	for k in pairs(item.chargeGen) do out[k] = true end
+end
+function BuildGeneratorClass:NewCharges(override)
+	local kinds = { }
+	if override then
+		itemCharges(override.repItem, kinds)
+		for _, item in pairs(override.repItems or { }) do if type(item) == "table" then itemCharges(item, kinds) end end
+		for node in pairs(override.addNodes or { }) do
+			if type(node) == "table" then for _, l in ipairs(node.sd or { }) do lineCharges(l, kinds) end end
+		end
+	end
+	local input = self.build.configTab.input
+	local list
+	for kind in pairs(kinds) do
+		if not input["use" .. kind .. "Charges"] and self.options.chargeSync ~= false then list = list or { } t_insert(list, kind) end
+	end
+	return list
+end
+
 function BuildGeneratorClass:Score(override)
+	local extra = override and self:NewCharges(override)
+	if extra then
+		local input = self.build.configTab.input
+		for _, kind in ipairs(extra) do input["use" .. kind .. "Charges"] = true end
+		self.build.configTab:BuildModList()
+		self:Recalculate()
+		local r = self.scorer:Evaluate(self.calcFunc, override, { flasks = "ratio", ratio = self.ratio })
+		for _, kind in ipairs(extra) do input["use" .. kind .. "Charges"] = nil end
+		self.build.configTab:BuildModList()
+		self:Recalculate()
+		self:Tick()
+		return r.score, r
+	end
 	local r = self.scorer:Evaluate(self.calcFunc, override or { }, { flasks = "ratio", ratio = self.ratio })
 	self:Tick()
 	return r.score, r
+end
+
+-- Charges the equipped items generate switched on in the configuration
+-- (only on: AutoConfig decides the counts when it runs)
+function BuildGeneratorClass:SyncCharges()
+	if self.options.chargeSync == false then return false end
+	local kinds = { }
+	for _, slot in pairs(self.itemsTab.slots) do itemCharges(self.itemsTab.items[slot.selItemId], kinds) end
+	local input = self.build.configTab.input
+	local changed = false
+	self.syncedCharges = self.syncedCharges or { }
+	for kind in pairs(kinds) do
+		if not input["use" .. kind .. "Charges"] then input["use" .. kind .. "Charges"] = true self.syncedCharges[kind] = true changed = true end
+	end
+	-- (switched on here and no longer generated: off again)
+	for kind in pairs(self.syncedCharges) do
+		if not kinds[kind] and input["use" .. kind .. "Charges"] then input["use" .. kind .. "Charges"] = nil self.syncedCharges[kind] = nil changed = true end
+	end
+	if changed then self.build.configTab:BuildModList() end
+	return changed
 end
 
 -- How the main skill is used in a fight (Classes/SkillProfiles): the skill
@@ -259,6 +339,7 @@ end
 
 function BuildGeneratorClass:FullScore()
 	self.fullScoreCount = (self.fullScoreCount or 0) + 1
+	self:SyncCharges()
 	self:Recalculate()
 	if self:AdjustSkillPart() then self:Recalculate() end
 	self:UpdateCombinedParts()
@@ -3173,6 +3254,50 @@ function BuildGeneratorClass:PairAilments()
 end
 
 -- Best timeless (Historic) jewel: type, seed, conqueror and socket
+-- Keystones near the tree tried whole (path and all, the tree trimmed to
+-- the budget around them): a keystone's worth can grow late - Bitter Frost
+-- pays by the chill the hits inflict, small while the build is weak, x1.2 on
+-- a finished Winter Orb - and a timeless jewel placed later conquers the
+-- ones still unallocated without counting what it took
+function BuildGeneratorClass:KeystoneMove(maxTries)
+	local spec = self.build.spec
+	local current = self:Score()
+	local list = { }
+	for _, node in pairs(spec.nodes) do
+		if node.type == "Keystone" and not node.alloc and not node.ascendancyName and node.path and #node.path <= (self.options.keystonePath or 6)
+			and not (self.forbiddenNodes and self.forbiddenNodes[node.id]) and not node.conqueredBy then
+			local add = { }
+			for _, n in ipairs(node.path) do add[n] = true end
+			local gain = self:Score({ addNodes = add }) - current
+			-- (a path's points are taken from the tree's least useful passives)
+			if gain > 0.01 * #node.path then t_insert(list, { node = node, gain = gain }) end
+		end
+	end
+	t_sort(list, function(a, b) return a.gain > b.gain end)
+	local kept = { }
+	for i = 1, m_min(maxTries or 3, #list) do
+		local node = list[i].node
+		if not node.alloc and node.path then
+			local before = self:FullScore()
+			local undo = spec:CreateUndoState()
+			spec:AllocNode(node)
+			self:Recalculate()
+			self:TrimTree()
+			self:RefineTree(4)
+			local after = self:FullScore()
+			if after > before + 0.01 and node.alloc then
+				t_insert(kept, string.format("%s (%+.3f)", node.dn, after - before))
+				self.protectedNodes = self.protectedNodes or { }
+				self.protectedNodes[node.id] = true
+			else
+				spec:RestoreUndoState(undo)
+				self:Recalculate()
+			end
+		end
+	end
+	if #kept > 0 then self:Note("Keystones taken: " .. table.concat(kept, ", ")) end
+end
+
 function BuildGeneratorClass:ChooseTimelessJewel()
 	local investment = self.options.investment or { }
 	if investment.timeless == false then return end
@@ -6525,7 +6650,11 @@ function BuildGeneratorClass:Run()
 	if opts.jewels ~= false then self:AddJewels(opts.maxJewels or 4) end
 	if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'AddJewels', r.score, r.dps, r.ehp) end
-	self:Move(6, 10, "Timeless jewel")
+	self:Move(6, 10, "Keystones, then the timeless jewel")
+	if opts.keystones ~= false then
+		local ok, err = pcall(function() self:KeystoneMove(3) end)
+		if not ok then ConPrintf("Keystone move failed: %s", tostring(err)) end
+	end
 	if opts.timeless ~= false then self:ChooseTimelessJewel() end
 	self:Move(7, 10, "Forbidden, Watcher's Eye, Split Personality and other unique jewels")
 	if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
@@ -6647,6 +6776,10 @@ function BuildGeneratorClass:Run()
 	self:PairAilments()
 	self:Move(4, 6, "Optimizing the passive tree")
 	self:OptimizeTree()
+	if opts.keystones ~= false then
+		local ok, err = pcall(function() self:KeystoneMove(2) end)
+		if not ok then ConPrintf("Keystone move failed: %s", tostring(err)) end
+	end
 	if opts.jewels ~= false and opts.lateJewels ~= false then
 		self:Move(4, 6, "Jewels for the finished build")
 		local ok, err = pcall(function() self:LateJewelsMove(opts.lateJewelCount or 6) end)
