@@ -2864,6 +2864,10 @@ function calcs.offence(env, actor, activeSkill)
 				end
 				if globalOutput.ExertedAttackUptimeRatio > 0 and not globalOutput.ExertedAttackUptimeRatioCalculated then
 					local incExertedAttacks = skillModList:Sum("INC", cfg, "ExertIncrease")
+					-- (exert damage of one warcry: while that warcry exerts attacks)
+					for _, cry in ipairs({ "Ancestral", "Infernal", "Intimidating", "Rallying", "Seismic", "Battlemage" }) do
+						if (globalOutput[cry .. "UpTimeRatio"] or 0) > 0 then incExertedAttacks = incExertedAttacks + skillModList:Sum("INC", cfg, cry .. "ExertIncrease") end
+					end
 					local moreExertedAttacks = skillModList:Sum("MORE", cfg, "ExertIncrease")
 					local moreExertedAttackDamage = skillModList:Sum("MORE", cfg, "ExertAttackIncrease")
 					local overexertionExertedDamage = skillModList:Sum("MORE", cfg, "OverexertionExertAverageIncrease")

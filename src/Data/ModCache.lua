@@ -14188,30 +14188,30 @@ c["Attack Skills have Added Lightning Damage equal to 6% of maximum Mana"]={{[1]
 c["Attack skills can have 1 additional Totem Summoned at a time"]={{[1]={flags=0,keywordFlags=65536,name="ActiveTotemLimit",type="BASE",value=1}},nil}
 c["Attacks Chain an additional time when in Main Hand"]={{[1]={[1]={num=1,type="SlotNumber"},flags=1,keywordFlags=0,name="ChainCountMax",type="BASE",value=1}},nil}
 c["Attacks Cost Life instead of Mana"]={{[1]={flags=1,keywordFlags=0,name="CostLifeInsteadOfMana",type="FLAG",value=true}},nil}
-c["Attacks Exerted by Ancestral Cry deal 21% increased Damage"]={nil,"Attacks Exerted by Ancestral Cry deal 21% increased Damage "}
-c["Attacks Exerted by Ancestral Cry deal 24% increased Damage"]={nil,"Attacks Exerted by Ancestral Cry deal 24% increased Damage "}
-c["Attacks Exerted by Ancestral Cry deal 27% increased Damage"]={nil,"Attacks Exerted by Ancestral Cry deal 27% increased Damage "}
-c["Attacks Exerted by Ancestral Cry deal 30% increased Damage"]={nil,"Attacks Exerted by Ancestral Cry deal 30% increased Damage "}
-c["Attacks Exerted by Ancestral Cry deal 33% increased Damage"]={nil,"Attacks Exerted by Ancestral Cry deal 33% increased Damage "}
-c["Attacks Exerted by Ancestral Cry deal 35% increased Damage"]={nil,"Attacks Exerted by Ancestral Cry deal 35% increased Damage "}
-c["Attacks Exerted by Ancestral Cry deal 36% increased Damage"]={nil,"Attacks Exerted by Ancestral Cry deal 36% increased Damage "}
-c["Attacks Exerted by Ancestral Cry deal 39% increased Damage"]={nil,"Attacks Exerted by Ancestral Cry deal 39% increased Damage "}
-c["Attacks Exerted by Ancestral Cry deal 41% increased Damage"]={nil,"Attacks Exerted by Ancestral Cry deal 41% increased Damage "}
-c["Attacks Exerted by Ancestral Cry deal 42% increased Damage"]={nil,"Attacks Exerted by Ancestral Cry deal 42% increased Damage "}
-c["Attacks Exerted by Ancestral Cry deal 45% increased Damage"]={nil,"Attacks Exerted by Ancestral Cry deal 45% increased Damage "}
-c["Attacks Exerted by Ancestral Cry deal 47% increased Damage"]={nil,"Attacks Exerted by Ancestral Cry deal 47% increased Damage "}
-c["Attacks Exerted by Seismic Cry deal 21% increased Damage"]={nil,"Attacks Exerted by Seismic Cry deal 21% increased Damage "}
-c["Attacks Exerted by Seismic Cry deal 24% increased Damage"]={nil,"Attacks Exerted by Seismic Cry deal 24% increased Damage "}
-c["Attacks Exerted by Seismic Cry deal 27% increased Damage"]={nil,"Attacks Exerted by Seismic Cry deal 27% increased Damage "}
-c["Attacks Exerted by Seismic Cry deal 30% increased Damage"]={nil,"Attacks Exerted by Seismic Cry deal 30% increased Damage "}
-c["Attacks Exerted by Seismic Cry deal 33% increased Damage"]={nil,"Attacks Exerted by Seismic Cry deal 33% increased Damage "}
-c["Attacks Exerted by Seismic Cry deal 35% increased Damage"]={nil,"Attacks Exerted by Seismic Cry deal 35% increased Damage "}
-c["Attacks Exerted by Seismic Cry deal 36% increased Damage"]={nil,"Attacks Exerted by Seismic Cry deal 36% increased Damage "}
-c["Attacks Exerted by Seismic Cry deal 39% increased Damage"]={nil,"Attacks Exerted by Seismic Cry deal 39% increased Damage "}
-c["Attacks Exerted by Seismic Cry deal 41% increased Damage"]={nil,"Attacks Exerted by Seismic Cry deal 41% increased Damage "}
-c["Attacks Exerted by Seismic Cry deal 42% increased Damage"]={nil,"Attacks Exerted by Seismic Cry deal 42% increased Damage "}
-c["Attacks Exerted by Seismic Cry deal 45% increased Damage"]={nil,"Attacks Exerted by Seismic Cry deal 45% increased Damage "}
-c["Attacks Exerted by Seismic Cry deal 47% increased Damage"]={nil,"Attacks Exerted by Seismic Cry deal 47% increased Damage "}
+c["Attacks Exerted by Ancestral Cry deal 21% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="AncestralExertIncrease",type="INC",value=21}},nil}
+c["Attacks Exerted by Ancestral Cry deal 24% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="AncestralExertIncrease",type="INC",value=24}},nil}
+c["Attacks Exerted by Ancestral Cry deal 27% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="AncestralExertIncrease",type="INC",value=27}},nil}
+c["Attacks Exerted by Ancestral Cry deal 30% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="AncestralExertIncrease",type="INC",value=30}},nil}
+c["Attacks Exerted by Ancestral Cry deal 33% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="AncestralExertIncrease",type="INC",value=33}},nil}
+c["Attacks Exerted by Ancestral Cry deal 35% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="AncestralExertIncrease",type="INC",value=35}},nil}
+c["Attacks Exerted by Ancestral Cry deal 36% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="AncestralExertIncrease",type="INC",value=36}},nil}
+c["Attacks Exerted by Ancestral Cry deal 39% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="AncestralExertIncrease",type="INC",value=39}},nil}
+c["Attacks Exerted by Ancestral Cry deal 41% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="AncestralExertIncrease",type="INC",value=41}},nil}
+c["Attacks Exerted by Ancestral Cry deal 42% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="AncestralExertIncrease",type="INC",value=42}},nil}
+c["Attacks Exerted by Ancestral Cry deal 45% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="AncestralExertIncrease",type="INC",value=45}},nil}
+c["Attacks Exerted by Ancestral Cry deal 47% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="AncestralExertIncrease",type="INC",value=47}},nil}
+c["Attacks Exerted by Seismic Cry deal 21% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="SeismicExertIncrease",type="INC",value=21}},nil}
+c["Attacks Exerted by Seismic Cry deal 24% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="SeismicExertIncrease",type="INC",value=24}},nil}
+c["Attacks Exerted by Seismic Cry deal 27% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="SeismicExertIncrease",type="INC",value=27}},nil}
+c["Attacks Exerted by Seismic Cry deal 30% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="SeismicExertIncrease",type="INC",value=30}},nil}
+c["Attacks Exerted by Seismic Cry deal 33% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="SeismicExertIncrease",type="INC",value=33}},nil}
+c["Attacks Exerted by Seismic Cry deal 35% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="SeismicExertIncrease",type="INC",value=35}},nil}
+c["Attacks Exerted by Seismic Cry deal 36% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="SeismicExertIncrease",type="INC",value=36}},nil}
+c["Attacks Exerted by Seismic Cry deal 39% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="SeismicExertIncrease",type="INC",value=39}},nil}
+c["Attacks Exerted by Seismic Cry deal 41% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="SeismicExertIncrease",type="INC",value=41}},nil}
+c["Attacks Exerted by Seismic Cry deal 42% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="SeismicExertIncrease",type="INC",value=42}},nil}
+c["Attacks Exerted by Seismic Cry deal 45% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="SeismicExertIncrease",type="INC",value=45}},nil}
+c["Attacks Exerted by Seismic Cry deal 47% increased Damage"]={{[1]={flags=1,keywordFlags=0,name="SeismicExertIncrease",type="INC",value=47}},nil}
 c["Attacks against you always Hit"]={{[1]={flags=0,keywordFlags=0,name="CannotEvade",type="FLAG",value=true}},nil}
 c["Attacks always Maim on Hit"]={nil,"Attacks always Maim on Hit "}
 c["Attacks always inflict Bleeding while you have Cat's Stealth"]={{[1]={[1]={type="Condition",var="AffectedByCat'sStealth"},flags=1,keywordFlags=0,name="BleedChance",type="BASE",value=100}},nil}
