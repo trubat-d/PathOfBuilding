@@ -3763,6 +3763,9 @@ local specialModList = {
 	["melee strike skills deal splash damage to surrounding targets"] = { flag("MeleeSplash") },
 	-- (enemy damage rolled twice, the lower kept: about 7% less on a +-20% roll)
 	["damage of enemies hitting you is unlucky"] = { mod("DamageTaken", "MORE", -7) },
+	-- Afarud Ritual (poedb): minions that stay alive (most minion builds) reach the maximum
+	["damageable minions deal (%d+)%% increased damage for each second they have been alive, up to a maximum of (%d+)%%"] = function(_, _, max) return { mod("MinionModifier", "LIST", { mod = mod("Damage", "INC", tonumber(max)) }) } end,
+	["damageable minions take (%d+)%% increased damage for each second they have been alive, up to a maximum of (%d+)%%"] = function(_, _, max) return { mod("MinionModifier", "LIST", { mod = mod("DamageTaken", "INC", tonumber(max)) }) } end,
 	-- exert damage of one warcry: counted while that warcry exerts attacks (CalcOffence)
 	["attacks exerted by (%a+) cry deal (%d+)%% increased damage"] = function(_, cry, num) return { mod(cry:sub(1, 1):upper() .. cry:sub(2) .. "ExertIncrease", "INC", tonumber(num), nil, ModFlag.Attack, 0) } end,
 	["you take (%d+)%% reduced extra damage from critical strikes per endurance charge"] = function(num) return { mod("ReduceCritExtraDamage", "BASE", num, { type = "Multiplier", var = "EnduranceCharge" }) } end,
