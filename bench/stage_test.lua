@@ -110,6 +110,20 @@ elseif step == "tree" or step == "treeplain" then
 elseif step == "profile" then
 	local prof = new("BuildDoctor"):BuildDoctor(gen):Profile()
 	print("PROFILE " .. require("dkjson").encode(prof))
+elseif step == "joint" then
+	-- JOINT="crit,power,resistance,ci": those commitments together, built for real
+	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
+	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
+	local doctor = new("BuildDoctor"):BuildDoctor(gen)
+	doctor:Diagnose()
+	local all = doctor:CommitmentPlans()
+	local parts = { }
+	for id in (os.getenv("JOINT") or "crit"):gmatch("[^,]+") do if all[id] then table.insert(parts, all[id]) end end
+	local plan = doctor.Joint(parts)
+	print("JOINT", plan.label)
+	print("GAIN", doctor:Execute(plan))
+	local prof = doctor:Profile()
+	print(string.format("PROFILE crit %.2f enemy %.2f speed %.2f increased %.1f more %.2f power %s life %d es %d", prof.crit or 0, prof.enemy or 0, prof.speed or 0, prof.increased or 0, prof.more or 0, tostring(prof.power), prof.life or 0, prof.es or 0))
 elseif step == "doctor" or step == "diagnose" then
 	-- (diagnose: the layer report only; doctor: the plans tried too)
 	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
@@ -189,6 +203,8 @@ elseif step == "corrupt" then
 elseif step == "ostentation" then
 	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
 	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]
+	gen.options.ostentationRefine = tonumber(os.getenv("OST_REFINE") or "")
+	gen.options.ostentationSolver = os.getenv("OST_SOLVER") == "1"
 	print("GAIN", gen:SupremeOstentationMove())
 	for _, l in ipairs(gen.log) do print("NOTE " .. l) end
 elseif step == "cost" or step == "upgrade" or step == "fitbudget" then

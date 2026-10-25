@@ -747,6 +747,13 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 		local value = self.lens.func and self.lens.func(output) or output[self.lens.stat] or 0
 		score = score + (self.lens.weight or 0.3) * m_log(m_max(1, value) / (self.lens.base or 100))
 	end
+	-- (several layers committed to at once: the build doctor's joint plans)
+	if self.lensExtra and output then
+		for _, lens in ipairs(self.lensExtra) do
+			local value = lens.func and lens.func(output) or output[lens.stat] or 0
+			score = score + (lens.weight or 0.3) * m_log(m_max(1e-6, value) / (lens.base or 100))
+		end
+	end
 	-- surviving a whole boss fight (FightSurvival): dying early costs, a fight
 	-- survived with room to spare gains a little (a defence layer with a target)
 	if output and self.fightSim ~= false then

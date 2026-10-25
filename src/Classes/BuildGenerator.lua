@@ -4251,7 +4251,10 @@ function BuildGeneratorClass:SupremeOstentationMove()
 			self:TrimTree()
 			dbg("trim")
 			-- passives taken for attributes are the cheapest leaves now: spent again
-			self:RefineTree(16)
+			-- (our trees cross 30-40 attribute passives on their paths, top
+			-- players' 0-2: with requirements gone the tree is chosen again)
+			self:RefineTree(self.options.ostentationRefine or 16)
+			if self.options.ostentationSolver then self:TreeSolverMove() end
 			dbg("refine")
 			if self.options.finalRares ~= false then self:FinalRares() end
 			dbg("rares")
@@ -6246,6 +6249,7 @@ function BuildGeneratorClass:SetupScorer()
 	-- (a hybrid's second stacked stat)
 	if opts.archetype and opts.archetype.lens2 and opts.statLens ~= false then
 		self.scorer.lens2 = opts.archetype.lens2
+		self.scorer.lensExtra = opts.archetype.lensExtra
 		self:Note(string.format("Commitment: %s too", opts.archetype.lens2.label or opts.archetype.lens2.stat))
 	end
 	-- (A/B options: weight of avoidance in tankiness, weight of tankiness)
@@ -6352,6 +6356,7 @@ function BuildGeneratorClass:Run()
 		-- (the archetype's stat lens left out: archetypes compared as they are)
 		self.scorer.lens = nil
 	self.scorer.lens2 = nil
+	self.scorer.lensExtra = nil
 		local final = self.scorer:Evaluate(self.calcFunc, { })
 		self.final = final
 		self.build.buildFlag = true
@@ -6601,6 +6606,7 @@ function BuildGeneratorClass:Run()
 	-- (the archetype's stat lens left out: archetypes compared as they are)
 	self.scorer.lens = nil
 	self.scorer.lens2 = nil
+	self.scorer.lensExtra = nil
 	local final = self.scorer:Evaluate(self.calcFunc, { })
 	self.final = final
 	self.build.buildFlag = true

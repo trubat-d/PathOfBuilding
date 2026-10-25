@@ -422,11 +422,20 @@ function BuildArchetypesClass.Hybrid(a, b)
 		auras = union(a.auras, b.auras), supports = union(a.supports, b.supports),
 		jewels = union(a.jewels, b.jewels), jewelStat = a.jewelStat or b.jewelStat,
 		lens = a.lens or b.lens, lens2 = a.lens and b.lens or nil,
+		-- (lenses past the second: valued too, as the scorer's lensExtra)
+		lensExtra = (function()
+			local extra = { }
+			for _, l in ipairs(a.lensExtra or { }) do t_insert(extra, l) end
+			for _, l in ipairs(b.lensExtra or { }) do t_insert(extra, l) end
+			if a.lens and a.lens2 and b.lens then t_insert(extra, b.lens) end
+			return #extra > 0 and extra or nil
+		end)(),
 		maxAuras = (a.maxAuras or b.maxAuras) and math.max(a.maxAuras or 4, b.maxAuras or 4) or nil,
 		maxUniques = math.max(a.maxUniques or 3, b.maxUniques or 3),
 		setTolerance = a.setTolerance or b.setTolerance,
 		playstyle = a.playstyle or b.playstyle,
 		hybrid = true, parts = { a.id, b.id },
+		lens2Of = nil,
 		applies = function() return true end,
 	}
 	return h
@@ -437,8 +446,17 @@ function BuildArchetypesClass.ById(gem, id, meta)
 	if not id then return nil end
 	local list = BuildArchetypesClass.ForSkill(gem, meta)
 	local function find(x) for _, a in ipairs(list) do if a.id == x then return a end end end
-	local a, b = id:match("^(.-)%+(.+)$")
-	if a then return BuildArchetypesClass.Hybrid(find(a), find(b)) end
+	-- ("A+B+C": three or more commitments folded into one hybrid)
+	if id:find("+", 1, true) then
+		local h
+		for part in id:gmatch("[^+]+") do
+			local p = find(part)
+			if not p then return nil end
+			h = h and BuildArchetypesClass.Hybrid(h, p) or p
+			if not h then return nil end
+		end
+		return h
+	end
 	return find(id)
 end
 

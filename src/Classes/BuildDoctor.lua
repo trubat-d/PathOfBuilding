@@ -561,6 +561,56 @@ function BuildDoctorClass:Plans()
 	return plans
 end
 
+-- One plan out of several committed to together (layers that only pay off
+-- together: an energy shield pool with Chaos Inoculation, crit, power
+-- charges, the enemy's resistance...): every drop, block, keystone taken and
+-- layer lens of its parts at once
+function BuildDoctorClass.Joint(parts)
+	local joint = { id = "joint", drop = { }, blockSupports = { }, take = { }, lenses = { }, refine = 16, labels = { }, reasons = { } }
+	for _, p in ipairs(parts) do
+		for _, x in ipairs(p.drop or { }) do t_insert(joint.drop, x) end
+		for _, x in ipairs(p.blockSupports or { }) do t_insert(joint.blockSupports, x) end
+		for _, x in ipairs(p.take or { }) do t_insert(joint.take, x) end
+		if p.lens then t_insert(joint.lenses, p.lens) end
+		joint.refine = m_max(joint.refine, p.refine or 16)
+		joint.rares = joint.rares or p.rares
+		joint.utility = joint.utility or p.utility
+		joint.auras = joint.auras or p.auras
+		t_insert(joint.labels, p.label)
+		if p.reason then t_insert(joint.reasons, p.reason) end
+		joint.id = joint.id .. "_" .. p.id
+	end
+	joint.label = "together: " .. table.concat(joint.labels, ", ")
+	joint.reason = table.concat(joint.reasons, "; ")
+	return joint
+end
+
+-- Plans of commitments the doctor can combine, by id (the layers it knows)
+function BuildDoctorClass:CommitmentPlans()
+	local r = self.report or self:Diagnose()
+	local spec = self.build.spec
+	local function allocated(name)
+		for _, node in pairs(spec.allocNodes) do if node.dn == name then return node end end
+	end
+	local element = r.mode.element
+	local critDrop = { }
+	for _, name in ipairs({ "Elemental Overload", "Resolute Technique" }) do if allocated(name) then t_insert(critDrop, name) end end
+	local blockSupports = { }
+	for name in pairs(self.critBlockers or { }) do t_insert(blockSupports, name) t_insert(critDrop, name) end
+	return {
+		crit = { id = "crit", label = "crit", drop = critDrop, blockSupports = blockSupports,
+			lens = { func = function(o) return o.CritEffect or 1 end, base = 1, label = "Crit damage factor", weight = 0.5 }, rares = true, refine = 30, utility = true },
+		power = { id = "power", label = "power charges", lens = { stat = "PowerChargesMax", base = 3, label = "Maximum power charges", weight = 0.4 }, rares = true, refine = 16 },
+		resistance = { id = "resistance", label = "enemy " .. element:lower() .. " resistance",
+			lens = r.mode.main == "hit" and { func = function(o) return o[element .. "EffMult"] or 1 end, base = 0.5, label = "enemy multiplier", weight = 0.6 } or nil,
+			rares = true, refine = 16, utility = true },
+		ci = { id = "ci", label = "Chaos Inoculation with an energy shield pool", take = { "Chaos Inoculation" },
+			lens = { stat = "EnergyShield", base = 1000, label = "Energy shield", weight = 0.6 }, rares = true, refine = 40 },
+		life = { id = "life", label = "a life pool", lens = { stat = "Life", base = 1000, label = "Life", weight = 0.6 }, rares = true, refine = 30 },
+		speed = { id = "speed", label = "speed", lens = { stat = "Speed", base = 1, label = "Speed", weight = 0.4 }, rares = true, refine = 16 },
+	}
+end
+
 -- Builds a plan for real and keeps it when the finished build scores better.
 -- Returns the gain kept (0 if none)
 function BuildDoctorClass:Execute(plan)
@@ -597,7 +647,21 @@ function BuildDoctorClass:Execute(plan)
 			self.build.skillsTab:ProcessSocketGroup(group)
 		end
 		if plan.lens then gen.scorer.lens2 = plan.lens end
+		-- (joint plans: every committed layer valued at once)
+		if plan.lenses then gen.scorer.lensExtra = plan.lenses end
+		-- keystones the plan commits to (Chaos Inoculation for an energy shield pool)
+		gen.protectedNodes = gen.protectedNodes or { }
+		for _, name in ipairs(plan.take or { }) do
+			for _, node in pairs(spec.nodes) do
+				if node.dn == name and node.type == "Keystone" and not node.ascendancyName and not node.alloc and node.path then
+					spec:AllocNode(node)
+					gen.protectedNodes[node.id] = true
+				end
+			end
+		end
+		spec:BuildAllDependsAndPaths()
 		gen:Recalculate()
+		if plan.take and #plan.take > 0 then gen:TrimTree() end
 		if plan.utility then gen:ChooseUtilityGems(true) end
 		if plan.auras then gen:AuraStackMove() end
 		gen:AllocateTree(true)
@@ -606,10 +670,12 @@ function BuildDoctorClass:Execute(plan)
 		if plan.rares and gen.options.finalRares ~= false then gen:FinalRares() end
 		gen:RefineTree(8)
 		gen.scorer.lens2 = savedLens2
+		gen.scorer.lensExtra = nil
 		gen:AutoConfigure()
 		gen:RefineTree(6)
 	end)
 	gen.scorer.lens2 = savedLens2
+	gen.scorer.lensExtra = nil
 	for j = #gen.log, savedLog + 1, -1 do table.remove(gen.log, j) end
 	local after = ok and gen:FullScore() or before
 	if gen.options.debugTiming then

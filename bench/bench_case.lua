@@ -28,7 +28,10 @@ local archetype
 if archetypeId == "LIST" then
 	-- the archetypes that fit the skill (run_bench.py "auto" mode scans them)
 	local ids = { }
-	for _, a in ipairs(new("BuildArchetypes"):BuildArchetypes().ForSkill(data.gems[gemId], nil)) do table.insert(ids, a.id) end
+	-- (GEN_OPTS playerKnowledge=false: the players' archetype isn't offered)
+	local lib = new("BuildArchetypes"):BuildArchetypes()
+	lib.SetPlayerKnowledge(not (os.getenv("GEN_OPTS") or ""):match("playerKnowledge%s*=%s*false"))
+	for _, a in ipairs(lib.ForSkill(data.gems[gemId], nil)) do table.insert(ids, a.id) end
 	print("ARCHETYPES " .. table.concat(ids, ","))
 	os.exit(0)
 end
