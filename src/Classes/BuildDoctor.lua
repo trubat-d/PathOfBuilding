@@ -862,6 +862,14 @@ function BuildDoctorClass:Execute(plan)
 			end
 		end
 	end
+	-- (the doctor's accumulated knowledge: every plan tried, with the layer
+	-- state it was tried in and what it really gained, in the decision log)
+	local r = self.report
+	gen:Decision("doctor_plan", plan.id, after - before, ok and after > before + 0.01, {
+		mode = r and r.mode.main, element = r and r.mode.element, value = plan.value,
+		crit = r and r.state.critEffect, speed = r and r.state.speed, enemy = r and r.profile and r.profile.enemy,
+		power = r and r.state.power,
+	})
 	if ok and after > before + 0.01 then
 		gen:Note(string.format("Build doctor: %s (%s): score %+.3f", plan.label, plan.reason, after - before))
 		return after - before

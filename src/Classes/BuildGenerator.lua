@@ -6206,6 +6206,11 @@ function BuildGeneratorClass:FinishKnowledge(final, mode, before)
 	if #self.skippedSteps > 0 then
 		self:Note(string.format("Skipped, as they improved none of the last builds like this one (learnt): %s", table.concat(self.skippedSteps, ", ")))
 	end
+	-- (which commitments this build was made with, and where it ended: the
+	-- combination designer's predictions checked against real full builds)
+	if final and final.score and opts.archetype then
+		self:Decision("archetype_result", opts.archetype.id, final.score, true, { quick = opts.quick and true or nil, dps = final.dps })
+	end
 	if final and final.score and self.mainGem and not opts.quick then
 		local key = self.know.BuildKey(self.options, self.mainGem.name, self.build.spec.curAscendClassName)
 		local ok, parts = pcall(self.know.Parts, self.build)
