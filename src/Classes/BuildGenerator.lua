@@ -466,12 +466,12 @@ function BuildGeneratorClass:SupportSwitches(gem)
 	end
 	self.autoConfigClass = self.autoConfigClass or new("AutoConfig"):AutoConfig({ })
 	local values = { }
-	for _, state in ipairs(self.autoConfigClass.SupportStatesOf(gem.name, mainTypes)) do
+	local boss = not self.options.configScenario or self.options.configScenario.boss == true
+	for _, state in ipairs(self.autoConfigClass.SupportStatesOf(gem.name, mainTypes, self.build.calcsTab.mainOutput, boss)) do
 		t_insert(vars, state.var)
 		-- (a count, e.g. Intensity: its value against a boss; about 1 while mapping)
 		if state.value then
-			local boss = not self.options.configScenario or self.options.configScenario.boss == true
-			values[state.var] = boss and state.value or 1
+			values[state.var] = (boss or state.var ~= "intensifyIntensity") and state.value or 1
 		end
 	end
 	return vars, values

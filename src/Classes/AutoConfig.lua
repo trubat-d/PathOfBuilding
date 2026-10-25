@@ -50,17 +50,32 @@ AutoConfigClass.supportStates = {
 	{ gem = "Infused Channelling", var = "infusedChannellingInfusion", needs = "Channel", label = "Infusion while channelling (Infused Channelling Support)" },
 	-- (Intensity at its maximum against a boss: casting in place; the full
 	-- configuration sets it from the scenario, see Run)
+	-- (Trinity: Resonance at its maximum when the skill hits with all three elements)
+	{ gem = "Trinity", var = "configResonanceCount", value = 50, allElements = true, label = "Resonance kept at its maximum: hits of all three elements (Trinity Support)" },
+	{ gem = "Predator", var = "deathmarkDeathmarkActive", needs = "Minion", label = "the minions mark their target with Signal Prey (Predator Support)" },
+	-- (Innervation comes from killing shocked enemies: mapping only)
+	{ gem = "Innervate", var = "innervateInnervation", mappingOnly = true, label = "Innervation from killing shocked enemies while mapping (Innervate Support)" },
 	{ gem = "Pinpoint", var = "intensifyIntensity", value = 3, needs = "Spell", label = "Intensity from casting in place (Pinpoint Support)" },
 	{ gem = "Intensify", var = "intensifyIntensity", value = 3, needs = "Spell", label = "Intensity from casting in place (Intensify Support)" },
 }
 
 -- The support states a support gem grants a main skill with these skill
 -- types: { state, ... }
-function AutoConfigClass.SupportStatesOf(gemName, skillTypes)
+-- (output: the main skill's, for states that depend on its damage; boss: the
+-- fight is a boss, so states that need kills don't count)
+function AutoConfigClass.SupportStatesOf(gemName, skillTypes, output, boss)
 	local list = { }
 	for _, state in ipairs(AutoConfigClass.supportStates) do
-		if state.gem == gemName and (not state.needs or (skillTypes and skillTypes[SkillType[state.needs]])) then
-			t_insert(list, state)
+		if state.gem == gemName and (not state.needs or (skillTypes and skillTypes[SkillType[state.needs]]))
+			and not (state.mappingOnly and boss) then
+			local ok = true
+			if state.allElements then
+				for _, t in ipairs({ "Fire", "Cold", "Lightning" }) do
+					local hit = output and (output[t .. "HitAverage"] or (output.MainHand and output.MainHand[t .. "HitAverage"])) or 0
+					if hit <= 0 then ok = false end
+				end
+			end
+			if ok then t_insert(list, state) end
 		end
 	end
 	return list
@@ -450,7 +465,7 @@ function AutoConfigClass:Run()
 		local mainTypes = skill and skill.skillTypes
 		for _, gem in ipairs(mainGroup and mainGroup.enabled ~= false and mainGroup.gemList or { }) do
 			if gem.enabled ~= false and gem.gemData then
-				for _, state in ipairs(AutoConfigClass.SupportStatesOf(gem.gemData.name, mainTypes)) do
+				for _, state in ipairs(AutoConfigClass.SupportStatesOf(gem.gemData.name, mainTypes, output, boss)) do
 					-- (Intensity: set from the scenario below)
 					if state.var ~= "intensifyIntensity" then self:Set(state.var, state.value or true, state.label) end
 				end
