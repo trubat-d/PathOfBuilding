@@ -658,7 +658,9 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 				-- (payoffs: damage lines; enablers: "count as having maximum...",
 				-- without which there is nothing to stack)
 				local line = modLine.line
-				local enabler = line and (line:find("[Cc]ount as having") or line:find("is equal to"))
+				-- (and converters: "Maximum Frenzy Charges is equal to your Maximum
+				-- Power Charges" stacks a second layer for free)
+				local enabler = line and (line:find("[Cc]ount as having") or line:find("is equal to") or line:find("equal to your"))
 				if current and line and (enabler or (line:find("[Dd]amage") and not line:find("taken"))) then
 					for _, pattern in ipairs(a.uniqueLines or { }) do
 						if modLine.line:match(pattern) then t_insert(lines, modLine.line) break end
@@ -668,12 +670,34 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 			if #lines > 0 then t_insert(scored, { title = item.title or item.name, lines = lines, ratio = measure(lines) }) end
 			gen:Tick()
 		end
-		t_sort(scored, function(x, y) return x.ratio > y.ratio end)
+		-- (chosen together, greedily: the stacked stat first, then the item
+		-- that raises the joint test most, up to three; an enabler like
+		-- Ralakesh's Impatience is worth nothing alone and decisive with the
+		-- payoff lines)
 		local out, names = { }, { }
-		for i = 1, m_min(2, #scored) do
-			for _, l in ipairs(scored[i].lines) do t_insert(out, l) end
-			t_insert(names, scored[i].title)
+		local stat = a.lens and stackLines[a.lens.stat] and string.format(stackLines[a.lens.stat], stackAmount[a.lens.stat])
+		if stat then t_insert(out, stat) end
+		local used = { }
+		local current = measure(out)
+		for _ = 1, 3 do
+			local best, bestRatio
+			for i, sc in ipairs(scored) do
+				if not used[i] then
+					local trial = { }
+					for _, l in ipairs(out) do t_insert(trial, l) end
+					for _, l in ipairs(sc.lines) do t_insert(trial, l) end
+					local ratio = measure(trial)
+					if not bestRatio or ratio > bestRatio then best, bestRatio = i, ratio end
+				end
+			end
+			if not best or bestRatio <= current * 1.01 then break end
+			used[best] = true
+			for _, l in ipairs(scored[best].lines) do t_insert(out, l) end
+			t_insert(names, scored[best].title)
+			current = bestRatio
+			gen:Tick()
 		end
+		if stat then table.remove(out, 1) end
 		return out, names
 	end
 	local options = { }

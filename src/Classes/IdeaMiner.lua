@@ -9,7 +9,9 @@
 -- is valued on its own while the build is made (the stat lens), so gear and
 -- passives follow it before the uniques that pay it back are all in place.
 -- The written stacking archetypes (Intelligence, Strength, Dexterity, mana,
--- life) are left out here.
+-- life) are left out here. Lines that turn the stacked stat into another one
+-- ("Maximum Frenzy Charges is equal to your Maximum Power Charges": Badge of
+-- the Brotherhood) belong to the idea: a second layer stacked for free.
 --
 local ipairs = ipairs
 local pairs = pairs
@@ -30,13 +32,13 @@ IdeaMinerClass.drivers = {
 		patterns = { "per %d*%%? ?[Cc]hance to [Bb]lock", "per 1%% Chance to Block" },
 		summary = "Stack block chance: uniques that turn block into damage or recovery, and the block itself as defence." },
 	{ key = "POWER", label = "Power charge stacking", stat = "PowerChargesMax", base = 3,
-		patterns = { "per Power Charge", "for each Power Charge", "Count as having maximum number of Power Charges", "to [Mm]aximum Power Charges", "Maximum Power Charges is equal to" },
+		patterns = { "per Power Charge", "for each Power Charge", "Count as having maximum number of Power Charges", "to [Mm]aximum Power Charges", "Maximum Power Charges is equal to", "equal to your Maximum Power Charges" },
 		summary = "More maximum power charges, uniques that scale per power charge, and ones that count as having the maximum (Ralakesh's Impatience: the \"lose all on reaching maximum\" drawbacks of the others stop mattering)." },
 	{ key = "FRENZY", label = "Frenzy charge stacking", stat = "FrenzyChargesMax", base = 3,
-		patterns = { "per Frenzy Charge", "for each Frenzy Charge", "Count as having maximum number of Frenzy Charges", "to [Mm]aximum Frenzy Charges", "Maximum Frenzy Charges is equal to" },
+		patterns = { "per Frenzy Charge", "for each Frenzy Charge", "Count as having maximum number of Frenzy Charges", "to [Mm]aximum Frenzy Charges", "Maximum Frenzy Charges is equal to", "equal to your Maximum Frenzy Charges" },
 		summary = "More maximum frenzy charges, and uniques that scale per frenzy charge." },
 	{ key = "ENDURANCE", label = "Endurance charge stacking", stat = "EnduranceChargesMax", base = 3,
-		patterns = { "per Endurance Charge", "for each Endurance Charge", "Count as having maximum number of Endurance Charges", "to [Mm]aximum Endurance Charges", "Maximum Endurance Charges is equal to" },
+		patterns = { "per Endurance Charge", "for each Endurance Charge", "Count as having maximum number of Endurance Charges", "to [Mm]aximum Endurance Charges", "Maximum Endurance Charges is equal to", "equal to your Maximum Endurance Charges" },
 		summary = "More maximum endurance charges, and uniques that scale per endurance charge." },
 	{ key = "EVASION", label = "Evasion stacking", stat = "Evasion", base = 5000,
 		patterns = { "per %d+ Evasion Rating", "per %d+ Evasion" },

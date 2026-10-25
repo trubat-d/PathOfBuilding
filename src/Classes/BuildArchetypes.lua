@@ -166,7 +166,7 @@ BuildArchetypesClass.list = {
 		lens = { stat = "PowerChargesMax", base = 3, label = "Maximum power charges" },
 		summary = "Many power charges kept at the maximum: damage per power charge (Malachai's Loop, Tulfall, Willclash), Ralakesh's Impatience to count as always having the maximum.",
 		uniques = { "Malachai's Loop", "Ralakesh's Impatience", "Tulfall", "Willclash" },
-		uniqueLines = { "per Power Charge", "[Mm]aximum Power Charges" },
+		uniqueLines = { "per Power Charge", "[Mm]aximum Power Charges", "equal to your Maximum Power Charges" },
 		applies = function(info) return info.spell and not info.minion end,
 	},
 	{
