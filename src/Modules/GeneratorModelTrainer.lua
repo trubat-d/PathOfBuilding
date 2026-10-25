@@ -199,7 +199,15 @@ function M.Validate(rows, tick, repeats)
 					for _, t in ipairs(THRESHOLDS) do
 						if p < t then
 							stats[t].skipped = stats[t].skipped + 1
-							if r.gain > MATTERS then stats[t].missed = stats[t].missed + 1 end
+							if r.gain > MATTERS then
+								stats[t].missed = stats[t].missed + 1
+								stats[t].worst = stats[t].worst or { }
+								if #stats[t].worst < 20 then
+									local ctx = { }
+									for _, f in ipairs(r.feats) do if f:sub(1, 2) == "c:" then ctx[#ctx + 1] = f:sub(3) end end
+									table.insert(stats[t].worst, string.format("%s for %s %+.3f (p %.4f; %s)", r.name, r.skill, r.gain, p, table.concat(ctx, " ")))
+								end
+							end
 						end
 					end
 				end
