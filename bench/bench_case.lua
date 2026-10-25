@@ -77,6 +77,8 @@ local gen = new("BuildGenerator"):BuildGenerator(build, {
 	excludedUniques = (function() local t = { } for n in (os.getenv("EXCLUDE") or ""):gmatch("[^;]+") do t[n] = true end return t end)(),
 	-- BUDGET=<divines>: a total budget for the whole build
 	totalBudget = tonumber(os.getenv("BUDGET") or ""),
+	-- RARES_PER_BUILD=<n>: how many of a level's rares the total must buy (PriceSource.ForBudget)
+	raresPerBuild = tonumber(os.getenv("RARES_PER_BUILD") or ""),
 	-- KNOWLEDGE=1: what earlier generations learnt is used and written (Modules/GeneratorKnowledge)
 	knowledge = os.getenv("KNOWLEDGE") == "1",
 	-- PHASE=START|WEEK1|MID|LATE: prices for that moment of the league (PriceSource.phases)
