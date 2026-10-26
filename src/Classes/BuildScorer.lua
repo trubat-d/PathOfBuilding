@@ -937,6 +937,17 @@ end
 local function isUtilityFlask(item)
 	return item.base and item.base.flask and not (item.base.flask.life or item.base.flask.mana)
 end
+-- A life / mana flask with an effect of its own while it is up (Lavianga's
+-- Spirit: no mana cost during its effect; Dying Sun...): up only part of the
+-- time like a utility flask, not counted as always on
+local function hasFlaskEffect(item)
+	if not (item.base and item.base.flask) or item.rarity ~= "UNIQUE" then return false end
+	for _, l in ipairs(item.explicitModLines or { }) do
+		local line = (l.line or ""):lower()
+		if line:find("during flask effect", 1, true) or line:find("during effect", 1, true) then return true end
+	end
+	return false
+end
 
 -- Estimated share of time a utility flask is up (0 to 1)
 -- (output: the build's, for the hits it takes - "Gain 2 Charges when you are
@@ -1067,7 +1078,7 @@ function BuildScorerClass:GetFlaskUptimes(override)
 	end
 	local list = { }
 	for item in pairs(env.flasks) do
-		if isUtilityFlask(item) then
+		if isUtilityFlask(item) or hasFlaskEffect(item) then
 			local uptime
 			if permanent[item] then
 				uptime = 1

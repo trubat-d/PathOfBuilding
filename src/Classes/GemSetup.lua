@@ -606,6 +606,14 @@ function GemSetupClass:ChooseMovement()
 		-- move, plus a Frostblink for walls and gaps
 		add("Shield Charge + Faster Attacks", { "Shield Charge", "Faster Attacks" })
 	elseif self:MainIsAttack() then
+		-- (a fast attacker leaps fast: Momentum's movement speed on top, when
+		-- three sockets are free - swapped for something else when the content
+		-- presses harder)
+		local output = self.build.calcsTab.mainOutput or { }
+		local speed = output.Speed or (output.MainHand and output.MainHand.Speed) or 0
+		if speed >= 3.5 then
+			add("Leap Slam + Faster Attacks + Momentum", { "Leap Slam", "Faster Attacks", "Momentum" })
+		end
 		add("Leap Slam + Faster Attacks", { "Leap Slam", "Faster Attacks" })
 		add("Whirling Blades + Faster Attacks", { "Whirling Blades", "Faster Attacks" })
 		add("Blink Arrow + Faster Attacks", { "Blink Arrow", "Faster Attacks" })
@@ -647,12 +655,34 @@ end
 -- Animate Guardian: a permanent minion wearing buff uniques. PoB doesn't count
 -- the buffs from its items, so it's added for high-end builds with free
 -- sockets, and noted otherwise.
+-- Not in every build: it is for builds with some minion life scaling (it
+-- dies to a boss otherwise), or for sockets nothing better uses.
+function GemSetupClass:MinionLifeScaling()
+	local function minionLife(line)
+		line = (line or ""):lower()
+		return line:find("minion", 1, true) and line:find("life", 1, true) and not line:find("leech", 1, true)
+	end
+	for _, node in pairs(self.build.spec.allocNodes) do
+		for _, line in ipairs(node.sd or { }) do if minionLife(line) then return true end end
+	end
+	local itemsTab = self.build.itemsTab
+	for _, slot in pairs(itemsTab.slots) do
+		local item = itemsTab.items[slot.selItemId]
+		if item and not slot.nodeId then
+			for _, list in ipairs({ item.explicitModLines or { }, item.implicitModLines or { } }) do
+				for _, l in ipairs(list) do if minionLife(l.line) then return true end end
+			end
+		end
+	end
+	return false
+end
 function GemSetupClass:ChooseAnimateGuardian()
 	local id = gemId("Animate Guardian")
 	if not id then return end
 	local investment = self.gen.options.investment or { }
 	local support = gemId("Meat Shield")
-	if investment.awakenedGems and self:SlotFor(2) and support then
+	-- (the fillers ran first: a free pair of sockets left is one nothing else wanted)
+	if investment.awakenedGems and self:SlotFor(2) and support and (self:MinionLifeScaling() or self.gen.options.animateGuardianAlways) then
 		self:Keep("Animate Guardian", { gemEntry(id), gemEntry(support) }, self:SlotFor(2))
 		self.gen:Note("Animate Guardian setup: Animate Guardian + Meat Shield (the uniques it wears are chosen later: their buffs to you go in the configuration's custom modifiers)")
 	else
@@ -800,9 +830,11 @@ function GemSetupClass:Run(maxBuffs, ignoreAttributes)
 	self:ChooseGuard()
 	self:ChooseMovement()
 	self:ChooseManaforged()
-	self:ChooseAnimateGuardian()
 	self:ChooseLifetap()
 	self:ChooseFillers()
+	-- (last: only where nothing better took the sockets, or when the build
+	-- scales minion life anyway)
+	self:ChooseAnimateGuardian()
 	scorer.ignoreAttributes = savedIgnore
 	self.gen:Recalculate()
 	local free = self:FreeSockets()
