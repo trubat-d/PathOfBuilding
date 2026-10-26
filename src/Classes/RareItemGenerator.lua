@@ -170,6 +170,23 @@ end
 -- the natural ones): the best tier the character's level allows per mod group.
 -- Bench "meta" crafts (prefixes cannot be changed...) are left out.
 local craftCache = { }
+-- Prefix / Suffix of a bench craft from its line (nil when no bench mod has it)
+local benchTypeOf
+function RareItemGeneratorClass.BenchType(line)
+	if not benchTypeOf then
+		benchTypeOf = { }
+		for _, mod in ipairs(data.masterMods or { }) do
+			if (mod.type == "Prefix" or mod.type == "Suffix") then
+				for _, l in ipairs(mod) do
+					local shape = l:gsub("%(%-?[%d%.]+%-%-?[%d%.]+%)", "#"):gsub("%-?[%d%.]+", "#")
+					benchTypeOf[shape] = benchTypeOf[shape] or mod.type
+				end
+			end
+		end
+	end
+	local shape = (line or ""):gsub("%(%-?[%d%.]+%-%-?[%d%.]+%)", "#"):gsub("%-?[%d%.]+", "#")
+	return benchTypeOf[shape]
+end
 function RareItemGeneratorClass:GetCraftCandidates(item, quality)
 	local class = item.type
 	local charLevel = self.build.characterLevel
@@ -798,11 +815,14 @@ function RareItemGeneratorClass.Validate(item)
 	local craftKinds = { }
 	for _, l in ipairs(item.explicitModLines or { }) do
 		if l.crafted then
-			local key = (l.prefix and "P" or "S") .. table.concat(l.modTags or { }, ",")
+			-- (a saved item's bench line carries no {prefix}/{suffix} tag: Item
+			-- writes none on crafted items; its kind from the bench mod's data)
+			local isPrefix = l.prefix or (not l.suffix and RareItemGeneratorClass.BenchType(l.line) == "Prefix")
+			local key = (isPrefix and "P" or "S") .. table.concat(l.modTags or { }, ",")
 			if not craftKinds[key] then
 				craftKinds[key] = true
 				crafts = crafts + 1
-				if l.prefix then prefixes = prefixes + 1 else suffixes = suffixes + 1 end
+				if isPrefix then prefixes = prefixes + 1 else suffixes = suffixes + 1 end
 			end
 		end
 	end

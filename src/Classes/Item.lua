@@ -1886,10 +1886,13 @@ function ItemClass:BuildRaw()
 		if modLine.fractured then
 			line = "{fractured}" .. line
 		end
-		if modLine.prefix then
+		-- (not on a crafted item: its affix list says which are prefixes, and
+		-- pobb.in draws a separator at every change between tagged prefixes and
+		-- suffixes - a generated rare showed four blocks of mods)
+		if modLine.prefix and not self.crafted then
 			line = "{prefix}" .. line
 		end
-		if modLine.suffix then
+		if modLine.suffix and not self.crafted then
 			line = "{suffix}" .. line
 		end
 		if modLine.exarch then
