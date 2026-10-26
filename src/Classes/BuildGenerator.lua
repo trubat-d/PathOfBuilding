@@ -1738,6 +1738,22 @@ function BuildGeneratorClass:ChooseBloodline()
 	if self.options.bloodlines == false or not tree.alternate_ascendancies or not spec.SelectSecondaryAscendClass then return end
 	self:Recalculate()
 	local bestScore, bestId
+	-- (a passive that adds a slot - the Nameless Bloodline's "+1 Ring Slot" -
+	-- is worth what the slot holds: a copy of the build's rare ring sits in
+	-- Ring 3 while the bloodlines are compared; PoB ignores it until such a
+	-- passive is allocated, so it counts only where the slot exists. Top
+	-- Boneshatter players wear three rings)
+	local ring3 = self.itemsTab.slots["Ring 3"]
+	local ring3Probe
+	if ring3 and (ring3.selItemId or 0) == 0 then
+		for _, name in ipairs({ "Ring 1", "Ring 2" }) do
+			local item = self.itemsTab.items[self.itemsTab.slots[name].selItemId]
+			if not ring3Probe and item and item.rarity == "RARE" then
+				ring3Probe = self:Equip(item, "Ring 3")
+			end
+		end
+		if ring3Probe then self:Recalculate() end
+	end
 	local original = spec:CreateUndoState()
 	-- 1. quick estimate: value of each bloodline's two best notables on top of the build
 	local estimates = { }
@@ -1792,6 +1808,19 @@ function BuildGeneratorClass:ChooseBloodline()
 	allocateWith(bestId)
 	self.bloodlineId = bestId
 	self:Recalculate()
+	-- (the third ring kept only when the winner gives the slot; the rares made
+	-- later make it a ring of its own)
+	if ring3Probe then
+		local env = self.build.calcsTab.mainEnv
+		if env and env.modDB:Flag(nil, "AdditionalRingSlot") then
+			self:Note("Third ring slot (+1 Ring Slot from the bloodline): a rare ring added in Ring 3")
+		else
+			ring3:SetSelItemId(0)
+			self.itemsTab:DeleteItem(ring3Probe, true)
+			self.itemsTab:PopulateSlots()
+			self:Recalculate()
+		end
+	end
 	if bestId ~= 0 and tree.alternate_ascendancies[bestId] then
 		local names = { }
 		for _, node in ipairs(nodesById(spec.allocNodes)) do
