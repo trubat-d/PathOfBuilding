@@ -7834,6 +7834,17 @@ function BuildGeneratorClass:WriteNotes(assumptions, costLine)
 	local edit = notesTab and notesTab.controls and notesTab.controls.edit
 	if not edit then return end
 	local lines = { "Generated build (" .. (self.className or "?") .. " " .. (self.ascendName or "") .. ", " .. (self.mainGem and self.mainGem.name or "?") .. ")", "" }
+	-- (only while the guardian's group is still in the configuration)
+	local guardianBlock
+	pcall(function()
+		local group = new("AnimateGuardianSetup"):AnimateGuardianSetup(self):Group(false)
+		if group and group.enabled ~= false and group.text and group.text ~= "" then guardianBlock = group end
+	end)
+	if guardianBlock and self.animateGuardianItems and self.animateGuardianItems[1] then
+		t_insert(lines, "Animate Guardian: give it these items (their buffs to you are in the Configuration tab's custom modifiers, group \"Animate Guardian (generated)\"):")
+		for _, name in ipairs(self.animateGuardianItems) do t_insert(lines, "- " .. name) end
+		t_insert(lines, "")
+	end
 	t_insert(lines, "Assumptions:")
 	for _, a in ipairs(assumptions or { }) do t_insert(lines, "- " .. a) end
 	local input = self.build.configTab and self.build.configTab.input or { }

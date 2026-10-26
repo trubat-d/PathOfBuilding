@@ -98,7 +98,8 @@ function AnimateGuardianSetupClass:Group(create)
 	if not set then return nil end
 	set.customModsList = set.customModsList or { }
 	for _, block in ipairs(set.customModsList) do
-		if block.title == self.groupTitle then return block end
+		-- (the title carries the items' names after the group's own title)
+		if block.title and block.title:sub(1, #self.groupTitle) == self.groupTitle then return block end
 	end
 	if create then
 		local block = { title = self.groupTitle, enabled = true, text = "" }
@@ -155,6 +156,13 @@ function AnimateGuardianSetupClass:Run()
 		t_insert(gen.costs, price or false)
 	end
 	t_sort(names)
+	-- what the guardian wears, where the player looks for it: the group's title
+	-- in the Configuration tab and the build's notes (BuildGenerator:WriteNotes)
+	local titles = { }
+	for title in pairs(chosen) do t_insert(titles, title) end
+	t_sort(titles)
+	block.title = self.groupTitle .. ": " .. table.concat(titles, ", ")
+	gen.animateGuardianItems = names
 	gen:Note(string.format("Animate Guardian wearing %s: their buffs to nearby allies are in the Configuration tab's custom modifiers (\"%s\"), score %+.3f",
 		table.concat(names, ", "), self.groupTitle, after - before))
 	return after - before
