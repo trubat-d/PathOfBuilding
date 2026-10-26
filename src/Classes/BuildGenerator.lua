@@ -3702,6 +3702,16 @@ end
 -- flasks in the flask slot that loses least.
 function BuildGeneratorClass:ForceUniques()
 	local forced = self.options.forcedUniques
+	-- (an archetype built around a unique - IdeaMiner.Anchors: Voidforge -
+	-- forces it like the player's list does: it only pays with the build made
+	-- around it, so trying it in the finished build never keeps it)
+	local archetype = self.options.archetype
+	if archetype and archetype.forced and #archetype.forced > 0 then
+		local list, seen = { }, { }
+		for _, t in ipairs(forced or { }) do if not seen[t] then seen[t] = true t_insert(list, t) end end
+		for _, t in ipairs(archetype.forced) do if not seen[t] then seen[t] = true t_insert(list, t) end end
+		forced = list
+	end
 	if not forced or #forced == 0 then return end
 	local byTitle = { }
 	for _, item in pairs(main.uniqueDB.list) do byTitle[item.title or item.name] = byTitle[item.title or item.name] or item end
@@ -6631,7 +6641,9 @@ function BuildGeneratorClass:ChooseTattoos()
 	local ranked = { }
 	for _, option in ipairs(options) do
 		local list = targets[option.targetType]
-		if list and list[1] then
+		-- (not a keystone a kept commitment rules out: BuildDoctor's blocks)
+		local blocked = self.blockedKeystones and (self.blockedKeystones[option.name] or (option.tattoo and self.blockedKeystones[option.tattoo.dn]))
+		if list and list[1] and not blocked then
 			local override = { removeNodes = { [list[1]] = true }, addNodes = { [extras:VirtualTattoo(option.tattoo)] = true } }
 			local gain = self:Score(override) - current
 			if gain > 0.0005 then t_insert(ranked, { option = option, gain = gain }) end

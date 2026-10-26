@@ -442,7 +442,7 @@ function BuildDoctorClass:Plans()
 		t_sort(blockSupports)
 		for _, name in ipairs(blockSupports) do t_insert(drop, name) end
 		t_insert(plans, {
-			id = "crit", label = "commit to critical strikes",
+			id = "crit", label = "commit to critical strikes", blocks = { "Elemental Overload", "Resolute Technique" },
 			reason = string.format("crit factor x%.2f now, x%.2f when chance and multiplier are built together (%s)", s.critEffect or 1, crit.commitRatio,
 				#drop > 0 and (table.concat(drop, ", ") .. " dropped") or "no keystone in the way"),
 			lens = { func = function(o) return o.CritEffect or 1 end, base = 1, label = "Crit damage factor", weight = 0.5 },
@@ -565,7 +565,7 @@ function BuildDoctorClass:Plans()
 		for _, name in ipairs({ "Elemental Overload", "Resolute Technique" }) do if allocated(name) then t_insert(drop, name) end end
 		local blockSupports = { }
 		for name in pairs(self.critBlockers or { }) do t_insert(blockSupports, name) t_insert(drop, name) end
-		return { id = "crit", label = "commit to critical strikes", drop = drop, blockSupports = blockSupports,
+		return { id = "crit", label = "commit to critical strikes", blocks = { "Elemental Overload", "Resolute Technique" }, drop = drop, blockSupports = blockSupports,
 			lens = { func = function(o) return o.CritEffect or 1 end, base = 1, label = "Crit damage factor", weight = 0.5 },
 			rares = true, refine = 30, utility = true }
 	end)
@@ -607,9 +607,10 @@ end
 -- charges, the enemy's resistance...): every drop, block, keystone taken and
 -- layer lens of its parts at once
 function BuildDoctorClass.Joint(parts)
-	local joint = { id = "joint", drop = { }, blockSupports = { }, take = { }, lenses = { }, refine = 16, labels = { }, reasons = { } }
+	local joint = { id = "joint", drop = { }, blockSupports = { }, take = { }, blocks = { }, lenses = { }, refine = 16, labels = { }, reasons = { } }
 	for _, p in ipairs(parts) do
 		for _, x in ipairs(p.drop or { }) do t_insert(joint.drop, x) end
+		for _, x in ipairs(p.blocks or { }) do t_insert(joint.blocks, x) end
 		for _, x in ipairs(p.blockSupports or { }) do t_insert(joint.blockSupports, x) end
 		for _, x in ipairs(p.take or { }) do t_insert(joint.take, x) end
 		if p.lens then t_insert(joint.lenses, p.lens) end
@@ -639,7 +640,7 @@ function BuildDoctorClass:CommitmentPlans()
 	local blockSupports = { }
 	for name in pairs(self.critBlockers or { }) do t_insert(blockSupports, name) t_insert(critDrop, name) end
 	return {
-		crit = { id = "crit", label = "crit", drop = critDrop, blockSupports = blockSupports,
+		crit = { id = "crit", label = "crit", blocks = { "Elemental Overload", "Resolute Technique" }, drop = critDrop, blockSupports = blockSupports,
 			lens = { func = function(o) return o.CritEffect or 1 end, base = 1, label = "Crit damage factor", weight = 0.5 }, rares = true, refine = 30, utility = true },
 		power = { id = "power", label = "power charges", lens = { stat = "PowerChargesMax", base = 3, label = "Maximum power charges", weight = 0.4 }, rares = true, refine = 16 },
 		resistance = { id = "resistance", label = "enemy " .. element:lower() .. " resistance",
@@ -1066,6 +1067,19 @@ function BuildDoctorClass:Execute(plan)
 	})
 	if ok and after > before + 0.01 then
 		gen:Note(string.format("Build doctor: %s (%s): score %+.3f", plan.label, plan.reason, after - before))
+		-- (a kept commitment stays kept: the keystones that undo it - Elemental
+		-- Overload after crit was built - aren't taken later by a step that
+		-- judges them alone, as a passive or a keystone tattoo: a Voidforge
+		-- Cyclone committed to crit, then took Elemental Overload as a tattoo
+		-- and ended at 7% crit)
+		gen.blockedKeystones = gen.blockedKeystones or { }
+		gen.forbiddenNodes = gen.forbiddenNodes or { }
+		for _, name in ipairs(plan.blocks or { }) do
+			gen.blockedKeystones[name] = true
+			for _, node in pairs(spec.nodes) do
+				if node.dn == name and node.type == "Keystone" then gen.forbiddenNodes[node.id] = true end
+			end
+		end
 		return after - before
 	end
 	gen:Restore(snap)

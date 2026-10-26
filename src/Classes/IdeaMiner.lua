@@ -137,6 +137,10 @@ function IdeaMinerClass.Ideas(info, opts)
 			end
 		end
 	end
+	-- uniques a build is made around (IdeaMiner.Anchors)
+	if opts.anchors ~= false then
+		for _, a in ipairs(IdeaMinerClass.Anchors(info, opts.maxAnchors)) do t_insert(list, a) end
+	end
 	-- conversion / "gain as extra" towards one element (IdeaMiner.Conversions):
 	-- the uniques adding it, that element's aura and penetration
 	if opts.conversions ~= false then
@@ -164,6 +168,67 @@ function IdeaMinerClass.Ideas(info, opts)
 				})
 			end
 		end
+	end
+	return list
+end
+
+-- Anchors: uniques with one line far above what an affix gives - "Gain 700%
+-- of Weapon Physical Damage as Extra Damage of a random Element" (Voidforge),
+-- "N% more Damage" from 40% - that the skill can use. A build is made around
+-- one (forced from the start: the archetype's `forced`); in the finished
+-- build it never wins alone, its crit / charge / keystone set has to come
+-- with it (top Cyclone of Tumult players: Voidforge, Overwhelm, Masterful
+-- Form, 65% crit x6.3). The strongest few, by the line's size.
+local anchorPatterns = {
+	{ pattern = "^Gain (%d+)%% of .-Damage as Extra", min = 100, scale = 1 / 100 },
+	{ pattern = "^(%d+)%% more Damage", min = 40, scale = 1 / 40 },
+	{ pattern = "^(%d+)%% more Attack Damage", min = 40, scale = 1 / 40 },
+	{ pattern = "^(%d+)%% more Spell Damage", min = 40, scale = 1 / 40 },
+}
+function IdeaMinerClass.Anchors(info, maxAnchors)
+	local list = { }
+	if info.minion or not main or not main.uniqueDB then return list end
+	local found, seen = { }, { }
+	for _, item in pairs(main.uniqueDB.list) do
+		local title = item.title or item.name
+		local base = item.base
+		local slotOk = base and (base.weapon or base.armour) and not seen[title]
+		-- (a weapon the attack can use; spells take any)
+		if slotOk and base.weapon then
+			if info.attack and info.weaponTypes and not info.weaponTypes[base.type] then slotOk = false end
+			if info.spell and not info.attack and not (base.type == "Wand" or base.type == "Staff" or base.type == "Sceptre" or base.type == "Dagger" or base.type:match("^One Handed")) then slotOk = false end
+		end
+		if slotOk then
+			for _, modLine in ipairs(item.explicitModLines or { }) do
+				local current = not modLine.variantList or (item.variant and modLine.variantList[item.variant])
+				local line = current and modLine.line
+				if line then
+					for _, a in ipairs(anchorPatterns) do
+						local v = tonumber(line:match(a.pattern) or "")
+						-- (attack lines for attacks, spell lines for spells)
+						local fits = not (line:find("Attack", 1, true) and not info.attack) and not (line:find("Spell", 1, true) and not info.spell)
+						if v and v >= a.min and fits then
+							seen[title] = true
+							t_insert(found, { title = title, line = line, size = v * a.scale })
+							break
+						end
+					end
+				end
+				if seen[title] then break end
+			end
+		end
+	end
+	table.sort(found, function(a, b) if a.size ~= b.size then return a.size > b.size end return a.title < b.title end)
+	for i = 1, math.min(maxAnchors or 3, #found) do
+		local f = found[i]
+		t_insert(list, {
+			id = "ANCHOR_" .. f.title:gsub("[^%w]", ""),
+			label = string.format("Built around %s (%s)", f.title, f.line),
+			summary = string.format("%s is forced from the start, and the build is made around its \"%s\" (the crit, charges and keystones it needs come with it).", f.title, f.line),
+			forced = { f.title },
+			mined = true,
+			applies = function() return true end,
+		})
 	end
 	return list
 end
