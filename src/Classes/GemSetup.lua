@@ -273,7 +273,13 @@ end
 
 -- Slots whose item turns auras into blessings (one aura there, not a group)
 function GemSetupClass:BlessingSlot(slotName)
-	return self:SlotGrantsSupport(slotName, "Divine Blessing") or self:SlotGrantsSupport(slotName, "Eternal Blessing")
+	local slot = self.build.itemsTab.slots[slotName]
+	local key = slotName .. ":" .. tostring(slot and slot.selItemId)
+	self.blessingCache = self.blessingCache or { }
+	if self.blessingCache[key] == nil then
+		self.blessingCache[key] = self:SlotGrantsSupport(slotName, "Divine Blessing") or self:SlotGrantsSupport(slotName, "Eternal Blessing")
+	end
+	return self.blessingCache[key]
 end
 
 -- Smallest slot that still fits n gems (keeps big slots for auras);
@@ -281,7 +287,8 @@ end
 function GemSetupClass:SlotFor(n, largest, filter)
 	local best, bestFree
 	for slotName, count in pairs(self:FreeSockets()) do
-		if count >= n and (not filter or filter(slotName)) then
+		-- (not an item that makes its gems blessings: kept for one blessing aura)
+		if count >= n and (not filter or filter(slotName)) and not self:BlessingSlot(slotName) then
 			if not best or (largest and count > bestFree) or (not largest and count < bestFree) or (count == bestFree and slotName < best) then
 				best, bestFree = slotName, count
 			end

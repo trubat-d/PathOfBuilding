@@ -6704,12 +6704,30 @@ function BuildGeneratorClass:FitSockets()
 		end
 	end
 	if main and main.slot then used[main.slot] = (used[main.slot] or 0) + #main.gemList end
+	local redo = false
 	for slotName, count in pairs(used) do
-		if count > setup:SlotSockets(slotName) then
-			self:ChooseUtilityGems()
-			changed = true
-			break
+		if count > setup:SlotSockets(slotName) then redo = true break end
+	end
+	-- (an item that makes its gems blessings - March of the Legion's Divine
+	-- Blessing - holds one aura and nothing else: each blessing lasts seconds
+	-- and is cast again by hand (one is fine, several are not played), PoB
+	-- counts every one as always up and free of reservation. A group left
+	-- there when the item came in is rebuilt)
+	if not redo then
+		for _, group in ipairs(skillsTab.socketGroupList) do
+			if group ~= main and group.slot and group.enabled ~= false and setup:BlessingSlot(group.slot) then
+				local auras = 0
+				for _, gem in ipairs(group.gemList or { }) do
+					local effect = gem.gemData and gem.gemData.grantedEffect
+					if gem.enabled ~= false and effect and not effect.support then auras = auras + 1 end
+				end
+				if auras > 1 then redo = true break end
+			end
 		end
+	end
+	if redo then
+		self:ChooseUtilityGems()
+		changed = true
 	end
 	if changed then self:Recalculate() end
 	return changed
