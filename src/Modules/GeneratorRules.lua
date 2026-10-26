@@ -70,6 +70,8 @@ rules.uniques = {
 	-- (found by the unique combo search: PoB reads each of its timed effects as always on)
 	["Bound Fate"] = { excluded = true, reason = "every 5 seconds one random effect, half of them drawbacks; PoB counts the good ones as permanent" },
 	-- build checks
+	-- (totems: the score counts every totem the limit allows)
+	["Cadigan's Authority"] = { check = function(output) return not output.ActiveTotemLimit or output.ActiveTotemLimit <= 2 end, reason = "no more than 2 totems of the same type" },
 	["Midnight Bargain"] = { check = function(output) return not output.ChaosInoculation end, reason = "can't be used with Chaos Inoculation" },
 	["Replica Midnight Bargain"] = { check = function(output) return not output.ChaosInoculation end, reason = "can't be used with Chaos Inoculation" },
 }
