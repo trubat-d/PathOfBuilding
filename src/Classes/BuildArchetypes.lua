@@ -436,7 +436,7 @@ function BuildArchetypesClass.Hybrid(a, b)
 	end
 	local h = {
 		id = a.id .. "+" .. b.id,
-		label = string.format("Hybrid: %s + %s", a.label:gsub(" %(found.*%)$", ""), b.label:gsub(" %(found.*%)$", "")),
+		label = string.format("Hybrid: %s + %s", (a.label:gsub(" %(found.*%)$", ""):gsub("^Hybrid: ", "")), (b.label:gsub(" %(found.*%)$", ""):gsub("^Hybrid: ", ""))),
 		summary = (a.summary or "") .. " Together with: " .. (b.summary or ""),
 		keystones = union(a.keystones, b.keystones), excludeKeystones = union(a.excludeKeystones, b.excludeKeystones),
 		uniques = union(a.uniques, b.uniques), uniqueLines = union(a.uniqueLines, b.uniqueLines),
