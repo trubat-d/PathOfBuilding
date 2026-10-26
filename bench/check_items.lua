@@ -36,7 +36,7 @@ for _, item in pairs(build.itemsTab.items) do
 		end
 	elseif item.rarity == "UNIQUE" and item.title then
 		local ps = new("PriceSource"):PriceSource()
-		if ps.isUnobtainable and ps:isUnobtainable(item.title) then flag(item, "no longer obtainable") end
+		if ps.IsUnobtainable and ps.IsUnobtainable(item.title) then flag(item, "no longer obtainable") end
 	end
 end
 print("PROBLEMS", problems)
