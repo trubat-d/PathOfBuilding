@@ -119,26 +119,35 @@ function calcs.getMiscCalculator(build)
 	return function(override, useFullDPS)
 		local env, cachedPlayerDB, cachedEnemyDB, cachedMinionDB = calcs.initEnv(build, "CALCULATOR", override)
 		calcs.perform(env)
+		local output, itemList = env.player.output, env.player.itemList
+		-- (build generator: whether it has "while stationary" lines, for
+		-- BuildScorer's boss fight blend; read before the full DPS runs below
+		-- reuse the environment. A flag, not the modDB: its actor holds the
+		-- output, and a weak key whose value refers back to it is never
+		-- collected in LuaJIT)
+		local stationary = calcs.hasStationaryLines(env.player.modDB)
 		if (useFullDPS ~= false or build.viewMode == "TREE") and usedFullDPS then
 			-- prevent upcoming calculation from using Cached Data and thus forcing it to re-calculate new FullDPS roll-up 
 			-- without this, FullDPS increase/decrease when for node/item/gem comparison would be all 0 as it would be comparing
 			-- A with A (due to cache reuse) instead of A with B
-			local fullDPS = calcs.calcFullDPS(build, "CALCULATOR", override, { cachedPlayerDB = cachedPlayerDB, cachedEnemyDB = cachedEnemyDB, cachedMinionDB = cachedMinionDB, env = nil})
-			env.player.output.SkillDPS = fullDPS.skills
-			env.player.output.FullDPS = fullDPS.combinedDPS
-			env.player.output.FullDotDPS = fullDPS.TotalDotDPS
+			-- (the generator's fast path, GeneratorFastFullDPS: the environment
+			-- just calculated is reused for the full DPS runs, as calcFullDPS
+			-- reuses it between skills, instead of being built once more)
+			local reuse = GeneratorFastFullDPS and { cachedPlayerDB = cachedPlayerDB, cachedEnemyDB = cachedEnemyDB, cachedMinionDB = cachedMinionDB, env = env,
+				accelerate = { nodeAlloc = true, requirementsItems = true, requirementsGems = true, skills = true, everything = true } }
+			local fullDPS = calcs.calcFullDPS(build, "CALCULATOR", override, reuse or { cachedPlayerDB = cachedPlayerDB, cachedEnemyDB = cachedEnemyDB, cachedMinionDB = cachedMinionDB, env = nil})
+			output.SkillDPS = fullDPS.skills
+			output.FullDPS = fullDPS.combinedDPS
+			output.FullDotDPS = fullDPS.TotalDotDPS
 		end
 		-- (build generator: the items this calculation used, for drawbacks PoB
 		-- doesn't calculate - Modules/GeneratorRules)
 		-- (kept beside the output, not in it: UI code iterates outputs)
 		GeneratorOutputItems = GeneratorOutputItems or setmetatable({ }, { __mode = "k" })
-		GeneratorOutputItems[env.player.output] = env.player.itemList
-		-- (and whether it has "while stationary" lines: BuildScorer's boss fight
-		-- blend. A flag, not the modDB: its actor holds the output, and a weak
-		-- key whose value refers back to it is never collected in LuaJIT)
+		GeneratorOutputItems[output] = itemList
 		GeneratorOutputStationary = GeneratorOutputStationary or setmetatable({ }, { __mode = "k" })
-		GeneratorOutputStationary[env.player.output] = calcs.hasStationaryLines(env.player.modDB)
-		return env.player.output
+		GeneratorOutputStationary[output] = stationary
+		return output
 	end, env.player.output
 end
 

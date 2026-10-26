@@ -132,6 +132,10 @@ function BuildGeneratorClass:BuildGenerator(build, options)
 	-- (their archetype, unique packages, layer targets): the build comes from
 	-- the game's math and the generator's own accumulated knowledge only
 	new("BuildArchetypes"):BuildArchetypes().SetPlayerKnowledge(self.options.playerKnowledge ~= false)
+	-- the full DPS (main + second skill) calculated on the environment just
+	-- built, not a new one: a third faster with a second skill, exact on 120
+	-- node trials (Modules/Calcs, getMiscCalculator)
+	GeneratorFastFullDPS = self.options.fastFullDPS ~= false
 	self.log = { }
 	return self
 end
