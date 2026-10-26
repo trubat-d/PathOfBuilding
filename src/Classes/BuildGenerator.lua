@@ -3740,6 +3740,194 @@ function BuildGeneratorClass:LateJewelsMove(maxJewels)
 	return after - before
 end
 
+-- Jewel pairs: a unique jewel that changes the passives in its radius
+-- ("Passive Skills in Radius also grant", "increased effect of small
+-- passives", conversions...) placed so its radius covers the passives another
+-- socketed jewel makes use of - Unnatural Instinct's unallocated small
+-- passives (each one it grants also gets The Light of Meaning's bonus), a
+-- timeless jewel's conquered passives, Thread of Hope's or Impossible
+-- Escape's. PoB counts them: each candidate is socketed for real in a free
+-- socket (empty or holding a generated rare, its path charged) and kept when
+-- the build is better.
+function BuildGeneratorClass:RadiusComboMove()
+	local spec = self.build.spec
+	local itemsTab = self.itemsTab
+	local investment = self.options.investment or { }
+	local prices = GetPriceSource()
+	-- the passives the socketed enabling jewels use
+	local used = { }
+	local enablers = { }
+	for nodeId, itemId in pairs(spec.jewels) do
+		local item = itemsTab.items[itemId]
+		local node = spec.nodes[nodeId]
+		if item and node and spec.allocNodes[nodeId] and item.rarity == "UNIQUE" and item.jewelRadiusIndex then
+			local title = item.title or ""
+			local unalloc = title == "Unnatural Instinct"
+			local conquer = item.jewelData and item.jewelData.conqueredBy
+			if unalloc or conquer then
+				t_insert(enablers, title)
+				for id, n in pairs(node.nodesInRadius and node.nodesInRadius[item.jewelRadiusIndex] or { }) do
+					local tn = spec.nodes[id]
+					if tn and ((unalloc and tn.type == "Normal" and not tn.alloc) or (conquer and tn.alloc)) then used[id] = true end
+				end
+			end
+		end
+	end
+	if not next(used) then return 0 end
+	-- candidate jewels: uniques with a radius function on the passives
+	local finder = new("RadiusJewelFinder"):RadiusJewelFinder(self)
+	local titles, seen = { }, { }
+	for _, unique in pairs(main.uniqueDB.list) do
+		local title = unique.title
+		if unique.type == "Jewel" and title and not seen[title] and title ~= "Unnatural Instinct" and not title:match("^Replica") then
+			for _, line in ipairs(unique.explicitModLines or { }) do
+				local l = (line.line or ""):lower()
+				if l:find("passive skills in radius also grant", 1, true) or l:find("passives in radius", 1, true) and (l:find("increased effect", 1, true) or l:find("transformed", 1, true))
+					or l:find("small passive skills in radius", 1, true) then
+					seen[title] = true
+					t_insert(titles, title)
+					break
+				end
+			end
+		end
+	end
+	t_sort(titles)
+	local function allowed(title)
+		if not prices.Available(investment, title) then return false end
+		local price = prices.uniques[title]
+		if price then return not investment.maxUnique or price <= investment.maxUnique end
+		return investment.unknownAllowed ~= false
+	end
+	local sockets = finder:Sockets(self.options.radiusComboPath or 6)
+	if self.options.debugTiming then
+		local n = 0 for _ in pairs(used) do n = n + 1 end
+		ConPrintf("[radius combo] %d passives used by %s; %d candidate jewels (%s); %d sockets", n, table.concat(enablers, ", "), #titles, table.concat(titles, ", "):sub(1, 300), #sockets)
+	end
+	self:Recalculate()
+	local before = self:FullScore()
+	local best
+	for _, title in ipairs(titles) do
+		local socketed = false
+		for _, itemId in pairs(spec.jewels) do
+			local it = itemsTab.items[itemId]
+			if it and it.title == title then socketed = true end
+		end
+		if self.options.debugTiming and not allowed(title) then ConPrintf("[radius combo] %s not allowed at this investment", title) end
+		if allowed(title) and not socketed then
+			for _, version in ipairs(finder:Versions(title, false)) do
+				local r = version.item.jewelRadiusIndex
+				for _, sock in ipairs(sockets) do
+					local covers = 0
+					for id in pairs(r and sock.node.nodesInRadius and sock.node.nodesInRadius[r] or { }) do
+						if used[id] then covers = covers + 1 end
+					end
+					if self.options.debugTiming and covers < 2 then ConPrintf("[radius combo] %s socket %d: covers %d (radius %s)", version.label, sock.node.id, covers, tostring(r)) end
+					if covers >= 2 then
+						local undo = spec:CreateUndoState()
+						local slotName = "Jewel " .. sock.node.id
+						local slot = itemsTab.slots[slotName]
+						local previous = slot.selItemId
+						local count = spec:CountAllocNodes()
+						if not sock.node.alloc and sock.node.path then spec:AllocNode(sock.node) end
+						local equipped = self:Equip(version.item, slotName)
+						itemsTab:PopulateSlots()
+						spec:BuildAllDependsAndPaths()
+						self:Recalculate()
+						local points = spec:CountAllocNodes() - count
+						local score = self:FullScore() - points * 0.02
+						if self.options.debugTiming then ConPrintf("[radius combo] %s in socket %d (%d used passives covered): %.3f -> %.3f", version.label, sock.node.id, covers, before, score) end
+						if score > before + 0.01 and (not best or score > best.score + 1e-9) then
+							best = { version = version, socket = sock, score = score, covers = covers }
+						end
+						slot:SetSelItemId(previous or 0)
+						itemsTab:DeleteItem(equipped, true)
+						spec:RestoreUndoState(undo)
+						spec:BuildAllDependsAndPaths()
+						itemsTab:PopulateSlots()
+						self:Recalculate()
+						self:Tick()
+					end
+				end
+			end
+		end
+	end
+	-- (none in reach of where Unnatural Instinct is: it moved to another
+	-- socket with a free one close enough for the second jewel to cover it)
+	local uiSlot, uiItem
+	for nodeId, itemId in pairs(spec.jewels) do
+		local it = itemsTab.items[itemId]
+		if it and it.title == "Unnatural Instinct" and spec.allocNodes[nodeId] then uiSlot, uiItem = "Jewel " .. nodeId, it end
+	end
+	if not best and uiItem then
+		local ri = uiItem.jewelRadiusIndex
+		for _, s1 in ipairs(sockets) do
+			local smalls = { }
+			for id in pairs(s1.node.nodesInRadius and s1.node.nodesInRadius[ri] or { }) do
+				local tn = spec.nodes[id]
+				if tn and tn.type == "Normal" and not tn.alloc then smalls[id] = true end
+			end
+			for _, s2 in ipairs(sockets) do
+				if s2 ~= s1 then
+					for _, title in ipairs(titles) do
+						if allowed(title) then
+							for _, version in ipairs(finder:Versions(title, false)) do
+								local r = version.item.jewelRadiusIndex
+								local covers = 0
+								for id in pairs(r and s2.node.nodesInRadius and s2.node.nodesInRadius[r] or { }) do
+									if smalls[id] then covers = covers + 1 end
+								end
+								if covers >= 3 then
+									local snap = self:Snapshot()
+									local count = spec:CountAllocNodes()
+									itemsTab.slots[uiSlot]:SetSelItemId(0)
+									for _, sock in ipairs({ s1, s2 }) do
+										if not sock.node.alloc and sock.node.path then spec:AllocNode(sock.node) spec:BuildAllDependsAndPaths() end
+									end
+									self:Equip(uiItem, "Jewel " .. s1.node.id)
+									self:Equip(version.item, "Jewel " .. s2.node.id)
+									itemsTab:PopulateSlots()
+									spec:BuildAllDependsAndPaths()
+									self:Recalculate()
+									local points = spec:CountAllocNodes() - count
+									local score = self:FullScore() - points * 0.02
+									if self.options.debugTiming then ConPrintf("[radius combo] Unnatural Instinct moved to %d, %s in %d (%d smalls covered): %.3f -> %.3f", s1.node.id, version.label, s2.node.id, covers, before, score) end
+									if score > before + 0.01 and (not best or score > best.score + 1e-9) then
+										best = { version = version, socket = s2, score = score, covers = covers, moveTo = s1 }
+									end
+									self:Restore(snap)
+									spec:BuildAllDependsAndPaths()
+									self:Recalculate()
+									self:Tick()
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	if not best then return 0 end
+	if best.moveTo then
+		itemsTab.slots[uiSlot]:SetSelItemId(0)
+		if not best.moveTo.node.alloc and best.moveTo.node.path then spec:AllocNode(best.moveTo.node) spec:BuildAllDependsAndPaths() end
+		self:Equip(uiItem, "Jewel " .. best.moveTo.node.id)
+	end
+	local slotName = "Jewel " .. best.socket.node.id
+	if not best.socket.node.alloc and best.socket.node.path then spec:AllocNode(best.socket.node) end
+	self:Equip(best.version.item, slotName)
+	itemsTab:PopulateSlots()
+	spec:BuildAllDependsAndPaths()
+	self:Recalculate()
+	self:TrimTree()
+	self:AllocateTree(true)
+	local after = self:FullScore()
+	self:Note(string.format("Jewel combo: %s over the passives %s uses (%d of them in its radius): score %+.3f (%s)", best.version.label,
+		table.concat(enablers, " / "), best.covers, after - before, prices.FormatPrice(prices:UniquePrice(best.version.item))))
+	self.costs = self.costs or { }
+	t_insert(self.costs, prices:UniquePrice(best.version.item) or false)
+	return after - before
+end
+
 -- The best rare jewel the generator makes for a jewel slot (nil if none)
 function BuildGeneratorClass:BestRareJewelFor(slotName)
 	local slot = self.itemsTab.slots[slotName]
@@ -8455,6 +8643,13 @@ function BuildGeneratorClass:Run()
 		self:Move(4, 6, "Jewels for the finished build")
 		local ok, err = pcall(function() self:LateJewelsMove(opts.lateJewelCount or 6) end)
 		if not ok then ConPrintf("Late jewels failed: %s", tostring(err)) end
+	end
+	-- (unique jewels that change the passives in their radius, placed over
+	-- the passives another jewel uses: The Light of Meaning over Unnatural
+	-- Instinct's unallocated small passives, over a timeless jewel's...)
+	if opts.jewels ~= false and opts.radiusCombos ~= false then
+		local ok, err = pcall(function() self:RadiusComboMove() end)
+		if not ok then ConPrintf("Radius jewel combos failed: %s", tostring(err)) end
 	end
 	if opts.requirementsToGear ~= false then
 		self:Move(4, 6, "Resistances and attributes moved from passives to gear")
