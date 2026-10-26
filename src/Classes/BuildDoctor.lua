@@ -1112,6 +1112,8 @@ function BuildDoctorClass:Execute(plan)
 	})
 	if ok and after > before + 0.01 then
 		gen:Note(string.format("Build doctor: %s (%s): score %+.3f", plan.label, plan.reason, after - before))
+		gen.doctorKept = gen.doctorKept or { }
+		gen.doctorKept[plan.id] = true
 		-- (a kept commitment stays kept: the keystones that undo it - Elemental
 		-- Overload after crit was built - aren't taken later by a step that
 		-- judges them alone, as a passive or a keystone tattoo: a Voidforge
@@ -1136,10 +1138,14 @@ end
 
 -- Diagnose, log the report, and try the best plans (each one measured
 -- again after any change: the balance moves)
-function BuildDoctorClass:Run(maxPlans)
+function BuildDoctorClass:Run(maxPlans, skipKept)
 	local gen = self.gen
 	local total = 0
 	local tried = { }
+	-- (skipKept: the last pass tries only plans no earlier pass kept)
+	if skipKept then
+		for id in pairs(gen.doctorKept or { }) do tried[id] = true end
+	end
 	for round = 1, maxPlans or 3 do
 		self:Diagnose()
 		if round == 1 then

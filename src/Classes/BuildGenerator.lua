@@ -3529,9 +3529,9 @@ end
 -- product of layers (crit, speed, resistance, pools...), each measured with a
 -- test dose and a full commitment, the ones with the most damage per point
 -- left rebuilt for (a plan is kept only if the build scores better)
-function BuildGeneratorClass:DoctorMove()
+function BuildGeneratorClass:DoctorMove(skipKept)
 	if not self.mainGem then return 0 end
-	local ok, gain = pcall(function() return new("BuildDoctor"):BuildDoctor(self):Run(self.options.doctorPlans or 3) end)
+	local ok, gain = pcall(function() return new("BuildDoctor"):BuildDoctor(self):Run(self.options.doctorPlans or 3, skipKept) end)
 	if not ok then
 		ConPrintf("Build doctor failed: %s", tostring(gain))
 		return 0
@@ -7987,6 +7987,21 @@ function BuildGeneratorClass:Run()
 	if (opts.repairRounds or 8) > 0 then
 		self:Move(6, 6, "Rebuilding parts of the build to improve it")
 		self:RepairSearch(opts.repairRounds or 8)
+	end
+	-- (the doctor once more, on the build as it now stands: a commitment that
+	-- lost before the polish and repair rounds can win after them - a
+	-- Penance Brand left at 2% crit gained +0.335 from crit committed on the
+	-- finished build; only plans no earlier pass kept)
+	if opts.doctor ~= false and opts.lastDoctor ~= false then
+		self:Move(6, 6, "Build doctor: last check of the damage layers")
+		local saved = self.options.doctorPlans
+		self.options.doctorPlans = opts.lastDoctorPlans or 2
+		local gain = self:DoctorMove(true)
+		self.options.doctorPlans = saved
+		if gain > 0 then
+			local tree = self:RefineTree(10)
+			if tree > 0.001 then self:Note(string.format("Passive tree adjusted after it: score %+.3f", tree)) end
+		end
 	end
 	-- (optional: a population search on top, options.population)
 	if opts.population then
