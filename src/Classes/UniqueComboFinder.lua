@@ -203,6 +203,24 @@ function UniqueComboFinderClass:Find(opts)
 	for _, slotName in ipairs(finder:GetActiveSlots()) do
 		if not slotName:match("^Weapon") and not locked[slotName] then t_insert(slots, slotName) end
 	end
+	-- (and two jewel sockets holding a generated rare or nothing: unique jewel
+	-- pairs - Bloodnotch with Immutable Force - and jewel + gear pairs)
+	local spec = self.build.spec
+	local jewelSlots = 0
+	local socketIds = { }
+	for nodeId in pairs(spec.allocNodes) do t_insert(socketIds, nodeId) end
+	t_sort(socketIds)
+	for _, nodeId in ipairs(socketIds) do
+		local node = spec.nodes[nodeId]
+		local slot = itemsTab.slots["Jewel " .. nodeId]
+		if jewelSlots < 2 and node and node.type == "Socket" and not node.expansionJewel and slot and not locked[slot.slotName] then
+			local current = itemsTab.items[slot.selItemId]
+			if not current or (current.rarity == "RARE" and current.title and current.title:match("^Best Rare")) then
+				t_insert(slots, slot.slotName)
+				jewelSlots = jewelSlots + 1
+			end
+		end
+	end
 	local equippedTitles = { }
 	for _, slot in pairs(itemsTab.slots) do
 		local item = itemsTab.items[slot.selItemId]
@@ -211,7 +229,10 @@ function UniqueComboFinderClass:Find(opts)
 	local candidates = { }
 	for _, item in pairs(main.uniqueDB.list) do
 		local title = item.title or item.name
-		if item.type ~= "Jewel" and item.type ~= "Flask" and item.type ~= "Tincture" and not equippedTitles[title]
+		-- (jewels without a radius: the radius ones are placed by their own steps)
+		local plainJewel = item.type == "Jewel" and not item.jewelRadiusIndex and not (item.base and item.base.subType == "Abyss")
+			and not (item.baseName or ""):match("Cluster") and not (item.baseName or ""):match("Timeless")
+		if (item.type ~= "Jewel" or plainJewel) and item.type ~= "Flask" and item.type ~= "Tincture" and not equippedTitles[title]
 			and prices.Available(gen.options.investment, title) and finder:IsItemAllowed(item, filter) then
 			t_insert(candidates, item)
 		end
