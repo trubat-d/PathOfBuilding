@@ -3970,9 +3970,37 @@ function BuildGeneratorClass:PackageMove(rounds)
 	end
 	-- packages from the scaling graph: stats several affordable uniques
 	-- consume, with what feeds them (not limited to the archetypes' ideas)
+	-- (pieces that lose their charges at the maximum - Tulfall, Malachai's
+	-- Loop - are allowed here: the package brings the piece that counts the
+	-- charges at maximum, Ralakesh's Impatience, added below when missing)
+	local graphFilter = { obtainableOnly = true, levelOnly = true, investment = self.options.investment,
+		assumeMaxCharges = { Power = true, Frenzy = true, Endurance = true } }
 	local okG, graphPackages = pcall(function()
-		return doctor:GraphPackages(function(item) return finder:IsItemAllowed(item, filter) end, self.options.graphVectors or 6)
+		return doctor:GraphPackages(function(item) return finder:IsItemAllowed(item, graphFilter) end, self.options.graphVectors or 6)
 	end)
+	local function linesOf(item)
+		local out = { }
+		for _, modLine in ipairs(item.explicitModLines or { }) do
+			local current = not modLine.variantList or (item.variant and modLine.variantList[item.variant])
+			if current and modLine.line then t_insert(out, modLine.line:lower()) end
+		end
+		return out
+	end
+	-- the best piece counting a kind of charges at maximum, for a package needing it
+	local enablers = { }
+	local function enablerFor(kind)
+		if enablers[kind] ~= nil then return enablers[kind] or nil end
+		enablers[kind] = false
+		for _, item in pairs(main.uniqueDB.list) do
+			for _, l in ipairs(linesOf(item)) do
+				if l:find("count as having maximum number of " .. kind:lower() .. " charges", 1, true) and finder:IsItemAllowed(item, filter) then
+					enablers[kind] = item
+				end
+			end
+			if enablers[kind] then break end
+		end
+		return enablers[kind] or nil
+	end
 	if okG and graphPackages then
 		local have = { }
 		for _, m in ipairs(moves) do have[m.label] = true end
@@ -3984,6 +4012,31 @@ function BuildGeneratorClass:PackageMove(rounds)
 					local item = byTitle[name]
 					if item then
 						if equipped[name] then t_insert(uniques, 1, item) else t_insert(uniques, item) end
+					end
+				end
+				-- (a piece losing its charges at the maximum needs the piece that counts them there)
+				for _, kind in ipairs({ "Power", "Frenzy", "Endurance" }) do
+					local needs, has = false, false
+					for _, item in ipairs(uniques) do
+						for _, l in ipairs(linesOf(item)) do
+							if l:find("lose all " .. kind:lower() .. " charges on reaching maximum", 1, true) then needs = true end
+							if l:find("count as having maximum number of " .. kind:lower() .. " charges", 1, true) then has = true end
+						end
+					end
+					local env = self.build.calcsTab.mainEnv
+					if env and env.player.modDB:Flag(nil, "HaveMaximum" .. kind .. "Charges") then has = true end
+					local enabler = needs and not has and enablerFor(kind)
+					if enabler then
+						-- (it takes the slot of the package's piece of the same kind)
+						for j = #uniques, 1, -1 do
+							if uniques[j].type == enabler.type and enabler.type ~= "Ring" then
+								local title = uniques[j].title or uniques[j].name
+								table.remove(uniques, j)
+								for k = #gp.names, 1, -1 do if gp.names[k] == title then table.remove(gp.names, k) end end
+							end
+						end
+						t_insert(uniques, enabler)
+						t_insert(gp.names, enabler.title or enabler.name)
 					end
 				end
 				local label = string.format("%s stacked (scaling graph, x%.2f as a test): %s", gp.stat, gp.ratio, table.concat(gp.names, " + "))

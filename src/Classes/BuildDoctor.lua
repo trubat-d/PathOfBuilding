@@ -900,7 +900,13 @@ function BuildDoctorClass:GraphPackages(allowed, maxVectors)
 		if lensStat and stackLines[lensStat] and tried < (maxVectors or 6) then
 			tried = tried + 1
 			local stacked = string.format(stackLines[lensStat], stackAmount[lensStat])
-			local base = measure({ stacked })
+			-- (a charge stat stacked is a charge kept up: the test switches
+			-- the charges on, as the build committing to them would - else
+			-- the uniques paying per charge test as worthless until an
+			-- enabler is found, and the greedy choice never gets there)
+			local kind = v.stat:match("^(%a+)Charges$")
+			local keep = kind and string.format("Gain a %s Charge on Hit", kind) or nil
+			local base = measure(keep and { stacked, keep } or { stacked })
 			local pool, seen = { }, { }
 			for _, list in ipairs({ v.consumers, v.feeders }) do
 				for _, a in ipairs(list) do
@@ -909,13 +915,18 @@ function BuildDoctorClass:GraphPackages(allowed, maxVectors)
 			end
 			-- (each alone first: the ten best go into the joint choice)
 			for _, a in ipairs(pool) do
-				local lines = { stacked }
+				local lines = { stacked, keep }
 				for _, l in ipairs(a.lines) do t_insert(lines, l) end
 				a.alone = measure(lines) / base
 				self.gen:Tick()
 			end
 			t_sort(pool, function(a, b) return a.alone > b.alone end)
-			local chosen, names, kinds = { stacked }, { }, { }
+			if os.getenv("DOCTOR_DEBUG") then
+				local parts = { }
+				for i = 1, m_min(12, #pool) do t_insert(parts, string.format("%s x%.3f", pool[i].title, pool[i].alone)) end
+				ConPrintf("[graph] %s alone (base x%.3f): %s", v.stat, base, table.concat(parts, ", "))
+			end
+			local chosen, names, kinds = { stacked, keep }, { }, { }
 			local current = base
 			for _ = 1, 4 do
 				local best, bestRatio
