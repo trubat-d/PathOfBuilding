@@ -969,8 +969,20 @@ function AutoConfigClass:Run()
 		for _, state in ipairs(comboFinder.SelfBuffs(lines, hitRate, boss, ((output.CritChance or (output.MainHand and output.MainHand.CritChance)) or 0) / 100,
 			-- (hits taken a second: a boss's regular hits, less those avoided; block chance)
 			1 * (self.scorer or new("BuildScorer"):BuildScorer(self.build, { })):DamageTakenShare(output), (output.EffectiveBlockChance or output.BlockChance or 0) / 100)) do
-			setIfUsed(state.var, state.on, state.reason)
-			if state.on then found[state.var] = true configTab.autoSelfBuffs[state.var] = true end
+			local var = state.var
+			-- (Bitter Heresy / Lycia: the ground made is Profane instead - you and
+			-- the enemy stand on it)
+			if var == "conditionOnConsecratedGround" then
+				for _, line in ipairs(lines) do
+					if line:find("create profane ground instead of consecrated ground", 1, true) then var = "conditionOnProfaneGround" end
+				end
+				if var == "conditionOnProfaneGround" then
+					setIfUsed("conditionEnemyOnProfaneGround", state.on, state.reason .. " (Profane Ground)")
+					if state.on then found.conditionEnemyOnProfaneGround = true configTab.autoSelfBuffs.conditionEnemyOnProfaneGround = true end
+				end
+			end
+			setIfUsed(var, state.on, state.reason)
+			if state.on then found[var] = true configTab.autoSelfBuffs[var] = true end
 		end
 		for var in pairs(configTab.autoSelfBuffs) do
 			if not found[var] and configTab.input[var] then
