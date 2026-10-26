@@ -4776,6 +4776,28 @@ function BuildGeneratorClass:SupremeOstentationMove()
 		if ah ~= bh then return ah end
 		return a.value > b.value
 	end)
+	-- (the trial below remakes the tree and the rares; the same remaking alone
+	-- is the baseline, kept when it helps, so the jewel is judged on what it
+	-- adds and not on the remaking: compared with the bare build, Supreme
+	-- Ostentation took the credit for it and replaced timeless jewels with
+	-- better notables)
+	do
+		local snap0 = self:Snapshot()
+		local savedLog0 = #self.log
+		local ok0 = pcall(function()
+			self:RefineTree(self.options.ostentationRefine or 16)
+			if self.options.finalRares ~= false then self:FinalRares() end
+			self:OptimizeTree()
+		end)
+		for j = #self.log, savedLog0 + 1, -1 do t_remove(self.log, j) end
+		local adapted = ok0 and self:FullScore() or before
+		if self.options.debugTiming then ConPrintf("[ostentation] remaking alone: %.3f -> %.3f", before, adapted) end
+		if ok0 and adapted > before + 0.002 then
+			before = adapted
+		else
+			self:Restore(snap0)
+		end
+	end
 	-- (each socket tried as a package; the first that improves the build is kept.
 	-- The second only when the first came close: in the traces on five Endgame
 	-- builds, a second socket never won, and never after a first that ended
