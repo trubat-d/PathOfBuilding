@@ -206,6 +206,20 @@ end
 -- Recalculate the build now (normally done at the next frame)
 function BuildGeneratorClass:Recalculate()
 	self.recalcCount = (self.recalcCount or 0) + 1
+	-- (a kept commitment's blocked keystones - Elemental Overload after crit -
+	-- never stay allocated, whichever step took them: one a step judged alone
+	-- undid the crit of a 200-divine Voidforge Cyclone)
+	if self.blockedKeystones then
+		local spec = self.build.spec
+		local removed = false
+		for _, node in pairs(spec.allocNodes) do
+			if node.type == "Keystone" and self.blockedKeystones[node.dn] and not node.ascendancyName then
+				spec:DeallocNode(node)
+				removed = true
+			end
+		end
+		if removed then spec:BuildAllDependsAndPaths() end
+	end
 	wipeGlobalCache()
 	self.build.outputRevision = self.build.outputRevision + 1
 	self.build.buildFlag = false
@@ -4208,11 +4222,13 @@ function BuildGeneratorClass:ConditionEnablerMove(rounds)
 					end
 				end
 				for _, node in ipairs(audit:PassiveSources(g.condition, g.enemy, 8)) do
-					local add = { }
-					for _, n in ipairs(node.path) do add[n] = true end
-					local score = self:Score({ addNodes = add }) - #node.path * 0.006
-					if score > current + 0.02 and (not best or score > best.score) then
-						best = { node = node, score = score, g = g }
+					if not (self.forbiddenNodes and self.forbiddenNodes[node.id]) then
+						local add = { }
+						for _, n in ipairs(node.path) do add[n] = true end
+						local score = self:Score({ addNodes = add }) - #node.path * 0.006
+						if score > current + 0.02 and (not best or score > best.score) then
+							best = { node = node, score = score, g = g }
+						end
 					end
 				end
 				self:Tick()
