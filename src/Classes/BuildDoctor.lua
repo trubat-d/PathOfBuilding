@@ -92,6 +92,30 @@ end
 -- typically costs (passive points, an affix counted as about 3 points), and
 -- which damage modes it applies to. commit: a full commitment for layers
 -- that only pay off when built together; drop: keystones it conflicts with.
+-- The passives that turn crit off or take its damage away, read from the
+-- tree ("Never deal Critical Strikes": Resolute Technique, Precise
+-- Technique; "Critical Strikes do not deal extra Damage": Elemental
+-- Overload): a crit commitment drops them and keeps them out. (A list of two
+-- missed Precise Technique: a Voidforge Cyclone took it and the doctor saw
+-- crit at 0% with nothing to gain.)
+local critBlockerCache
+local function critBlockers()
+	if critBlockerCache then return critBlockerCache end
+	critBlockerCache = { "Elemental Overload", "Resolute Technique" }
+	local seen = { ["Elemental Overload"] = true, ["Resolute Technique"] = true }
+	local tree = main and main.tree and main.tree[latestTreeVersion]
+	for _, node in pairs(tree and tree.nodes or { }) do
+		if (node.type == "Keystone" or node.isKeystone) and node.dn and not seen[node.dn] and not node.ascendancyName then
+			local text = table.concat(node.sd or node.stats or { }, " ")
+			if text:find("Never deal Critical Strikes", 1, true) or text:find("Critical Strikes do not deal extra Damage", 1, true) then
+				seen[node.dn] = true
+				table.insert(critBlockerCache, node.dn)
+			end
+		end
+	end
+	return critBlockerCache
+end
+
 local function layerList(mode)
 	local e = mode.element
 	local elemental = e == "Fire" or e == "Cold" or e == "Lightning"
@@ -106,7 +130,7 @@ local function layerList(mode)
 			-- Assassin's Mark / Power Charge On Critical, gear; top Winter Orbs
 			-- reach 99% chance and x8)
 			commit = { "+4% to Critical Strike Chance", "500% increased Critical Strike Chance", "+250% to Critical Strike Multiplier" }, commitCost = 30,
-			drop = { "Elemental Overload", "Resolute Technique" } },
+			drop = critBlockers() },
 		{ id = "speed", label = mode.attack and "Attack speed" or "Cast speed", hitOnly = not (mode.main == "poison"), lines = { "15% increased Attack and Cast Speed" }, cost = 3.5,
 			commit = { "60% increased Attack and Cast Speed" }, commitCost = 14 },
 		{ id = "penetration", label = e .. " penetration (hits only)", hitOnly = true, lines = { "Damage Penetrates 15% " .. e .. " Resistance" }, cost = 4,
@@ -463,7 +487,7 @@ function BuildDoctorClass:Plans()
 		t_sort(blockSupports)
 		for _, name in ipairs(blockSupports) do t_insert(drop, name) end
 		t_insert(plans, {
-			id = "crit", label = "commit to critical strikes", blocks = { "Elemental Overload", "Resolute Technique" }, take = critTakes(self.build),
+			id = "crit", label = "commit to critical strikes", blocks = critBlockers(), take = critTakes(self.build),
 			reason = string.format("crit factor x%.2f now, x%.2f when chance and multiplier are built together (%s)", s.critEffect or 1, crit.commitRatio,
 				#drop > 0 and (table.concat(drop, ", ") .. " dropped") or "no keystone in the way"),
 			lens = { func = function(o) return o.CritEffect or 1 end, base = 1, label = "Crit damage factor", weight = 0.5 },
@@ -583,10 +607,10 @@ function BuildDoctorClass:Plans()
 	end
 	gapPlan("crit", "crit", function()
 		local drop = { }
-		for _, name in ipairs({ "Elemental Overload", "Resolute Technique" }) do if allocated(name) then t_insert(drop, name) end end
+		for _, name in ipairs(critBlockers()) do if allocated(name) then t_insert(drop, name) end end
 		local blockSupports = { }
 		for name in pairs(self.critBlockers or { }) do t_insert(blockSupports, name) t_insert(drop, name) end
-		return { id = "crit", label = "commit to critical strikes", blocks = { "Elemental Overload", "Resolute Technique" }, take = critTakes(self.build), drop = drop, blockSupports = blockSupports,
+		return { id = "crit", label = "commit to critical strikes", blocks = critBlockers(), take = critTakes(self.build), drop = drop, blockSupports = blockSupports,
 			lens = { func = function(o) return o.CritEffect or 1 end, base = 1, label = "Crit damage factor", weight = 0.5 },
 			rares = true, refine = 30, utility = true }
 	end)
@@ -657,11 +681,11 @@ function BuildDoctorClass:CommitmentPlans()
 	end
 	local element = r.mode.element
 	local critDrop = { }
-	for _, name in ipairs({ "Elemental Overload", "Resolute Technique" }) do if allocated(name) then t_insert(critDrop, name) end end
+	for _, name in ipairs(critBlockers()) do if allocated(name) then t_insert(critDrop, name) end end
 	local blockSupports = { }
 	for name in pairs(self.critBlockers or { }) do t_insert(blockSupports, name) t_insert(critDrop, name) end
 	return {
-		crit = { id = "crit", label = "crit", blocks = { "Elemental Overload", "Resolute Technique" }, take = critTakes(self.build), drop = critDrop, blockSupports = blockSupports,
+		crit = { id = "crit", label = "crit", blocks = critBlockers(), take = critTakes(self.build), drop = critDrop, blockSupports = blockSupports,
 			lens = { func = function(o) return o.CritEffect or 1 end, base = 1, label = "Crit damage factor", weight = 0.5 }, rares = true, refine = 30, utility = true },
 		power = { id = "power", label = "power charges", lens = { stat = "PowerChargesMax", base = 3, label = "Maximum power charges", weight = 0.4 }, rares = true, refine = 16 },
 		resistance = { id = "resistance", label = "enemy " .. element:lower() .. " resistance",
