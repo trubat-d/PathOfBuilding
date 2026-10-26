@@ -3710,18 +3710,61 @@ function BuildGeneratorClass:KeystoneMove(maxTries)
 			self:Recalculate()
 			self:TrimTree()
 			self:RefineTree(4)
+			-- (with the states the keystone changes set as they really are: Wind
+			-- Dancer is worth +0.13 while "hit recently" is still off, less than
+			-- nothing once the configuration sees three hits a second)
+			self:AutoConfigure()
 			local after = self:FullScore()
 			if after > before + 0.01 and node.alloc then
 				t_insert(kept, string.format("%s (%+.3f)", node.dn, after - before))
 				self.protectedNodes = self.protectedNodes or { }
 				self.protectedNodes[node.id] = true
+				self.keystonesKept = self.keystonesKept or { }
+				self.keystonesKept[node.id] = true
 			else
 				spec:RestoreUndoState(undo)
+				self:AutoConfigure()
 				self:Recalculate()
 			end
 		end
 	end
 	if #kept > 0 then self:Note("Keystones taken: " .. table.concat(kept, ", ")) end
+end
+
+-- The keystones KeystoneMove took (protected from the tree's pruning ever
+-- since) judged again on the finished build: one that now costs more than it
+-- gives is taken out with its path, the points spent again (a crit Cyclone
+-- kept Wind Dancer at -0.05 once "hit recently" was on)
+function BuildGeneratorClass:KeystoneRecheck()
+	local spec = self.build.spec
+	local removed = { }
+	for id in pairs(self.keystonesKept or { }) do
+		local node = spec.nodes[id]
+		if node and node.alloc then
+			local before = self:FullScore()
+			local undo = spec:CreateUndoState()
+			local savedInput = copyTable(self.build.configTab.input, true)
+			self.protectedNodes[id] = nil
+			spec:DeallocNode(node)
+			self:Recalculate()
+			self:TrimTree()
+			self:RefineTree(8)
+			self:AutoConfigure()
+			local after = self:FullScore()
+			if after > before + 0.005 and not node.alloc then
+				t_insert(removed, string.format("%s (%+.3f)", node.dn, after - before))
+				self.keystonesKept[id] = nil
+			else
+				self.protectedNodes[id] = true
+				spec:RestoreUndoState(undo)
+				for k in pairs(self.build.configTab.input) do self.build.configTab.input[k] = nil end
+				for k, v in pairs(savedInput) do self.build.configTab.input[k] = v end
+				self.build.configTab:BuildModList()
+				self:Recalculate()
+			end
+		end
+	end
+	if #removed > 0 then self:Note("Keystones taken out on the finished build: " .. table.concat(removed, ", ")) end
 end
 
 function BuildGeneratorClass:ChooseTimelessJewel()
@@ -8071,6 +8114,11 @@ function BuildGeneratorClass:Run()
 	if opts.population then
 		local ok, err = pcall(function() self:PopulationSearch(opts.populationSize or 3, opts.populationGenerations or 2) end)
 		if not ok then ConPrintf("Population search failed: %s", tostring(err)) end
+	end
+	-- (keystones taken earlier, judged again on the finished build)
+	if opts.keystoneRecheck ~= false then
+		local ok, err = pcall(function() self:KeystoneRecheck() end)
+		if not ok then ConPrintf("Keystone recheck failed: %s", tostring(err)) end
 	end
 	-- (resistance / attribute / suppression leaves again: the steps since -
 	-- the doctor, the repair rounds - can take some back to cap a resistance
