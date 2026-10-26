@@ -1879,6 +1879,32 @@ end
 -- third ring comes through Toad's Price, utility flasks disabled (a mid-tier
 -- Righteous Fire took it for the ring and ended 0.8 below). Kept if better;
 -- a third ring left without its slot is taken out.
+-- The flasks chosen again for the finished build: they are chosen at stage
+-- 10, for the build as it was then (a Gold Flask kept for its suffix, worth
+-- nothing once the gear changed, while a Sulphur or Quicksilver Flask would
+-- add). Kept if the build is better.
+function BuildGeneratorClass:FlaskRecheck()
+	local before = self:FullScore()
+	local snap = self:Snapshot()
+	local savedLog = #self.log
+	local ok, err = pcall(function()
+		self:MakeFlasks()
+		if self.options.flaskEnchants ~= false then self:FlaskEnchantMove() end
+	end)
+	if not ok then ConPrintf("Flask recheck: %s", tostring(err)) end
+	self:AutoConfigure()
+	local after = ok and self:FullScore() or before
+	if ok and after > before + 0.005 then
+		for i = #self.log, savedLog + 1, -1 do if not self.log[i]:match("^Flasks:") then t_remove(self.log, i) end end
+		self:Note(string.format("Flasks chosen again for the finished build: score %+.3f", after - before))
+		return after - before
+	end
+	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+	self:Restore(snap)
+	self:AutoConfigure()
+	return 0
+end
+
 function BuildGeneratorClass:BloodlineRecheck()
 	local spec = self.build.spec
 	if self.options.bloodlines == false or not spec.tree.alternate_ascendancies then return 0 end
@@ -7752,6 +7778,10 @@ function BuildGeneratorClass:Run()
 	if opts.bloodlineRecheck ~= false then
 		local ok, err = pcall(function() self:BloodlineRecheck() end)
 		if not ok then ConPrintf("Bloodline recheck failed: %s", tostring(err)) end
+	end
+	if opts.flaskRecheck ~= false then
+		local ok, err = pcall(function() self:FlaskRecheck() end)
+		if not ok then ConPrintf("Flask recheck failed: %s", tostring(err)) end
 	end
 	if opts.finalSupports ~= false then
 		self:Move(2, 6, "Choosing the supports again")
