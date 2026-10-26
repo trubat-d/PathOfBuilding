@@ -203,6 +203,26 @@ function RareItemGeneratorClass:GetCraftCandidates(item, quality)
 	return list
 end
 
+-- A bench craft the item refuses: it shares a stat with one of the item's
+-- natural prefixes / suffixes (poewiki Crafting Bench: "The item cannot
+-- already have a mod of that type")
+function RareItemGeneratorClass.CraftClashes(item, candidate)
+	local stats = { }
+	for _, so in ipairs(candidate.mod and candidate.mod.statOrder or { }) do stats[so] = true end
+	for _, list in ipairs({ item.prefixes or { }, item.suffixes or { } }) do
+		for _, affix in ipairs(list) do
+			local mod = affix.modId and affix.modId ~= "None" and data.itemMods.Explicit[affix.modId]
+			if mod then
+				if candidate.mod and mod.group and mod.group == candidate.mod.group then return true end
+				for _, so in ipairs(mod.statOrder or { }) do
+					if stats[so] then return true end
+				end
+			end
+		end
+	end
+	return false
+end
+
 -- Total amount by which the build's resistances / attributes are worse than the baseline
 local function deficit(output, baseOutput, opts)
 	local total = 0

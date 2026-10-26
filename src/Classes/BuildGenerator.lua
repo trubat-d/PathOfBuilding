@@ -3008,7 +3008,7 @@ function BuildGeneratorClass:RequirementsMove(rounds)
 					end
 					for _, c in ipairs(candidates) do
 						local text = table.concat(c.lines, " ")
-						if (not kind or c.type == kind) and c.lines[1] ~= craftedLines[1]
+						if (not kind or c.type == kind) and c.lines[1] ~= craftedLines[1] and not rg.CraftClashes(item, c)
 							and (text:match("Resistance") or text:match("to Strength") or text:match("to Dexterity") or text:match("to Intelligence") or text:match("to all Attributes")) then
 							local raw = item:BuildRaw()
 							local copy = new("Item"):Item(raw)
