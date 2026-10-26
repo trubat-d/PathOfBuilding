@@ -4900,6 +4900,100 @@ function BuildGeneratorClass:FitTotalBudget()
 	end
 end
 
+-- Total budget left over: the total picks the level whose rares fit six
+-- times in it (80 divines: High, 8 divine rares; Endgame's 30 don't), and the
+-- fit only takes away, so a mid-tier build ended at 47 of 80 divines. Each
+-- rare gear slot is made at the next level, the best score per extra divine
+-- kept while the build stays under the budget (each checked on the build).
+function BuildGeneratorClass:SpendBudgetMove()
+	local budget = self.options.totalBudget
+	local prices = GetPriceSource()
+	if not budget or budget <= 0 or not prices.loaded then return 0 end
+	local investment = self.options.investment or { }
+	local nextLevel
+	for i, level in ipairs(prices.levels) do
+		if level.id == (investment.baseId or investment.id) then nextLevel = prices.levels[i + 1] end
+	end
+	if not nextLevel or nextLevel.id == "MIRROR" then return 0 end
+	local total = self:BuildCost()
+	if total > budget * 0.85 then return 0 end
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local generator = finder.rareGenerator
+	local measure = function(output) return self.scorer:ScoreOutput(output, self.ratio) end
+	local function priceOf(item, level)
+		return (self.rarePriceById and self.rarePriceById[item.id]) or prices:RarePrice(item, level) or 0
+	end
+	-- 1. every rare gear slot made at the next level, alone
+	local before = self:FullScore()
+	local options = { }
+	for _, slot in ipairs(self.itemsTab.orderedSlots) do
+		local item = self.itemsTab.items[slot.selItemId]
+		if item and item.rarity == "RARE" and not slot.nodeId and item.type ~= "Jewel" and not (item.base and item.base.flask)
+			and not (self.lockedSlots and self.lockedSlots[slot.slotName]) then
+			local snap = self:Snapshot()
+			local ok, result = pcall(function()
+				self.itemsTab.slots[slot.slotName]:SetSelItemId(0)
+				self.itemsTab:PopulateSlots()
+				self:Recalculate()
+				local opts = self:RareOptions(true)
+				opts.maxAffixes, opts.multiCraft = nextLevel.rareAffixes, nextLevel.multiCraft
+				opts.influences, opts.eldritchTier, opts.elevated = nextLevel.influences or 0, nextLevel.eldritchTier or 0, nextLevel.elevated or false
+				opts.quality = generator.qualityList[nextLevel.quality or generator.defaultQuality] or opts.quality
+				local baseOutput = self.calcFunc({ })
+				local ctx = { calcFunc = self.calcFunc, baseOutput = baseOutput, basePower = measure(baseOutput), measure = measure, tick = function() self:Tick() end, opts = opts }
+				return generator:GenerateForSlotWith(slot.slotName, makeBase(item.baseName), ctx, nil)
+			end)
+			self:Restore(snap)
+			self:Recalculate()
+			if ok and result and result.item then
+				local newItem = new("Item"):Item(result.item.raw)
+				newItem:NormaliseQuality()
+				newItem:BuildModList()
+				local extra = (prices:RarePrice(newItem, nextLevel) or 0) - priceOf(item, investment)
+				t_insert(options, { slot = slot.slotName, item = result.item, extra = m_max(0.1, extra), old = item })
+			elseif not ok then
+				ConPrintf("Budget upgrade of %s failed: %s", slot.slotName, tostring(result))
+			end
+			self:Tick()
+		end
+	end
+	-- 2. measured in the build, best gain per extra divine first
+	for _, o in ipairs(options) do
+		local snap = self:Snapshot()
+		self:Equip(o.item, o.slot)
+		self:Recalculate()
+		o.gain = self:FullScore() - before
+		self:Restore(snap)
+	end
+	self:Recalculate()
+	t_sort(options, function(a, b) return a.gain / a.extra > b.gain / b.extra end)
+	local kept, gainTotal = { }, 0
+	for _, o in ipairs(options) do
+		if o.gain > 0.02 and total + o.extra <= budget then
+			local current = self:FullScore()
+			local snap = self:Snapshot()
+			local item = self:Equip(o.item, o.slot)
+			self.rarePriceById = self.rarePriceById or { }
+			self.rarePriceById[item.id] = prices:RarePrice(item, nextLevel)
+			self:Recalculate()
+			local after = self:FullScore()
+			if after > current + 0.01 then
+				total = total + o.extra
+				gainTotal = gainTotal + after - current
+				t_insert(kept, string.format("%s (+%s, %+.3f)", o.slot, prices.FormatPrice(o.extra), after - current))
+			else
+				self:Restore(snap)
+				self:Recalculate()
+			end
+		end
+	end
+	if #kept > 0 then
+		self:Note(string.format("Budget left spent: rares made at the %s level in %s; build now about %s of %s",
+			nextLevel.label:match("^([^%(]+)"):gsub("%s+$", ""), table.concat(kept, ", "), prices.FormatPrice(total), prices.FormatPrice(budget)))
+	end
+	return gainTotal
+end
+
 -- Upgrade order: the priced parts sorted by score per divine, with what the
 -- build has after each step (what to buy first when building it up)
 function BuildGeneratorClass:UpgradeOrder()
@@ -7445,10 +7539,15 @@ function BuildGeneratorClass:Run()
 		local ok, err = pcall(function() self:PruneUselessGems() end)
 		if not ok then ConPrintf("Pruning gems failed: %s", tostring(err)) end
 	end
-	-- total budget: the parts worth least per divine made cheap until it fits
+	-- total budget: the parts worth least per divine made cheap until it fits,
+	-- and what is left spent on better rares
 	if opts.totalBudget then
 		local ok, err = pcall(function() self:FitTotalBudget() end)
 		if not ok then ConPrintf("Fitting the total budget failed: %s", tostring(err)) end
+		if opts.spendBudget ~= false then
+			local ok2, err2 = pcall(function() self:SpendBudgetMove() end)
+			if not ok2 then ConPrintf("Spending the budget failed: %s", tostring(err2)) end
+		end
 	end
 	-- hard requirements (resistances, attributes) fixed with bench crafts
 	if opts.requirements ~= false then self:RequirementsMove() end
