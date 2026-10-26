@@ -101,8 +101,34 @@ function PriceSourceClass.ForBudget(total, raresPerBuild)
 end
 
 -- Can a unique be counted on at an investment level (scarce ones from High)?
+-- Uniques no longer obtainable (The Perandus Pact, legacy league uniques):
+-- never offered, whichever finder asks
+local unobtainable
+local function isUnobtainable(title)
+	if not unobtainable then
+		if not (main and main.uniqueDB and main.uniqueDB.list and not main.uniqueDB.loading) then return false end
+		unobtainable = { }
+		local obtainable = { }
+		for _, item in pairs(main.uniqueDB.list) do
+			local name = item.title or item.name
+			if name then
+				if (item.source or "") == "No longer obtainable" or item.league == "Race Events" then
+					unobtainable[name] = true
+				else
+					obtainable[name] = true
+				end
+			end
+		end
+		-- (a title with an obtainable version stays: replicas, reworked uniques)
+		for name in pairs(obtainable) do unobtainable[name] = nil end
+	end
+	return unobtainable[title] or false
+end
+PriceSourceClass.IsUnobtainable = isUnobtainable
+
 function PriceSourceClass.Available(level, title)
 	if not title then return true end
+	if isUnobtainable(title) then return false end
 	-- (the player's excluded uniques and the mid-tier option's chase uniques:
 	-- the jewel finders ask here, not through the item filter)
 	local rules = GetGeneratorRules and GetGeneratorRules()

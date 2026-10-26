@@ -372,11 +372,28 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 	local function fill(seed)
 		local chosen = { }
 		local usedGroups = { }
-		local counts = { Prefix = 0, Suffix = 0, crafted = 0, influence = 0 }
+		local counts = { Prefix = 0, Suffix = 0, crafted = 0, influence = 0, gemLevel = 0 }
 		-- (influence mods: one per influence the item has - what a Conqueror's
 		-- Exalted Orb or an Awakener's Orb merge gives; an item with three
 		-- Warlord mods is a lottery, not a craft. opts.maxInfluenceMods overrides)
 		local maxInfluence = opts.maxInfluenceMods or #(influences or { })
+		-- ("+1 to Level of Socketed Lightning / Physical / all Gems": one on an
+		-- item - two or three of them together is a lottery nobody crafts)
+		local maxGemLevel = opts.maxGemLevelMods or 1
+		local function isGemLevel(candidate)
+			if candidate.gemLevelMod == nil then
+				candidate.gemLevelMod = false
+				for _, line in ipairs(candidate.lines or { }) do
+					if line:match("to Level of Socketed") then candidate.gemLevelMod = true end
+				end
+				if not candidate.lines and candidate.mod then
+					for _, line in ipairs(candidate.mod) do
+						if type(line) == "string" and line:match("to Level of Socketed") then candidate.gemLevelMod = true end
+					end
+				end
+			end
+			return candidate.gemLevelMod
+		end
 		local function isInfluence(candidate)
 			if candidate.influenceMod == nil then
 				candidate.influenceMod = false
@@ -400,6 +417,7 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			counts[seed.type] = counts[seed.type] + 1
 			if seed.crafted then counts.crafted = counts.crafted + 1 end
 			if isInfluence(seed) then counts.influence = counts.influence + 1 end
+			if isGemLevel(seed) then counts.gemLevel = counts.gemLevel + 1 end
 			local output, power = evaluate()
 			currentPower, currentDeficit = power, deficit(output, ctx.baseOutput, opts)
 		end
@@ -424,7 +442,8 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 					and counts.Prefix + counts.Suffix + 2 <= total)
 				if not usedGroups[candidate.group] and counts[candidate.type] < limits[candidate.type] and not (candidate.crafted and counts.crafted >= maxCrafts)
 					and metaRoom and not (opts.maxAffixes and not candidate.crafted and natural >= opts.maxAffixes)
-					and not (isInfluence(candidate) and counts.influence >= maxInfluence) then
+					and not (isInfluence(candidate) and counts.influence >= maxInfluence)
+					and not (isGemLevel(candidate) and counts.gemLevel >= maxGemLevel) then
 					t_insert(order, candidate)
 				end
 			end
@@ -473,6 +492,7 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			counts[best.type] = counts[best.type] + 1
 			if best.crafted then counts.crafted = counts.crafted + 1 end
 			if isInfluence(best) then counts.influence = counts.influence + 1 end
+			if isGemLevel(best) then counts.gemLevel = counts.gemLevel + 1 end
 			currentPower, currentDeficit = bestPower, bestDeficit
 		end
 		-- take the mods off again: the caller builds the real item
