@@ -68,7 +68,7 @@ function main:Init()
 	self.gameAccounts = { }
 
 	local ignoreBuild
-	if arg[1] then
+	if arg and arg[1] then
 		local importLink = buildSites.ParseImportLinkFromURI(arg[1])
 		buildSites.DownloadBuild(arg[1], nil, function(isSuccess, data, importLink)
 			if not isSuccess then

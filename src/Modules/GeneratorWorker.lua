@@ -75,6 +75,8 @@ return function(jobJson, userPath, scriptBase)
 		if name == "lcurl.safe" then return end
 		return l_require(name)
 	end
+	-- (no command line in a background thread: Main reads arg[1] for a build link)
+	arg = arg or { }
 	dofile("Launch.lua")
 	trace("Launch.lua loaded")
 	runCallback("OnInit")
