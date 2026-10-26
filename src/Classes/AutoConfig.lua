@@ -15,6 +15,7 @@
 local pairs = pairs
 local ipairs = ipairs
 local t_insert = table.insert
+local m_max, m_min, m_floor = math.max, math.min, math.floor
 local configOptions = require("Modules.ConfigOptions")
 
 ---@class AutoConfig
@@ -59,6 +60,66 @@ AutoConfigClass.supportStates = {
 	{ gem = "Intensify", var = "intensifyIntensity", value = 3, needs = "Spell", label = "Intensity from casting in place (Intensify Support)" },
 }
 
+-- Trinity's lowest Resonance as the hits really give it (poewiki): a hit
+-- grants Resonance of the elements other than its highest damage type, and
+-- only when that highest type is elemental (physical or chaos highest: none);
+-- an element that is always the highest never gains, so the lowest stays at
+-- 0. Hits sampled from each damage type's range: the share of hits granting
+-- each element, then the chance it gains in the last 2 seconds (hits made in
+-- 2 seconds). 50 when every element gains steadily. (A Cyclone with Trinity
+-- counted at 50 while physical was its highest damage: nothing in game)
+function AutoConfigClass.TrinityResonance(output)
+	if not output then return 0 end
+	local src = output.MainHand or output
+	local types = { "Physical", "Fire", "Cold", "Lightning", "Chaos" }
+	local elements = { Fire = true, Cold = true, Lightning = true }
+	-- (PoB keeps a type's min / max only in the Calcs tab's mode; from its
+	-- average otherwise, with the usual spread of that type: lightning
+	-- rolls 1 to 10, the others about 1 to 2-3)
+	local spread = { Physical = 0.33, Fire = 0.4, Cold = 0.4, Lightning = 0.82, Chaos = 0.33 }
+	local ranges, anyElement = { }, false
+	for _, t in ipairs(types) do
+		local mn, mx = src[t .. "Min"], src[t .. "Max"]
+		if not (mn and mx) then
+			local avg = src[t .. "HitAverage"] or 0
+			mn, mx = avg * (1 - spread[t]), avg * (1 + spread[t])
+		end
+		ranges[t] = { mn, m_max(mn, mx) }
+		if elements[t] and mx > 0 then anyElement = true end
+	end
+	if not anyElement then return 0 end
+	local seed = 12345
+	local function rnd()
+		seed = (seed * 1103515245 + 12345) % 2147483648
+		return seed / 2147483648
+	end
+	local gain = { Fire = 0, Cold = 0, Lightning = 0 }
+	local samples = 400
+	for _ = 1, samples do
+		local best, bestType = -1, nil
+		for _, t in ipairs(types) do
+			local r = ranges[t]
+			if r[2] > 0 then
+				local v = r[1] + (r[2] - r[1]) * rnd()
+				if v > best then best, bestType = v, t end
+			end
+		end
+		if bestType and elements[bestType] then
+			for el in pairs(gain) do
+				if el ~= bestType then gain[el] = gain[el] + 1 end
+			end
+		end
+	end
+	local hits = 2 * m_max(0.5, output.HitSpeed or output.Speed or src.Speed or 1)
+	local lowest = 50
+	for _, count in pairs(gain) do
+		local q = count / samples
+		local gaining = 1 - (1 - q) ^ hits
+		lowest = m_min(lowest, 50 * gaining)
+	end
+	return m_floor(lowest)
+end
+
 -- The support states a support gem grants a main skill with these skill
 -- types: { state, ... }
 -- (output: the main skill's, for states that depend on its damage; boss: the
@@ -70,9 +131,15 @@ function AutoConfigClass.SupportStatesOf(gemName, skillTypes, output, boss)
 			and not (state.mappingOnly and boss) then
 			local ok = true
 			if state.allElements then
-				for _, t in ipairs({ "Fire", "Cold", "Lightning" }) do
-					local hit = output and (output[t .. "HitAverage"] or (output.MainHand and output.MainHand[t .. "HitAverage"])) or 0
-					if hit <= 0 then ok = false end
+				local value = AutoConfigClass.TrinityResonance(output)
+				if value < 5 then
+					ok = false
+				else
+					local copy = { }
+					for k, v in pairs(state) do copy[k] = v end
+					copy.value = value
+					copy.label = string.format("Resonance %d of 50 on the lowest element: the highest element of a hit changes often enough (Trinity Support)", value)
+					state = copy
 				end
 			end
 			if ok then t_insert(list, state) end
