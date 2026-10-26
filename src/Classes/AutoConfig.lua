@@ -120,6 +120,28 @@ function AutoConfigClass.TrinityResonance(output)
 	return m_floor(lowest)
 end
 
+-- Cruelty's effect from the main skill's average hit and the enemy's
+-- ailment threshold (as CalcOffence works it out for non-damaging ailments)
+function AutoConfigClass.CrueltyEffect(output, env, gem)
+	if not (output and env and env.enemyDB) then return nil end
+	local hit = output.AverageHit or (output.MainHand and output.MainHand.AverageHit) or output.AverageDamage or (output.MainHand and output.MainHand.AverageDamage)
+	if not hit or hit <= 0 then return nil end
+	local isBoss = env.configInput and env.configInput.enemyIsBoss and env.configInput.enemyIsBoss ~= "None"
+	local level = env.enemyLevel or 84
+	local threshold = data.monsterAilmentThresholdTable[level] or 20000
+	local lifeMult, ailmentMult = 1, 1
+	if level >= 66 then
+		lifeMult = isBoss and data.mapLevelBossLifeMult and data.mapLevelBossLifeMult[level] or (data.mapLevelLifeMult and data.mapLevelLifeMult[level]) or 1
+		ailmentMult = isBoss and data.mapLevelBossAilmentMult and data.mapLevelBossAilmentMult[level] or 1
+	end
+	threshold = threshold * (isBoss and 7.68 or 1) * lifeMult * env.enemyDB:More(nil, "Life") * ailmentMult * env.enemyDB:More(nil, "AilmentThreshold")
+	if threshold <= 0 then return nil end
+	-- (gem level 20: 19% increased effect, quality 0.25% each)
+	local level20 = (gem.level or 20)
+	local inc = m_max(0, (level20 - 1)) / 100 + (gem.quality or 0) * 0.0025
+	return m_floor(m_min(40, 100 * (hit / threshold) ^ 0.2 * (1 + inc)))
+end
+
 -- The support states a support gem grants a main skill with these skill
 -- types: { state, ... }
 -- (output: the main skill's, for states that depend on its damage; boss: the
@@ -547,7 +569,29 @@ function AutoConfigClass:Run()
 			if gem.enabled ~= false and gem.gemData then
 				for _, state in ipairs(AutoConfigClass.SupportStatesOf(gem.gemData.name, mainTypes, output, boss)) do
 					-- (Intensity: set from the scenario below)
-					if state.var ~= "intensifyIntensity" then self:Set(state.var, state.value or true, state.label) end
+					if state.var == "buffArcaneSurge" then
+						-- (poewiki: mana spent only - life costs, Blood Magic or Lifetap,
+						-- give nothing; the threshold is the gem's, 400 mana at level 20,
+						-- and the buff lasts 4 s: up when the skill spends that much in 4 s)
+						local threshold = 400
+						local levels = gem.gemData.grantedEffect and gem.gemData.grantedEffect.levels
+						local lv = levels and levels[m_min(#levels, m_max(1, gem.level or 20))]
+						if lv and tonumber(lv[1]) then threshold = tonumber(lv[1]) end
+						local spent = (output.ManaPerSecondCost or 0) * 4
+						if spent >= threshold * 0.9 then
+							self:Set(state.var, true, string.format("Arcane Surge: the main skill spends %d mana in 4 s (%d needed)", spent, threshold))
+						else
+							self:Set(state.var, nil, string.format("no Arcane Surge: the main skill spends %d mana in 4 s, %d needed (life costs don't count)", spent, threshold))
+						end
+					elseif state.var ~= "intensifyIntensity" then self:Set(state.var, state.value or true, state.label) end
+				end
+				-- Cruelty (poewiki): up to 40% more damage over time, by the hit's
+				-- damage against the target's ailment threshold, (D / L)^0.2 x
+				-- (1 + increased effect); PoB counts 40 unless told. A pinnacle
+				-- boss's threshold is millions: a 5k hit gives about 27%
+				if gem.gemData.name == "Cruelty" and self.optionByVar["overrideCruelty"] then
+					local value = AutoConfigClass.CrueltyEffect(output, env, gem)
+					if value then self:Set("overrideCruelty", value, string.format("Cruelty %d%%: the main skill's hit against the enemy's ailment threshold", value)) end
 				end
 			end
 		end
