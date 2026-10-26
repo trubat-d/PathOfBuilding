@@ -203,12 +203,28 @@ function RareItemGeneratorClass:GetCraftCandidates(item, quality)
 	return list
 end
 
--- A bench craft the item refuses: it shares a stat with one of the item's
--- natural prefixes / suffixes (poewiki Crafting Bench: "The item cannot
--- already have a mod of that type")
+-- Mod families (Data/ModFamilies, from poewiki): a bench craft can't share
+-- one with a mod already on the item - "+X to Strength and Intelligence" is
+-- of the Strength and the Intelligence families
+local modFamilies
+local function familiesOf(mod, modId, crafted)
+	modFamilies = modFamilies or LoadModule("Data/ModFamilies")
+	if not mod then return { } end
+	if crafted then
+		return modFamilies.craft[mod.group or ""] or { mod.group }
+	end
+	local stem = modId and modId:gsub("%d*_*$", "")
+	return (stem and modFamilies.natural[stem]) or { mod.group }
+end
+RareItemGeneratorClass.FamiliesOf = familiesOf
+
+-- A bench craft the item refuses: it shares a family or a stat with one of
+-- the item's natural prefixes / suffixes (poewiki Crafting Bench: "The item
+-- cannot already have a mod of that type")
 function RareItemGeneratorClass.CraftClashes(item, candidate)
-	local stats = { }
+	local stats, fams = { }, { }
 	for _, so in ipairs(candidate.mod and candidate.mod.statOrder or { }) do stats[so] = true end
+	for _, f in ipairs(familiesOf(candidate.mod, candidate.modId, true)) do fams[f] = true end
 	for _, list in ipairs({ item.prefixes or { }, item.suffixes or { } }) do
 		for _, affix in ipairs(list) do
 			local mod = affix.modId and affix.modId ~= "None" and data.itemMods.Explicit[affix.modId]
@@ -216,6 +232,9 @@ function RareItemGeneratorClass.CraftClashes(item, candidate)
 				if candidate.mod and mod.group and mod.group == candidate.mod.group then return true end
 				for _, so in ipairs(mod.statOrder or { }) do
 					if stats[so] then return true end
+				end
+				for _, f in ipairs(familiesOf(mod, affix.modId, false)) do
+					if fams[f] then return true end
 				end
 			end
 		end
@@ -402,19 +421,30 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 		-- (the crafting bench can't add a mod of a type the item already has,
 		-- poewiki: "The item cannot already have a mod of that type" - a natural
 		-- Movement Speed and a crafted one: one mod sharing a stat with another)
-		local usedStats = { }
+		-- (and a family: "+X to Strength and Intelligence" crafted next to a
+		-- natural Intelligence mod is refused too - poewiki mod families)
+		local usedStats, usedFamilies = { }, { }
 		local function stats(candidate)
 			return candidate.mod and candidate.mod.statOrder or { }
+		end
+		local function families(candidate)
+			if candidate.meta then return { } end
+			return familiesOf(candidate.mod, candidate.modId, candidate.crafted)
 		end
 		local function statClash(candidate)
 			for _, so in ipairs(stats(candidate)) do
 				local by = usedStats[so]
 				if by and (by.crafted or candidate.crafted) then return true end
 			end
+			for _, f in ipairs(families(candidate)) do
+				local by = usedFamilies[f]
+				if by and (by.crafted or candidate.crafted) then return true end
+			end
 			return false
 		end
 		local function useStats(candidate)
 			for _, so in ipairs(stats(candidate)) do usedStats[so] = usedStats[so] or candidate end
+			for _, f in ipairs(families(candidate)) do usedFamilies[f] = usedFamilies[f] or candidate end
 		end
 		local maxGemLevel = opts.maxGemLevelMods or 1
 		local function isGemLevel(candidate)

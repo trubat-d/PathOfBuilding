@@ -11,9 +11,11 @@ local xml = f:read("*a")
 f:close()
 loadBuildFromXML(xml, "check")
 local function shape(line)
-	return (line:lower():gsub("[%+%-]?%d+%.?%d*", "#"):gsub("%(#%-#%)", "#"):gsub("%s+", " "))
+	return (line:lower():gsub("%(%-?[%d%.]+%-%-?[%d%.]+%)", "#"):gsub("[%+%-]?%d+%.?%d*", "#"):gsub("[%+%-]#", "#"):gsub("%s+", " "))
 end
 local problems = 0
+local RareGen = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
+
 local function flag(item, msg)
 	problems = problems + 1
 	print(string.format("FLAG\t%s (%s)\t%s", item.name or "?", item.baseName or "?", msg))
@@ -29,6 +31,27 @@ for _, item in pairs(build.itemsTab.items) do
 		end
 		for _, c in ipairs(crafted) do
 			if natural[c.s] then flag(item, "crafted '" .. c.line .. "' repeats '" .. natural[c.s] .. "'") end
+		end
+		-- (mod families: the bench mod the crafted line comes from against the
+		-- natural mods' families)
+		local naturalFamilies = { }
+		for _, list in ipairs({ item.prefixes or { }, item.suffixes or { } }) do
+			for _, affix in ipairs(list) do
+				local mod = affix.modId and affix.modId ~= "None" and data.itemMods.Explicit[affix.modId]
+				if mod then
+					for _, f in ipairs(RareGen.FamiliesOf(mod, affix.modId, false)) do naturalFamilies[f] = affix.modId end
+				end
+			end
+		end
+		for _, c in ipairs(crafted) do
+			for _, mm in ipairs(data.masterMods or { }) do
+				if mm[1] and shape(mm[1]) == c.s and mm.types and mm.types[item.type] then
+					for _, f in ipairs(RareGen.FamiliesOf(mm, nil, true)) do
+						if naturalFamilies[f] then flag(item, "crafted '" .. c.line .. "' shares the " .. f .. " family with " .. naturalFamilies[f]) end
+					end
+					break
+				end
+			end
 		end
 		if gemLevel > 1 then flag(item, gemLevel .. " '+level of socketed gems' mods") end
 		for _, modLine in ipairs(item.implicitModLines or { }) do
