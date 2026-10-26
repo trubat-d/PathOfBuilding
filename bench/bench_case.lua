@@ -71,6 +71,33 @@ local configScenario
 for _, sc in ipairs(new("AutoConfig"):AutoConfig(build).scenarioList) do
 	if sc.id == os.getenv("CONFIG") then configScenario = sc end
 end
+-- WATCH_CONFIG=var1,var2: who switches these configuration options on (a
+-- stack printed when one appears in the configuration between two
+-- BuildModList calls)
+if os.getenv("WATCH_CONFIG") then
+	pcall(getClass, "ConfigTab")
+	local class = common.classes.ConfigTab
+	local watch = { }
+	for v in os.getenv("WATCH_CONFIG"):gmatch("[^,]+") do watch[v] = true end
+	local last = { }
+	local orig = class.BuildModList
+	class.BuildModList = function(self, ...)
+		for var in pairs(watch) do
+			local v = self.input[var]
+			if v and v ~= last[var] then
+				local frames = { }
+				for level = 2, 14 do
+					local info = debug.getinfo(level, "nSl")
+					if not info then break end
+					table.insert(frames, (info.name or "?") .. ":" .. (info.short_src or ""):match("[^/]*$") .. ":" .. (info.currentline or 0))
+				end
+				print(string.format("WATCH %s = %s  <- %s", var, tostring(v), table.concat(frames, " < ")))
+			end
+			last[var] = v
+		end
+		return orig(self, ...)
+	end
+end
 -- PROFILE=1: where the time goes (bench/profile.lua), printed at the end
 local profiler
 if os.getenv("PROFILE") == "1" then

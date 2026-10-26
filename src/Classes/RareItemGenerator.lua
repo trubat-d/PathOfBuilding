@@ -90,7 +90,11 @@ function RareItemGeneratorClass:MakeBlankRare(current, influences)
 				if l.exarch or l.eater then table.remove(item.implicitModLines, i) end
 			end
 		end
-	elseif current.base.implicit then
+	end
+	-- (the base's own implicits when the item has none: a rare made on a base
+	-- the slot never had - a Void Sceptre without its "40% increased Elemental
+	-- Damage" - or an influenced remake of an Eldritch item)
+	if not item.implicitModLines[1] and current.base.implicit then
 		local index = 1
 		for line in current.base.implicit:gmatch("[^\n]+") do
 			local modList, extra = modLib.parseMod(line)
@@ -508,8 +512,20 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 	end
 	item.title = "Best Rare (" .. slotName .. ")"
 	item:Craft()
+	-- (prefixes, then suffixes, then the crafted lines: build sites group the
+	-- lines of an item by affix kind, and PoB's stat order mixed them)
+	local ordered = { }
+	for _, pass in ipairs({ "prefix", "suffix", "crafted" }) do
+		for _, l in ipairs(item.explicitModLines) do
+			local kind = l.crafted and "crafted" or (l.prefix and "prefix") or (l.suffix and "suffix") or "suffix"
+			if kind == pass then t_insert(ordered, l) end
+		end
+	end
+	if #ordered == #item.explicitModLines then
+		for i, l in ipairs(ordered) do item.explicitModLines[i] = l end
+	end
 	-- an item can't be both influenced and have eldritch implicits
-	local eldritch = not (influences and influences[1]) and self:AddEldritch(item, slotName, ctx, opts.eldritchTier, quality.range) or nil
+	local eldritch = not (influences and influences[1]) and self:AddEldritch(item, slotName, ctx, opts.eldritchTier, quality.range, opts.eldritchPresence) or nil
 	item.name = item.title .. ", " .. item.baseName
 	local output = calcFunc({ repSlotName = slotName, repItem = item }, useFullDPS)
 	ctx.tick()
@@ -554,7 +570,17 @@ local function getEldritchMods()
 end
 
 -- Adds the best Exarch and the best Eater implicit (tier up to maxTier) to a generated rare
-function RareItemGeneratorClass:AddEldritch(item, slotName, ctx, maxTier, range)
+-- presence: which conditional versions may be used - "none" (default: the
+-- base lines only, a build mostly fights map monsters), "unique" (also "while
+-- a Unique Enemy is in your Presence") or "pinnacle" (also the pinnacle boss
+-- versions)
+local presenceAllowed = {
+	none = { [""] = true },
+	unique = { [""] = true, UniquePresence = true },
+	pinnacle = { [""] = true, UniquePresence = true, PinnaclePresence = true },
+}
+function RareItemGeneratorClass:AddEldritch(item, slotName, ctx, maxTier, range, presence)
+	local allowed = presenceAllowed[presence or "none"] or presenceAllowed.none
 	if not maxTier or maxTier <= 0 or not (item.base and eldritchSlots[item.base.type]) then
 		return nil
 	end
@@ -597,7 +623,7 @@ function RareItemGeneratorClass:AddEldritch(item, slotName, ctx, maxTier, range)
 	local function candidates(kind)
 		local best = { }
 		for _, entry in ipairs(getEldritchMods()) do
-			if entry.type == kind and entry.tier <= maxTier and subject:GetModSpawnWeight(entry.mod) > 0 then
+			if entry.type == kind and entry.tier <= maxTier and allowed[entry.presence] and subject:GetModSpawnWeight(entry.mod) > 0 then
 				local key = entry.name .. entry.presence
 				if not best[key] or entry.tier > best[key].tier then
 					best[key] = entry

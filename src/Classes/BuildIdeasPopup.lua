@@ -64,6 +64,7 @@ local function loadUniqueChoices()
 			uniqueChoices.excluded = type(data.excluded) == "table" and data.excluded or { }
 			uniqueChoices.forced = type(data.forced) == "table" and data.forced or { }
 			uniqueChoices.midTier = data.midTier == true
+			uniqueChoices.bossImplicits = data.bossImplicits == true
 		end
 	end
 	return uniqueChoices
@@ -356,6 +357,13 @@ local function openUniqueChoices()
 		choices.midTier = on
 		saveUniqueChoices()
 	end, "A mid-tier build: no Mageblood, Headhunter, Pearl of Tsoatha, Forbidden jewels and the other\nchase uniques of the league, and no unique over 30 divines. The build a player without\nthe league's top items can have (top players' builds mostly hold one or more of them).", choices.midTier == true)
+	-- Eldritch implicits: the base lines unless asked (a build mostly clears
+	-- maps; the "while a Pinnacle Atlas Boss is in your Presence" lines are
+	-- dead there)
+	controls.bossImplicits = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {470, 176, 18}, "Boss implicits:", function(on)
+		choices.bossImplicits = on
+		saveUniqueChoices()
+	end, "Eldritch implicits in their \"while a Unique Enemy / Pinnacle Atlas Boss is in your Presence\"\nversions (stronger, but only against those bosses). Off: the base lines, active while mapping.", choices.bossImplicits == true)
 	controls.done = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {556, 176, 80, 20}, "Done", function()
 		main:ClosePopup()
 	end)
@@ -950,6 +958,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 		options.forcedUniques = { }
 		for _, title in ipairs(choices.forced) do t_insert(options.forcedUniques, title) end
 		options.midTier = choices.midTier or nil
+		options.eldritchPresence = choices.bossImplicits and "pinnacle" or "none"
 		return options
 	end
 
