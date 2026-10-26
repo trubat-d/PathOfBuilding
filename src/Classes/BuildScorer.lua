@@ -349,6 +349,38 @@ function BuildScorerClass:HasSecondarySkill()
 	return false
 end
 
+-- Damage that builds up over time, as maps are played: PoB's damage over
+-- time that stacks (Toxic Rain's spore pods - poewiki: "enemies can take
+-- damage from multiple spore pods" - and poison) is the boss's steady state,
+-- stacks = rate x duration, so a longer duration (More Duration in the main
+-- link) adds damage there; a pack dies within a second or so, and over a
+-- kill window W the stacks average rate x W/2 when the duration outlasts it
+-- (rate x (D - D^2 / 2W) when shorter). The damage counted is the boss's
+-- and the pack's, half each (geometric mean): duration is worth only the
+-- boss half, damage per stack both.
+local clearWindow, clearShare = 1.5, 0.5
+local function rampShare(duration)
+	if not duration or duration <= 0 then return 1 end
+	if duration >= clearWindow then return (clearWindow / 2) / duration end
+	return 1 - duration / (2 * clearWindow)
+end
+function BuildScorerClass:ClearRampDPS(output, dps)
+	if dps <= 0 then return dps end
+	local lost = 0
+	local env = self.build.calcsTab and self.build.calcsTab.mainEnv
+	local mainSkill = env and env.player and env.player.mainSkill
+	if mainSkill and mainSkill.skillFlags and mainSkill.skillFlags.DotCanStack and (output.TotalDot or 0) > 0 then
+		lost = lost + output.TotalDot * (1 - rampShare(output.Duration))
+	end
+	if (output.TotalPoisonDPS or 0) > 0 and (output.PoisonStacks or 0) > 1 then
+		lost = lost + output.TotalPoisonDPS * (1 - rampShare(output.PoisonDuration))
+	end
+	if lost <= 0 then return dps end
+	local clearDps = m_max(dps - lost, dps * 0.05)
+	output.ClearRampDPS = clearDps
+	return dps ^ (1 - clearShare) * clearDps ^ clearShare
+end
+
 function BuildScorerClass:GetDPS(output)
 	local dps
 	if output.FullDPS and output.FullDPS > 0 then
@@ -365,6 +397,9 @@ function BuildScorerClass:GetDPS(output)
 	end
 	if self.overlap then
 		dps = self.overlap:AdjustDPS(output, dps)
+	end
+	if self.clearRamp ~= false then
+		dps = self:ClearRampDPS(output, dps)
 	end
 	-- (no real build deals this: a calculation broken by an extreme value -
 	-- speed reduced past -100%, a negative multiplier - scores nothing)
