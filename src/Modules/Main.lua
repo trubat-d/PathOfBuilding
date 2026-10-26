@@ -399,6 +399,19 @@ function main:OnFrame()
 
 	self.viewPort = { x = 0, y = 0, width = self.screenW, height = self.screenH }
 
+	-- background generations (Classes/GenerationQueue): their panel at the
+	-- bottom right takes the input over it only, unless a dialog is open
+	local gqPanel = self.generationQueue and self.generationQueue:Shown() and self.generationQueue.panel
+	if gqPanel and (not self.popups[1] or self.popups[1].sidePanel) then
+		local px, py = gqPanel:GetPos()
+		local pw, ph = gqPanel:GetSize()
+		local cx, cy = GetCursorPos()
+		if cx >= px and cx < px + pw and cy >= py and cy < py + ph then
+			gqPanel:ProcessInput(self.inputEvents, self.viewPort)
+			wipeTable(self.inputEvents)
+		end
+	end
+
 	local sidePanel = self.popups[1] and self.popups[1].sidePanel
 	if sidePanel then
 		-- a side panel (the build generator while it runs) only takes the input
@@ -447,6 +460,12 @@ function main:OnFrame()
 	SetDrawColor(0.1, 0.1, 0.1)
 	DrawImage(nil, 0, self.screenH - 54, 308, 54)
 	self:DrawControls(self.viewPort)
+
+	if gqPanel then
+		SetDrawLayer(9)
+		gqPanel:Draw(self.viewPort)
+		SetDrawLayer(0)
+	end
 
 	if self.popups[1] then
 		SetDrawLayer(10)

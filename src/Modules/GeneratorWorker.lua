@@ -208,8 +208,18 @@ return function(jobJson, userPath, scriptBase)
 	end
 	local lastStage
 	options.yieldEvery = 1000
-	options.onProgress = function(stage)
+	-- (and to the app: the background generations' panel, Classes/GenerationQueue;
+	-- at most twice a second)
+	local lastSent = 0
+	options.onProgress = function(stage, index, count, sub)
 		if stage ~= lastStage then lastStage = stage trace("step: " .. tostring(stage)) end
+		if GeneratorProgress and traceName then
+			local now = os.clock()
+			if now - lastSent > 0.5 then
+				lastSent = now
+				pcall(GeneratorProgress, traceName, tostring(stage), index or 0, count or 0, sub or 0)
+			end
+		end
 	end
 	local generator = new("BuildGenerator"):BuildGenerator(build, options)
 	trace("generating")

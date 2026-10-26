@@ -789,6 +789,13 @@ function BuildIdeasPopupClass:OpenGenerator()
 		main.generatorLoadouts = on
 	end, "When several builds are fully built (tries, archetypes with \"Several cores\"), the opened build\nkeeps the others as loadouts: tree, items, skills and configuration switch together from\nthe Loadouts drop-down next to the ascendancy. The best one is the active loadout.", main.generatorLoadouts ~= false)
 	controls.loadouts.enabled = idle
+	-- generations in the background (Classes/GenerationQueue): the window
+	-- closes, the builds are made in background threads, the app stays usable
+	controls.background = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {1010, 134, 18}, "Background:", function(on)
+		main.generatorBackground = on
+		if on then main.generatorThreads = true controls.threads.state = true end
+	end, "Generate in the background: the window closes and the builds are made in background threads\n(several cores) while you keep using the app. A panel at the bottom right lists the generations;\na finished one is saved in your builds folder (Generated) and opens from there. Needs background threads.", main.generatorBackground == true)
+	controls.background.enabled = idle
 
 	-- Archetypes: the ways this skill can scale; "Scan" builds each one quickly to compare them
 	local archetypeLib = new("BuildArchetypes"):BuildArchetypes()
@@ -977,6 +984,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 			state.status = "^7The unique database is still loading, try again in a moment."
 			return
 		end
+		-- (in the background: the open build is left alone)
+		if controls.background.state and state.queueBackground and state.queueBackground() then return end
 		local current = main.modes["BUILD"]
 		if main.mode == "BUILD" and current and current.unsaved and not state.confirmDiscard then
 			state.confirmDiscard = true
@@ -1384,6 +1393,76 @@ function BuildIdeasPopupClass:OpenGenerator()
 			if GetTime() - t0 > 60000 then go(nil) end
 		end
 		loadMeta(skill.label, function(entry) go(entry) end, function(text) state.status = text end)
+	end
+	-- A generation queued to run in the background (Classes/GenerationQueue):
+	-- the same phases as here - scan, quick builds of the promising
+	-- archetypes, the best fully built with their tries - all in background
+	-- threads. false when background threads aren't available
+	state.queueBackground = function()
+		main.generationQueue = main.generationQueue or new("GenerationQueue"):GenerationQueue()
+		local queue = main.generationQueue
+		if not queue:Available() then
+			state.status = colorCodes.WARNING .. "Background generation needs background threads: tick \"Several cores\" (it may not work on this PC)."
+			return false
+		end
+		local skill = controls.skill.list[controls.skill.selIndex]
+		local asc = controls.ascend.list[controls.ascend.selIndex]
+		local entry = controls.archetype.list[controls.archetype.selIndex]
+		local baseOptions = makeOptions()
+		local list, standard = { }, nil
+		for _, e in ipairs(archetypeList()) do
+			if e.archetype then
+				t_insert(list, e.archetype)
+				if e.archetype.id == "STANDARD" then standard = e.archetype end
+			end
+		end
+		standard = standard or list[1]
+		local selected = entry and not entry.auto and entry.archetype or nil
+		local remembered
+		if not selected then
+			local memory = loadScanMemory()[scanMemoryKey(baseOptions)]
+			if memory and memory.version == SCAN_MEMORY_VERSION and type(memory.results) == "table" and os.time() - (memory.time or 0) < SCAN_MEMORY_DAYS * 86400 then
+				remembered = memory.results
+			end
+		end
+		local pgStatic = new("ParallelGenerator"):ParallelGenerator()
+		local hybrids = controls.hybrids.state
+		local meta
+		local batch = {
+			title = skill.label .. " " .. asc.ascendName .. (selected and (" (" .. selected.label .. ")") or "") .. ", " .. controls.investment.list[controls.investment.selIndex].label:gsub(" %(.*", ""),
+			buildName = "Generated " .. skill.label .. " " .. asc.ascendName,
+			skillLabel = skill.label,
+			archetypes = list, standard = standard, selected = selected, remembered = remembered,
+			tries = tonumber(controls.tries.list[controls.tries.selIndex]) or 1,
+			hybrid = hybrids and function(a, b) return archetypeLib.Hybrid(a, b) end or nil,
+			learningContext = state.learningContext(),
+			scanBuilds = math.max(3, 2 * pgStatic.MaxWorkers()),
+			makeJob = function(archetype, quick, variant, plan)
+				local o = { }
+				for k, v in pairs(baseOptions) do o[k] = v end
+				o.archetype = archetype
+				o.quick = quick or nil
+				if quick then o.synergies = false end
+				o.variant = variant
+				o.meta = meta
+				return pgStatic.JobFromOptions(o, plan and { plan = true } or nil)
+			end,
+		}
+		-- poe.ninja's statistics first (as the scan does), then queued
+		local key = "GenerationQueueMeta" .. tostring(batch)
+		local queued = false
+		local t0 = GetTime()
+		local function go(entryMeta)
+			if queued then return end
+			queued = true
+			main.onFrameFuncs[key] = nil
+			meta = entryMeta
+			queue:Add(batch)
+		end
+		main.onFrameFuncs[key] = function() if GetTime() - t0 > 60000 then go(nil) end end
+		loadMeta(skill.label, function(m) go(m) end)
+		main:ClosePopup()
+		return true
 	end
 	-- Automatic mode, last step: the best built archetypes fully generated in
 	-- background threads at once; the best one is opened. false = not possible

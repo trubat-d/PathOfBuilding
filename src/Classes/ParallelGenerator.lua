@@ -166,7 +166,7 @@ function ParallelGeneratorClass:Fill()
 		local entry = t_remove(self.queue, 1)
 		-- (Inflate / Deflate: the timeless jewel tables are compressed)
 		ParallelGeneratorClass.Trace(string.format("launching job %d (%d bytes of job), %d running", entry.index, #entry.json, self:RunningCount()))
-		local id = LaunchSubScript(workerScript, "Inflate,Deflate", "ConPrintf", entry.json, main.userPath or "", GetScriptPath and GetScriptPath() or "")
+		local id = LaunchSubScript(workerScript, "Inflate,Deflate", "ConPrintf,GeneratorProgress", entry.json, main.userPath or "", GetScriptPath and GetScriptPath() or "")
 		ParallelGeneratorClass.Trace(string.format("job %d launched: %s", entry.index, tostring(id)))
 		local callbacks = self.callbacks
 		local function finished()
