@@ -79,7 +79,31 @@ SkillProfilesClass.list = {
 	{ pattern = "^Divine Ire", part = "Release", note = "released at full stages" },
 	{ pattern = "^Blade Flurry", part = "Channel & Release", note = "channelled to full stages, then released" },
 	{ pattern = "^Charged Dash", part = "Channelling, Max Stages", note = "channelled at full stages" },
-	{ pattern = "^Blade Blast", part = "Blade Hits Per Sec", note = "blades detonated as fast as the cast rate allows" },
+	-- Blade Blast detonates Lingering Blades it touches (PoB's stages: the blade
+	-- hits, 50 by default whatever the build). The blades come from Bladefall
+	-- (one per volley) or Ethereal Knives of Lingering Blades: a player casts
+	-- one, then Blade Blast - the blade hits a second are the cycle's blades
+	-- (and Blade Blast's own hit) over the two cast times. No blade source:
+	-- Blade Blast's own hit only
+	{ pattern = "^Blade Blast$", part = "Blade Hits Per Sec", stages = function(ctx)
+		local build = ctx.gen and ctx.gen.build
+		local blades, castTime = 0, 0
+		for _, group in ipairs(build and build.skillsTab.socketGroupList or { }) do
+			if group.enabled ~= false then
+				for _, g in ipairs(group.gemList or { }) do
+					local name = g.enabled ~= false and g.gemData and g.gemData.name or ""
+					if name:match("^Bladefall") and blades < 5 then blades, castTime = 5 + m_floor((g.quality or 0) / 20), 0.7
+					elseif name == "Ethereal Knives of Lingering Blades" and blades < 5 then blades, castTime = 5, 0.6 end
+				end
+			end
+		end
+		local speed = ctx.output.Speed or 0
+		if speed <= 0 then return 1 end
+		if blades == 0 then return m_max(1, m_floor(speed + 0.5)) end
+		-- (Blade Blast's cast time 0.5 s, the other skill's at the same cast speed)
+		local cycle = (0.5 + castTime) / (speed * 0.5)
+		return m_max(1, m_floor((blades + 1) / cycle + 0.5))
+	end, note = "the lingering blades the build makes, detonated: blade hits a second" },
 	{ pattern = "^Detonate Dead", part = "Corpse Explosion", note = "corpse explosions" },
 	{ pattern = "^Volatile Dead", part = "Corpse Explosion", note = "corpse explosions" },
 	{ pattern = "^Cremation", part = "Corpse Explosion", note = "corpse eruptions" },
@@ -219,6 +243,16 @@ SkillProfilesClass.list = {
 	{ pattern = "^Bladefall$", hits = bossOr(2, 1), note = "about 2 of the 5 volleys hitting a boss" },
 	-- (Artillery Ballista: its arrows land in a line, a boss under about two)
 	{ pattern = "^Artillery Ballista$", hits = bossOr(2, 1), note = "about 2 of a volley's arrows hitting a boss" },
+	-- Lightning Arrow of Electrocution (poewiki): an arrow stuck in the target
+	-- strikes it 4 more times (+1 at 20% quality), one every 0.5 s; up to 10
+	-- stuck. PoB's stages are the arrows stuck, 10 by default: the arrows the
+	-- attack rate keeps stuck
+	{ pattern = "^Lightning Arrow of Electrocution", stages = function(ctx)
+		local first = ctx.gen and ctx.gen.mainGroup and ctx.gen.mainGroup.gemList[1]
+		local strikes = 4 + m_floor(((first and first.quality) or 0) * 0.05)
+		local stuck = (ctx.output.Speed or 0) * strikes * 0.5
+		return m_max(1, m_min(10, m_floor(stuck + 0.5)))
+	end, note = "the arrows the attack rate keeps stuck in a boss" },
 	-- conditions the skill is used under
 	{ pattern = "^Cyclone", config = { channellingCycloneCheck = true }, note = "channelled" },
 }
@@ -299,6 +333,15 @@ function SkillProfilesClass.Apply(gen)
 	end
 	if profile.part then
 		changed = setPart(gen, partIndex(gem.grantedEffect, profile.part)) or changed
+	end
+	if profile.stages then
+		local stages = profile.stages(ctx)
+		if stages and first.skillStageCount ~= stages then
+			first.skillStageCount, first.skillStageCountCalcs = stages, stages
+			gen.build.skillsTab:ProcessSocketGroup(gen.mainGroup)
+			changed = true
+		end
+		note = string.format("%s (%s)", profile.note, tostring(stages))
 	end
 	if profile.bestOf then
 		-- (each part's hit DPS once; the best one shown)
