@@ -3305,6 +3305,142 @@ function BuildGeneratorClass:RequirementsMove(rounds)
 	return total
 end
 
+-- Attribute passives a bench craft can stand in for: a leaf chain of "+10 to
+-- Dexterity" passives held for a requirement, while a rare's bench craft
+-- gives an attribute the build has to spare (+24 Strength and Intelligence
+-- on gloves, two Dexterity passives past a jewel socket). The craft swapped
+-- for one with the attribute the passives gave (Dexterity and Intelligence),
+-- the passives given back while the requirement still holds, the points
+-- spent again; the best swap kept if the build is better.
+function BuildGeneratorClass:AttributeLeavesMove()
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local rg = finder.rareGenerator
+	local quality = self.options.quality
+	if not rg or not quality then return 0 end
+	local spec = self.build.spec
+	local names = { Str = "Strength", Dex = "Dexterity", Int = "Intelligence" }
+	local function attrOf(node)
+		if node.ascendancyName or node.type ~= "Normal" or not node.sd or #node.sd ~= 1 then return nil end
+		if self.protectedNodes and self.protectedNodes[node.id] then return nil end
+		for short, long in pairs(names) do
+			if node.sd[1]:match("^%+%d+ to " .. long .. "$") then return short end
+		end
+		return nil
+	end
+	-- the attributes with such leaves
+	spec:BuildAllDependsAndPaths()
+	local wanted = { }
+	for _, node in pairs(spec.allocNodes) do
+		local a = attrOf(node)
+		if a and node.depends and #node.depends <= 1 then wanted[a] = true end
+	end
+	if not next(wanted) then return 0 end
+	self:Recalculate()
+	local before = self:FullScore()
+	local snap = self:Snapshot()
+	local savedLog = #self.log
+	-- (the leaves of one attribute given back while its requirement holds)
+	local function giveBack(a)
+		local freed = 0
+		for _ = 1, 6 do
+			spec:BuildAllDependsAndPaths()
+			local leaf
+			for _, node in pairs(spec.allocNodes) do
+				if attrOf(node) == a and node.depends and #node.depends <= 1 then leaf = node break end
+			end
+			if not leaf then break end
+			spec:DeallocNode(leaf)
+			spec:BuildAllDependsAndPaths()
+			self:Recalculate()
+			local o = self.build.calcsTab.mainOutput
+			if (o["Req" .. a] or 0) > (o[a] or 0) then
+				spec:AllocNode(leaf)
+				spec:BuildAllDependsAndPaths()
+				self:Recalculate()
+				break
+			end
+			freed = freed + 1
+		end
+		return freed
+	end
+	local trials = { }
+	for _, slot in ipairs(self.itemsTab.orderedSlots) do
+		local item = self.itemsTab.items[slot.selItemId]
+		if item and item.rarity == "RARE" and not slot.nodeId and item.type ~= "Jewel" and not (item.base and item.base.flask)
+			and not (self.lockedSlots and self.lockedSlots[slot.slotName]) then
+			-- (a bench craft of attributes only, next to the item's other crafts)
+			local attrLine
+			for _, modLine in ipairs(item.explicitModLines or { }) do
+				if modLine.crafted and (modLine.line:match("^%+%d+ to %a+ and %a+$") or modLine.line:match("^%+%d+ to %a+$")) then attrLine = modLine.line end
+			end
+			if attrLine then
+				for a in pairs(wanted) do
+					if not attrLine:match(names[a]) then
+						for _, c in ipairs(rg:GetCraftCandidates(item, quality)) do
+							local text = table.concat(c.lines, " ")
+							if #c.lines == 1 and text:match(names[a]) and (text:match("^%+%d+ to %a+ and %a+$") or text:match("^%+%d+ to %a+$"))
+								and not rg.CraftClashes(item, c) then
+								t_insert(trials, { slot = slot, item = item, craft = c, attr = a, was = attrLine })
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	local best
+	for _, trial in ipairs(trials) do
+		local copy = new("Item"):Item(trial.item:BuildRaw())
+		for i = #copy.explicitModLines, 1, -1 do
+			if copy.explicitModLines[i].crafted and copy.explicitModLines[i].line == trial.was then t_remove(copy.explicitModLines, i) end
+		end
+		t_insert(copy.explicitModLines, { line = trial.craft.lines[1], crafted = true })
+		copy:BuildAndParseRaw()
+		self:Equip(copy, trial.slot.slotName)
+		self.itemsTab:PopulateSlots()
+		self:Recalculate()
+		local freed = giveBack(trial.attr)
+		local score
+		if freed > 0 then
+			local ok = pcall(function() self:AllocateTree(true, false, true) end)
+			self:Recalculate()
+			score = ok and self:FullScore() or nil
+		end
+		if self.options.debugTiming then ConPrintf("[attribute leaves] %s: %s -> %s, %d passive(s): %s", trial.slot.slotName, trial.was, trial.craft.lines[1], freed, score and string.format("%.3f -> %.3f", before, score) or "-") end
+		if score and score > before + 0.005 and (not best or score > best.score + 1e-9) then
+			best = trial
+			best.score, best.freed = score, freed
+		end
+		self:Restore(snap)
+		self:Recalculate()
+		self:Tick()
+	end
+	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+	if not best then return 0 end
+	-- the best one again, kept
+	local copy = new("Item"):Item(best.item:BuildRaw())
+	for i = #copy.explicitModLines, 1, -1 do
+		if copy.explicitModLines[i].crafted and copy.explicitModLines[i].line == best.was then t_remove(copy.explicitModLines, i) end
+	end
+	t_insert(copy.explicitModLines, { line = best.craft.lines[1], crafted = true })
+	copy:BuildAndParseRaw()
+	self:Equip(copy, best.slot.slotName)
+	self.itemsTab:PopulateSlots()
+	self:Recalculate()
+	giveBack(best.attr)
+	pcall(function() self:AllocateTree(true, false, true) end)
+	self:Recalculate()
+	local after = self:FullScore()
+	if after > before + 0.002 then
+		self:Note(string.format("Attribute passives replaced by a bench craft: %s %s instead of %s, %d %s passive%s given back: score %+.3f",
+			best.slot.slotName, best.craft.lines[1], best.was, best.freed, names[best.attr], best.freed == 1 and "" or "s", after - before))
+		return after - before
+	end
+	self:Restore(snap)
+	self:Recalculate()
+	return 0
+end
+
 -- Rares made again at the end, once the tree, jewels, flasks and gems are
 -- final (they were made for the build as it was then): every rare slot,
 -- influences and eldritch implicits included (the weapon bases and the
@@ -3602,6 +3738,39 @@ function BuildGeneratorClass:LateJewelsMove(maxJewels)
 		self:Note(string.format("Jewels for the finished build: %d replaced by a rare made for it, %d new socket%s: score %+.3f", replaced, added, added == 1 and "" or "s", after - before))
 	end
 	return after - before
+end
+
+-- The best rare jewel the generator makes for a jewel slot (nil if none)
+function BuildGeneratorClass:BestRareJewelFor(slotName)
+	local slot = self.itemsTab.slots[slotName]
+	if not slot then return nil end
+	local previous = slot.selItemId
+	slot:SetSelItemId(0)
+	self.itemsTab:PopulateSlots()
+	self:Recalculate()
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local generator = finder.rareGenerator
+	local scorer, ratio = self.scorer, self.ratio
+	local measure = function(output) return scorer:ScoreOutput(output, ratio) end
+	local baseOutput = self.calcFunc({ })
+	local ctx = {
+		calcFunc = self.calcFunc, baseOutput = baseOutput, basePower = measure(baseOutput),
+		measure = measure, tick = function() self:Tick() end,
+		opts = { quality = self.options.quality, levelOnly = true, keepResists = false, keepAttributes = false, keepLife = false },
+	}
+	local best
+	for _, baseName in ipairs({ "Crimson Jewel", "Viridian Jewel", "Cobalt Jewel" }) do
+		if data.itemBases[baseName] then
+			local blank = new("Item"):Item("Rarity: NORMAL\n" .. baseName)
+			blank:BuildModList()
+			local r = generator:GenerateForSlotWith(slotName, blank, ctx, nil)
+			if r and (not best or r.power > best.power) then best = r end
+		end
+	end
+	slot:SetSelItemId(previous or 0)
+	self.itemsTab:PopulateSlots()
+	self:Recalculate()
+	return best and best.item
 end
 
 -- Allocated jewel sockets left empty (a jewel taken out by a later step, a
@@ -3994,12 +4163,36 @@ function BuildGeneratorClass:ChooseTimelessJewel()
 	local undo = spec:CreateUndoState()
 	local slot = self.itemsTab.slots["Jewel " .. result.socket.node.id]
 	local previous = slot and slot.selItemId
+	-- (what else the socket could hold: a rare jewel made for the build there -
+	-- a Glorious Vanity whose own keystone, Corrupted Soul, added nothing took
+	-- the place of a crit multiplier jewel worth more)
+	local rareAlt
+	do
+		local snap = self:Snapshot()
+		local ok = pcall(function()
+			if not result.socket.node.alloc then spec:AllocNode(result.socket.node) spec:BuildAllDependsAndPaths() end
+			local rare = self:BestRareJewelFor("Jewel " .. result.socket.node.id)
+			if rare then
+				self:Equip(rare, "Jewel " .. result.socket.node.id)
+				self.itemsTab:PopulateSlots()
+				self:Recalculate()
+				self:TrimTree()
+				self:RefineTree(10)
+				rareAlt = self:FullScore()
+			end
+		end)
+		self:Restore(snap)
+		self:Recalculate()
+	end
 	local jewel = finder:Apply(result)
 	self:Recalculate()
 	self:TrimTree()
 	self:RefineTree(10)
 	local after = self:FullScore()
-	if after <= before + 0.005 then
+	if after <= m_max(before, rareAlt or before) + 0.005 then
+		if rareAlt and after > before + 0.005 then
+			self:Note(string.format("Timeless jewel %s left out: a rare jewel in its socket scores more (%.3f against %.3f)", result.label, rareAlt, after))
+		end
 		slot:SetSelItemId(previous or 0)
 		self.itemsTab:DeleteItem(jewel, true)
 		spec:RestoreUndoState(undo)
@@ -4008,7 +4201,31 @@ function BuildGeneratorClass:ChooseTimelessJewel()
 		return
 	end
 	local price = GetPriceSource():UniquePrice(result.item)
-	self:Note(string.format("Timeless jewel: %s (%s base price; a chosen seed usually costs more)", result.label, GetPriceSource().FormatPrice(price)))
+	-- (does the gain come from this seed's passives, or from the jewel's
+	-- keystone any seed gives? Three other seeds of the same conqueror: a
+	-- jewel worth only with its seed is bought with that seed - priced as
+	-- such, about 5 divines, not the base price)
+	local seedSpecific = false
+	do
+		local jt = result.jewelType
+		local lo, hi = data.timelessJewelSeedMin[jt.id], data.timelessJewelSeedMax[jt.id]
+		local step = jt.seedStep or 1
+		local total, n = 0, 0
+		if lo and hi then
+			for i = 1, 3 do
+				local seed = (lo + m_floor((hi - lo) * i / 4)) * step
+				if seed ~= result.seed then
+					total = total + finder:TryReal(result.socket, finder.MakeItem(jt, seed, result.conqueror, result.extra or { }), nil)
+					n = n + 1
+				end
+			end
+		end
+		local current = self:FullScore()
+		if n > 0 and current - total / n > 0.02 then seedSpecific = true end
+	end
+	if seedSpecific then price = m_max(price or 0, self.options.timelessSeedPrice or 5) end
+	self:Note(string.format("Timeless jewel: %s (%s%s)", result.label, GetPriceSource().FormatPrice(price),
+		seedSpecific and ": this seed's passives carry it - priced as a chosen seed" or " base price: its keystone carries it, any seed does"))
 	for _, line in ipairs(described) do self:Note("    " .. line) end
 	self.costs = self.costs or { }
 	t_insert(self.costs, price or false)
@@ -8331,6 +8548,9 @@ function BuildGeneratorClass:Run()
 	if opts.requirementsToGear ~= false and opts.finalRequirements ~= false then
 		local ok, err = pcall(function() self:RequirementsToGearMove("only") end)
 		if not ok then ConPrintf("Final requirements move failed: %s", tostring(err)) end
+		-- (attribute passives a bench craft can stand in for)
+		local ok2, err2 = pcall(function() self:AttributeLeavesMove() end)
+		if not ok2 then ConPrintf("Attribute leaves move failed: %s", tostring(err2)) end
 	end
 	-- utility gems that add nothing taken out
 	if opts.pruneGems ~= false then

@@ -409,6 +409,88 @@ function GemSetupClass:ChooseCurses()
 	end
 end
 
+-- Spells an Arcanist Brand casts for the build besides its curse: Wave of
+-- Conviction (exposure of the element its own hit deals most of) and Frost
+-- Bomb (cold exposure) - in a free linked socket of the brand already placed
+-- for a curse, or a brand of their own. PoB counts the exposure only when the
+-- configuration says the enemy has it: switched on while measured (AutoConfig
+-- keeps it on once the spell is there)
+function GemSetupClass:ChooseBrandSpells()
+	local brandId = gemId("Arcanist Brand")
+	if not brandId then return end
+	local brandBuild = self.gen.mainGem and self.gen.mainGem.tags and self.gen.mainGem.tags.brand
+	local configTab = self.build.configTab
+	local input = configTab.input
+	for _ = 1, 2 do
+		local free = self:FreeSockets()
+		-- (one Arcanist Brand: a second one takes another of the brands the
+		-- build can have out at once)
+		local brandGroup, hasBrand = nil, false
+		for _, group in ipairs(self.skillsTab.socketGroupList) do
+			if group.enabled ~= false and group.gemList[1] and group.gemList[1].gemId == brandId then hasBrand = true end
+		end
+		for _, group in ipairs(self.groups) do
+			if group.gemList[1] and group.gemList[1].gemId == brandId and group.slot and (free[group.slot] or 0) > 0 and #group.gemList < 3 then brandGroup = group end
+		end
+		local current = self:Score()
+		local best, bestScore
+		for _, spell in ipairs({ { name = "Wave of Conviction", exposure = true }, { name = "Frost Bomb" } }) do
+			local id = gemId(spell.name)
+			local present = false
+			for _, group in ipairs(self.skillsTab.socketGroupList) do
+				for _, g in ipairs(group.gemList or { }) do if g.gemId == id then present = true end end
+			end
+			if id and not present and supportsApply({ brandId, id }) then
+				local ways = { }
+				if brandGroup then t_insert(ways, { into = brandGroup, label = spell.name .. " on the same Arcanist Brand", cost = 0 }) end
+				if not hasBrand and self:SlotFor(2) then t_insert(ways, { label = spell.name .. " on Arcanist Brand", cost = brandBuild and 0.01 or 0.035 }) end
+				for _, way in ipairs(ways) do
+					local group
+					if way.into then
+						t_insert(way.into.gemList, gemEntry(id))
+						self.skillsTab:ProcessSocketGroup(way.into)
+					else
+						group = self:AddGroup("try", { gemEntry(brandId), gemEntry(id) }, nil)
+					end
+					-- (Wave of Conviction's exposure is PoB's "exposure type" switch:
+					-- the element its own hit deals most of; Frost Bomb's is a debuff
+					-- PoB counts by itself)
+					local element
+					if spell.exposure then
+						self.gen:Recalculate()
+						element = new("AutoConfig"):AutoConfig(self.build):WaveOfConvictionElement()
+					end
+					local var = element and "waveOfConvictionExposureType"
+					local saved = var and input[var]
+					if var then input[var] = element configTab:BuildModList() end
+					self.gen:Recalculate()
+					local score = self:Score() - way.cost * ((self.gen.scorer and self.gen.scorer.focus and self.gen.scorer.focus.dps) or 1)
+					if var then input[var] = saved configTab:BuildModList() end
+					if way.into then
+						t_remove(way.into.gemList)
+						self.skillsTab:ProcessSocketGroup(way.into)
+					else
+						self:RemoveGroup(group)
+					end
+					self.gen:Recalculate()
+					if os.getenv("DEBUG_BRAND") then ConPrintf("[brand] %s: %+.4f (%s, was %s)", way.label, score - current, tostring(var), tostring(saved)) end
+					if not bestScore or score > bestScore + 1e-9 then best, bestScore = { id = id, way = way, var = var, value = element }, score end
+				end
+			end
+		end
+		if not best or bestScore <= current + 0.003 then return end
+		if best.way.into then
+			t_insert(best.way.into.gemList, gemEntry(best.id))
+			self.skillsTab:ProcessSocketGroup(best.way.into)
+		else
+			self:Keep("Brand spell", { gemEntry(brandId), gemEntry(best.id) }, self:SlotFor(2))
+		end
+		if best.var then input[best.var] = best.value configTab:BuildModList() end
+		self.gen:Recalculate()
+		self.gen:Note("Brand spell setup: " .. best.way.label)
+	end
+end
+
 ------------------------------------------------------------------------------
 -- Auras, heralds, golems
 ------------------------------------------------------------------------------
@@ -440,6 +522,11 @@ end
 
 function GemSetupClass:ChooseAuras(maxBuffs)
 	local candidates = { }
+	-- (Petrified Blood: life other than flasks can't be recovered above low
+	-- life, poewiki - only for a build already there, half its life reserved;
+	-- measured at full life it looked like free mitigation)
+	local out = self.build.calcsTab.mainOutput or { }
+	local lowLife = (out.Life or 0) > 1 and out.LifeUnreserved and out.LifeUnreserved / out.Life <= 0.5
 	for id, gem in pairs(data.gems) do
 		-- (attacks with an aura, like Smite, only give it while you use them)
 		-- (as are mines / traps with an aura: only while they are placed)
@@ -447,7 +534,8 @@ function GemSetupClass:ChooseAuras(maxBuffs)
 		local reservedBuff = gem.grantedEffect and gem.grantedEffect.skillTypes and gem.grantedEffect.skillTypes[SkillType.HasReservation]
 			and gem.grantedEffect.skillTypes[SkillType.Buff] and not (gem.tags and (gem.tags.minion or gem.tags.guard))
 		if gem.tags and (gem.tags.aura or gem.tags.herald or gem.tags.golem or gem.tags.banner or reservedBuff) and not gem.tags.attack and not gem.tags.mine and not gem.tags.trap and not gem.tags.totem
-			and gem.grantedEffect and not gem.grantedEffect.support and not gem.vaalGem and not gem.grantedEffect.unsupported then
+			and gem.grantedEffect and not gem.grantedEffect.support and not gem.vaalGem and not gem.grantedEffect.unsupported
+			and (gem.name ~= "Petrified Blood" or lowLife) then
 			t_insert(candidates, id)
 		end
 	end
@@ -896,6 +984,7 @@ function GemSetupClass:Run(maxBuffs, ignoreAttributes)
 	-- other choices would be measured against no damage)
 	self:ChooseCorpses()
 	self:ChooseCurses()
+	self:ChooseBrandSpells()
 	self:ChooseAuras(maxBuffs)
 	self:ChooseGuard()
 	self:ChooseMovement()

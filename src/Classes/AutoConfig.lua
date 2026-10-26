@@ -951,11 +951,11 @@ function AutoConfigClass:Run()
 				local hit = skillValue(output, t .. "HitAverage") or 0
 				if hit > 0 and (not bestHit or hit > bestHit) then bestType, bestHit = t, hit end
 			end
-			if bestType then setIfUsed("conditionEnemy" .. bestType .. "Exposure", true, "Wave of Conviction applies " .. bestType:lower() .. " exposure") end
+			-- (PoB's own switch for it: the exposure type; the "Is the enemy
+			-- exposed" switches only work with the main skill's exposure chance)
+			if bestType then self:Set("waveOfConvictionExposureType", bestType, "Wave of Conviction applies " .. bestType:lower() .. " exposure") end
 		end
-		if hasGem["Frost Bomb"] then
-			setIfUsed("conditionEnemyColdExposure", true, "Frost Bomb applies cold exposure")
-		end
+		-- (Frost Bomb's cold exposure: PoB counts it as a debuff of the skill)
 		-- states the build gives itself from its own lines (Elusive, Onslaught,
 		-- Unholy Might...: Classes/UniqueComboFinder), when something uses them
 		local comboFinder = new("UniqueComboFinder"):UniqueComboFinder({ build = self.build, itemsTab = self.build.itemsTab, options = { } })
