@@ -68,7 +68,9 @@ SkillProfilesClass.list = {
 	-- balls undervalued it about 6 times)
 	{ pattern = "^Molten Strike of the Zenith", combine = { { part = "Melee Hit", weight = 1 }, { part = "Total Weighted Ball Average", weight = 1 } }, note = "the melee hit and the magma balls landing on a boss, every 5th attack's bigger volley included (PoB's weighted average)" },
 	{ pattern = "^Molten Strike", combine = { { part = "Melee Hit", weight = 1 }, { part = "Average Balls Hitting", weight = 1 } }, note = "the melee hit and its magma balls that land on a boss (PoB's average)" },
-	{ pattern = "^Kinetic Blast", combine = { { part = "Projectile", weight = 1 }, { part = "Explosions", weight = 2 } }, note = "the projectile and 2 of its 3 explosions hitting a boss" },
+	-- (poewiki: a typical-sized target isn't hit by the explosions of a
+	-- collision against it; a large boss's hitbox catches about one)
+	{ pattern = "^Kinetic Blast", combine = { { part = "Projectile", weight = 1 }, { part = "Explosions", weight = bossOr(1, 2) } }, note = "the projectile and about one explosion on a large boss (the target hit isn't hit by its own explosions)" },
 	{ pattern = "^Earthquake", combine = { { part = "Initial impact", weight = 1 }, { part = "Aftershock", weight = 1 } }, note = "each impact and its aftershock" },
 	-- Earthshatter's spikes shatter only when a warcry or a different slam is
 	-- used near them (poewiki), not by Earthshatter itself: counted when the
