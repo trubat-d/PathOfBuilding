@@ -2181,6 +2181,12 @@ function BuildGeneratorClass:Snapshot()
 	for k, v in pairs(self.lockedSlots or { }) do snap.locked[k] = v end
 	snap.itemIds = { }
 	for id in pairs(self.itemsTab.items) do snap.itemIds[id] = true end
+	-- (the equipped items themselves: a step after the snapshot can delete
+	-- one it replaced - the rares made again - and the slot would come back empty)
+	snap.equipped = { }
+	for _, id in pairs(snap.items) do
+		if id and id ~= 0 and self.itemsTab.items[id] then snap.equipped[id] = self.itemsTab.items[id] end
+	end
 	snap.decisionCount = self.decisions and #self.decisions
 	return snap
 end
@@ -2188,6 +2194,12 @@ function BuildGeneratorClass:Restore(snap)
 	-- (choices made since the snapshot were undone: still training data, marked)
 	if self.decisions and snap.decisionCount then
 		for i = snap.decisionCount + 1, #self.decisions do self.decisions[i].undone = true end
+	end
+	for id, item in pairs(snap.equipped or { }) do
+		if not self.itemsTab.items[id] then
+			self.itemsTab.items[id] = item
+			t_insert(self.itemsTab.itemOrderList, id)
+		end
 	end
 	for name, id in pairs(snap.items) do
 		local slot = self.itemsTab.slots[name]
@@ -2904,7 +2916,14 @@ end
 -- on what the build scales with. Passive points and sockets are the scarcest
 -- budget: a lone fire resistance node is the dearest way to cap it. Kept
 -- only if the whole build is better.
-function BuildGeneratorClass:RequirementsToGearMove()
+function BuildGeneratorClass:RequirementsToGearMove(mode)
+	-- (both ways, the better kept: only the passives giving nothing else, then
+	-- also those held mostly for them)
+	if not mode then
+		local gain = self:RequirementsToGearMove("only")
+		local gain2 = self:RequirementsToGearMove("held")
+		return gain + gain2
+	end
 	local spec = self.build.spec
 	local before = self:FullScore()
 	local snap = self:Snapshot()
@@ -2923,11 +2942,28 @@ function BuildGeneratorClass:RequirementsToGearMove()
 		end
 		return any
 	end
+	-- (and passives held mostly for them: worth less than a third of their
+	-- score once resistances and attributes don't count - Holy Dominion's
+	-- 24% elemental damage next to its 12% resistances)
+	local current
+	local function heldForRequirements(node)
+		if node.ascendancyName or node.type == "Mastery" or node.type == "Keystone" or node.type == "ClassStart" or node.type == "Socket" then return false end
+		if self.protectedNodes and self.protectedNodes[node.id] then return false end
+		local loss = current - self:Score({ removeNodes = { [node] = true } })
+		if loss <= 0.002 then return false end
+		self.scorer.ignoreRequirements = true
+		local base = self:Score()
+		local free = base - self:Score({ removeNodes = { [node] = true } })
+		self.scorer.ignoreRequirements = nil
+		return free < loss / 3
+	end
 	local removed, names = 0, { }
 	for _ = 1, 8 do
 		local cut = { }
+		self:Recalculate()
+		current = self:Score()
 		for _, node in pairs(spec.allocNodes) do
-			if reqOnly(node) and node.depends and #node.depends <= 1 then t_insert(cut, node) end
+			if node.depends and #node.depends <= 1 and (reqOnly(node) or (mode == "held" and heldForRequirements(node))) then t_insert(cut, node) end
 		end
 		if #cut == 0 then break end
 		for _, node in ipairs(cut) do

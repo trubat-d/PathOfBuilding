@@ -419,7 +419,7 @@ function BuildScorerClass:GetPenalties(output)
 	for _, elem in ipairs(elements) do
 		missing = missing + m_max(0, output["Missing" .. elem .. "Resist"] or 0)
 	end
-	if missing > 0 then
+	if missing > 0 and not self.ignoreRequirements then
 		-- ailments and map mods hurt more than EHP shows
 		local p = missing * 0.004
 		total = total + p
@@ -428,7 +428,7 @@ function BuildScorerClass:GetPenalties(output)
 	for _, attr in ipairs(attributes) do
 		local short = (output["Req" .. attr] or 0) - (output[attr] or 0)
 		-- (ignoreAttributes: while choosing gems before the gear is made to supply them)
-		if short > 0 and not self.ignoreAttributes then
+		if short > 0 and not self.ignoreAttributes and not self.ignoreRequirements then
 			local p = 1 + short * 0.01
 			total = total + p
 			t_insert(penalties, { label = string.format("%d %s missing for gem/item requirements", short, attr), value = p })
