@@ -802,6 +802,15 @@ function AutoConfigClass:Run()
 			self:Set("traumaStacks", stacks, string.format("trauma held at %d of the %d the attack rate keeps up: each stack costs %.0f life a hit, recovery %.0f a second",
 				stacks, math.floor(output.SustainableTrauma), perStack, recovery))
 		end
+		-- Ice Nova of Frostbolts / Vortex of Projection: cast on the build's own
+		-- Frostbolts when it has them (their "more damage when cast on Frostbolt")
+		local mainName = skill and skill.activeEffect and skill.activeEffect.grantedEffect.name or ""
+		if mainName == "Ice Nova of Frostbolts" or mainName == "Vortex of Projection" then
+			local hasFrostbolt = false
+			for _, name in ipairs(gems) do if name:match("^Frostbolt") then hasFrostbolt = true end end
+			setIfUsed("iceNovaCastOnFrostbolt", hasFrostbolt, hasFrostbolt and "cast on the build's Frostbolts" or "no Frostbolt in the build")
+			setIfUsed("vortexCastOnFrostbolt", hasFrostbolt, hasFrostbolt and "cast on the build's Frostbolts" or "no Frostbolt in the build")
+		end
 		-- Conjoined Spire (Hierophant): "All other Summoned Totems die when you
 		-- Summon a Totem" - PoB doesn't read it and counts every totem the limit
 		-- allows (its damage, Ritual of Awakening's "per Summoned Totem")
