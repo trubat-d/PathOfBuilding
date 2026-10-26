@@ -32,10 +32,26 @@ local slotOfType = {
 	["Helmet"] = "Helmet", ["Body Armour"] = "Body Armour", ["Gloves"] = "Gloves", ["Boots"] = "Boots",
 	["Shield"] = "Off Hand",
 }
+-- (melee weapons only: a guardian can't animate a bow or a wand)
+local rangedTypes = { ["Bow"] = true, ["Wand"] = true, ["Fishing Rod"] = true }
 local function guardianSlot(item)
 	if slotOfType[item.type] then return slotOfType[item.type] end
-	if item.base and item.base.weapon then return "Weapon" end
+	if item.base and item.base.weapon and not rangedTypes[item.type] then return "Weapon" end
 end
+
+-- The highest item level requirement the guardian can use at a gem level
+-- (poewiki: 33 at level 1 to 82 at 19, every item from 20): items above it
+-- are disabled on the guardian
+local maxReqByLevel = { 33, 36, 39, 43, 46, 48, 51, 53, 56, 58, 61, 63, 66, 68, 71, 73, 76, 79, 82 }
+function AnimateGuardianSetupClass.MaxItemLevel(gemLevel)
+	gemLevel = gemLevel or 20
+	if gemLevel >= 20 then return 100 end
+	return maxReqByLevel[math.max(1, gemLevel)] or 100
+end
+
+-- The guardian's slots it should always wear something in (poewiki: helmet,
+-- body armour, gloves, boots, a melee weapon or a shield)
+AnimateGuardianSetupClass.wornSlots = { "Weapon", "Helmet", "Body Armour", "Gloves", "Boots" }
 
 -- The player's version of an ally line, or nil
 function AnimateGuardianSetupClass.PlayerLine(line)
@@ -47,6 +63,17 @@ function AnimateGuardianSetupClass.PlayerLine(line)
 	if rest then l = rest elseif l == line then return nil end
 	l = l:gsub(" you have$", "")
 	return l
+end
+
+-- The item level the guardian of this build can use (its gem's level)
+function AnimateGuardianSetupClass:MaxLevel()
+	local level = 20
+	for _, group in ipairs(self.build.skillsTab.socketGroupList) do
+		for _, gem in ipairs(group.gemList or { }) do
+			if gem.gemData and gem.gemData.name == "Animate Guardian" then level = gem.level or level end
+		end
+	end
+	return self.MaxItemLevel(level)
 end
 
 -- Candidate items: { item, slot, lines }
@@ -61,10 +88,12 @@ function AnimateGuardianSetupClass:Candidates()
 		if not byTitle[title] then byTitle[title] = item; t_insert(titles, title) end
 	end
 	t_sort(titles)
+	local maxLevel = self:MaxLevel()
 	for _, title in ipairs(titles) do
 		local item = byTitle[title]
 		local slot = guardianSlot(item)
-		if slot and finder:IsItemAllowed(item, filter) then
+		local req = item.requirements and item.requirements.level or 0
+		if slot and req <= maxLevel and finder:IsItemAllowed(item, filter) then
 			local lines = { }
 			for _, modLine in ipairs(item.explicitModLines or { }) do
 				local current = not modLine.variantList or (item.variant and modLine.variantList[item.variant])
@@ -156,6 +185,18 @@ function AnimateGuardianSetupClass:Run()
 		t_insert(gen.costs, price or false)
 	end
 	t_sort(names)
+	-- every slot worn (poewiki): the ones no buff item took get a rare for the
+	-- guardian's own survival - it can't be summoned again in an area where it
+	-- died - with life and resistances, within the level it can use
+	local taken = { }
+	for _, c in pairs(chosen) do taken[c.slot == "Off Hand" and "Weapon" or c.slot] = true end
+	local maxLevel = self:MaxLevel()
+	for _, slot in ipairs(self.wornSlots) do
+		if not taken[slot] then
+			t_insert(names, string.format("%s: any rare %s with maximum life and elemental resistances%s, for its survival",
+				slot, slot == "Weapon" and "melee weapon or shield" or slot:lower(), maxLevel < 100 and string.format(" (level requirement %d or less at this gem level)", maxLevel) or ""))
+		end
+	end
 	-- what the guardian wears, where the player looks for it: the group's title
 	-- in the Configuration tab and the build's notes (BuildGenerator:WriteNotes)
 	local titles = { }

@@ -603,7 +603,14 @@ function GemSetupClass:ChooseMovement()
 		add("Flame Dash + Faster Casting", { "Flame Dash", "Faster Casting" })
 	elseif self:HasShield() and gemId("Shield Charge") and self:CanUse(gemId("Shield Charge")) then
 		-- any build with a shield (spells too): Shield Charge is the fastest way to
-		-- move, plus a Frostblink for walls and gaps
+		-- move, plus a Frostblink for walls and gaps; a fast melee attacker
+		-- leaps faster still (Leap Slam first: the better one when equal)
+		local output = self.build.calcsTab.mainOutput or { }
+		local speed = output.Speed or (output.MainHand and output.MainHand.Speed) or 0
+		if self:MainIsAttack() and speed >= 3.5 then
+			add("Leap Slam + Faster Attacks + Momentum", { "Leap Slam", "Faster Attacks", "Momentum" })
+			add("Leap Slam + Faster Attacks", { "Leap Slam", "Faster Attacks" })
+		end
 		add("Shield Charge + Faster Attacks", { "Shield Charge", "Faster Attacks" })
 	elseif self:MainIsAttack() then
 		-- (a fast attacker leaps fast: Momentum's movement speed on top, when
