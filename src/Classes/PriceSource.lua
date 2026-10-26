@@ -25,18 +25,19 @@ local itemTypes = { "UniqueWeapon", "UniqueArmour", "UniqueAccessory", "UniqueFl
 local exchangeTypes = { "Tattoo", "Oil" }
 
 -- Investment levels: max price per item in divines (nil = no limit);
--- rareAffixes: the good natural mods a rare of the budget realistically has
--- (plus the bench craft; nil = all six); rarePrice: rough price of one rare
+-- rareAffixes: the natural mods a rare of the budget has (plus the bench
+-- craft; nil = all six: every budget fills its rares - an exalted orb on a
+-- cheap rare is cheap; the tiers and rolls are what the budget limits); rarePrice: rough price of one rare
 -- piece of gear made at that level (rares aren't on poe.ninja); budgetUpTo:
 -- the level a total budget up to that many divines uses
 PriceSourceClass.levels = {
-	{ id = "LEAGUE_START", label = "League start (items up to 1 divine)", rarePrice = 0.05, budgetUpTo = 3, rareAffixes = 3, maxUnique = 1, maxAnoint = 1, maxTattoo = 0.1, influences = 0, eldritchTier = 1, quality = 3, unknownAllowed = false,
+	{ id = "LEAGUE_START", label = "League start (items up to 1 divine)", rarePrice = 0.05, budgetUpTo = 3, maxUnique = 1, maxAnoint = 1, maxTattoo = 0.1, influences = 0, eldritchTier = 1, quality = 3, unknownAllowed = false,
 		enlighten = nil, exceptionalGems = false, awakenedGems = false, timeless = false, scarce = false },
-	{ id = "BUDGET", label = "Budget (items up to 5 divines)", rarePrice = 0.3, budgetUpTo = 15, rareAffixes = 4, maxUnique = 5, maxAnoint = 3, maxTattoo = 0.5, influences = 0, eldritchTier = 3, quality = 2, unknownAllowed = false,
+	{ id = "BUDGET", label = "Budget (items up to 5 divines)", rarePrice = 0.3, budgetUpTo = 15, maxUnique = 5, maxAnoint = 3, maxTattoo = 0.5, influences = 0, eldritchTier = 3, quality = 2, unknownAllowed = false,
 		enlighten = nil, exceptionalGems = false, awakenedGems = false, timeless = true, scarce = false },
-	{ id = "MID", label = "Mid investment (items up to 30 divines)", rarePrice = 1.5, budgetUpTo = 100, rareAffixes = 4, maxUnique = 30, maxAnoint = 10, maxTattoo = 2, influences = 1, maxInfluenced = 2, eldritchTier = 4, quality = 2, unknownAllowed = false,
+	{ id = "MID", label = "Mid investment (items up to 30 divines)", rarePrice = 1.5, budgetUpTo = 100, maxUnique = 30, maxAnoint = 10, maxTattoo = 2, influences = 1, maxInfluenced = 2, eldritchTier = 4, quality = 2, unknownAllowed = false,
 		enlighten = nil, exceptionalGems = false, awakenedGems = false, timeless = true, scarce = false },
-	{ id = "HIGH", label = "High investment (items up to 150 divines)", rarePrice = 8, budgetUpTo = 450, rareAffixes = 5, maxUnique = 150, maxAnoint = 50, maxTattoo = 10, influences = 2, maxInfluenced = 4, eldritchTier = 5, quality = 2, unknownAllowed = true,
+	{ id = "HIGH", label = "High investment (items up to 150 divines)", rarePrice = 8, budgetUpTo = 450, maxUnique = 150, maxAnoint = 50, maxTattoo = 10, influences = 2, maxInfluenced = 4, eldritchTier = 5, quality = 2, unknownAllowed = true,
 		enlighten = { name = "Enlighten", level = 4 }, exceptionalGems = true, awakenedGems = true, timeless = true, corruptedMain = true },
 	{ id = "ENDGAME", label = "Endgame investment (items up to 500 divines, Mageblood level)", rarePrice = 30, budgetUpTo = 2000, multiCraft = true, maxUnique = 500, maxAnoint = 150, maxTattoo = 30, influences = 2, maxInfluenced = 7, eldritchTier = 6, quality = 4, unknownAllowed = true,
 		enlighten = { name = "Awakened Enlighten", level = 5 }, exceptionalGems = true, awakenedGems = true, timeless = true, corruptedMain = true, corruptedSupports = true },

@@ -487,8 +487,11 @@ function BuildScorerClass:GetPenalties(output)
 		missing = missing + m_max(0, output["Missing" .. elem .. "Resist"] or 0)
 	end
 	if missing > 0 and not self.ignoreRequirements then
-		-- ailments and map mods hurt more than EHP shows
-		local p = missing * 0.004
+		-- ailments and map mods hurt more than EHP shows; and a finished build
+		-- below the cap is a mistake a player sees at once (a Slayer left 2%
+		-- short on cold and lightning, 0.016 lost: the generator kept a damage
+		-- craft over the resistance) - a step, then more per point
+		local p = 0.3 + missing * 0.05
 		total = total + p
 		t_insert(penalties, { label = string.format("Elemental resistances %d%% below cap", missing), value = p })
 	end
@@ -511,6 +514,24 @@ function BuildScorerClass:GetPenalties(output)
 			local p = 0.6 * m_log(9000 / m_max(life, 1000))
 			total = total + p
 			t_insert(penalties, { label = string.format("Dissolution of the Flesh on %d life (no recovery while hit, needs a very large pool)", life), value = p })
+		end
+	end
+	-- Imbalanced Guard (poewiki): armour doubled against hits, damage
+	-- reduction capped at 50% instead of 90% - better against a boss's big
+	-- hits, worse against the many small hits of a map pack, where a lot of
+	-- armour reduces far more than 50%. The map hit (1500 physical) taken
+	-- with and without it; the loss counted (half the damage taken while
+	-- mapping is physical, roughly)
+	if (output.DamageReductionMax or 90) < 90 and (output.Armour or 0) > 0 and not self.ignoreRequirements then
+		local armour, hit = output.Armour, 1500
+		local cap = output.DamageReductionMax
+		local without = m_min(90, 100 * armour / (armour + 5 * hit))
+		local with = m_min(cap, 100 * 2 * armour / (2 * armour + 5 * hit))
+		local factor = (1 - with / 100) / m_max(0.1, 1 - without / 100)
+		if factor > 1.02 then
+			local p = 0.3 * m_log(factor)
+			total = total + p
+			t_insert(penalties, { label = string.format("Damage reduction capped at %d%% (Imbalanced Guard): map hits reduced %d%% instead of %d%%", cap, with, without), value = p })
 		end
 	end
 	for _, pool in ipairs({ "Mana", "Life" }) do

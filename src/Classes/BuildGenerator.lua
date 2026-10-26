@@ -1958,7 +1958,101 @@ function BuildGeneratorClass:JewelleryBaseMove()
 		end
 	end
 	if #kept > 0 then self:Note("Jewellery bases chosen again for the finished build: " .. table.concat(kept, ", ")) end
+	-- (an amulet base whose implicit gives the attributes the other rares pay
+	-- an affix for - a helmet crafting Intelligence while an Agate Amulet gives
+	-- Strength and Intelligence: with the base swapped the rares are made again,
+	-- so the freed affixes take something better; measured whole)
+	if self.options.amuletAttributeBases ~= false then
+		local ok, err = pcall(function() self:AmuletAttributeMove() end)
+		if not ok then ConPrintf("Amulet attribute bases failed: %s", tostring(err)) end
+	end
 	return #kept
+end
+
+function BuildGeneratorClass:AmuletAttributeMove()
+	local slot = self.itemsTab.slots["Amulet"]
+	local item = slot and slot.selItemId ~= 0 and self.itemsTab.items[slot.selItemId]
+	if not (item and item.rarity == "RARE" and item.base and item.raw) or (self.lockedSlots and self.lockedSlots.Amulet) then return end
+	-- attributes other rares carry as affixes
+	local carried = { }
+	for _, other in ipairs(self.itemsTab.orderedSlots) do
+		local it = self.itemsTab.items[other.selItemId]
+		if it and it ~= item and it.rarity == "RARE" and not other.nodeId then
+			for _, modLine in ipairs(it.explicitModLines or { }) do
+				local l = modLine.line
+				for _, attr in ipairs({ "Strength", "Dexterity", "Intelligence" }) do
+					if l:match("to " .. attr) or l:match("and " .. attr) or l:match("to all Attributes") then carried[attr] = true end
+				end
+			end
+		end
+	end
+	local candidates = { }
+	for _, baseName in ipairs(self:BasesOfType(function(base) return base.type == "Amulet" end)) do
+		local implicit = (data.itemBases[baseName] and data.itemBases[baseName].implicit) or ""
+		if baseName ~= item.baseName then
+			local gives = 0
+			for _, attr in ipairs({ "Strength", "Dexterity", "Intelligence" }) do
+				if carried[attr] and (implicit:match(attr) or implicit:match("all Attributes")) then gives = gives + 1 end
+			end
+			if gives >= 1 and implicit:match("to %a+ and %a+") or (gives >= 2) then t_insert(candidates, baseName) end
+		end
+	end
+	if #candidates == 0 then return end
+	local before = self:FullScore()
+	local best, bestScore, bestSnap
+	local origSnap = self:Snapshot()
+	for i = 1, m_min(3, #candidates) do
+		local baseName = candidates[i]
+		local lines, out = { }, { }
+		for line in item.raw:gmatch("[^\n]+") do t_insert(lines, line) end
+		local baseIndex, implicitIndex, implicitCount
+		for j, l in ipairs(lines) do
+			if l == item.baseName and not baseIndex then baseIndex = j end
+			local n = l:match("^Implicits: (%d+)$")
+			if n and not implicitIndex then implicitIndex, implicitCount = j, tonumber(n) end
+		end
+		if baseIndex and implicitIndex then
+			for j, l in ipairs(lines) do
+				if j == baseIndex then
+					t_insert(out, baseName)
+				elseif j == implicitIndex then
+					local implicits = { }
+					for imp in ((data.itemBases[baseName] and data.itemBases[baseName].implicit) or ""):gmatch("[^\n]+") do t_insert(implicits, "{range:0.5}" .. imp) end
+					t_insert(out, "Implicits: " .. #implicits)
+					for _, imp in ipairs(implicits) do t_insert(out, imp) end
+				elseif not (j > implicitIndex and j <= implicitIndex + implicitCount) then
+					t_insert(out, l)
+				end
+			end
+			local ok, candidate = pcall(function()
+				local c = new("Item"):Item(table.concat(out, "\n"))
+				c:NormaliseQuality()
+				c:BuildModList()
+				return c
+			end)
+			if ok and candidate and candidate.base then
+				self:Restore(origSnap)
+				self:Equip(candidate, "Amulet")
+				self.itemsTab:PopulateSlots()
+				self:Recalculate()
+				self:FinalRares()
+				self:AutoConfigure()
+				local score = self:FullScore()
+				if score > before + 0.01 and (not bestScore or score > bestScore) then
+					best, bestScore, bestSnap = baseName, score, self:Snapshot()
+				end
+			end
+		end
+		self:Tick()
+	end
+	if best then
+		self:Restore(bestSnap)
+		self:Recalculate()
+		self:Note(string.format("Amulet base %s for its attributes, the rares made again around it: score %+.3f", best, bestScore - before))
+	else
+		self:Restore(origSnap)
+		self:Recalculate()
+	end
 end
 
 -- The flasks chosen again for the finished build: they are chosen at stage

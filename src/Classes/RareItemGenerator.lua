@@ -542,8 +542,11 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 					end
 				end
 			end
-			-- Stop when nothing helps any more
-			if not best or (bestPower <= currentPower and bestDeficit >= currentDeficit) then
+			-- Stop when nothing is left to add, or the best makes it worse: a
+			-- mod that adds nothing still fills its affix (an exalted orb on a
+			-- rare is cheap at any budget - six mods, as players make them)
+			if not best or (bestPower < currentPower - 1e-9 and bestDeficit >= currentDeficit)
+				or (bestPower <= currentPower and bestDeficit >= currentDeficit and best.crafted) then
 				break
 			end
 			if best.crafted and counts.crafted >= 1 and not metaTaken then
