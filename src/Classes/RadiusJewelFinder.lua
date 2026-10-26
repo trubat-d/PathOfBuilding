@@ -153,7 +153,8 @@ end
 -- allowed(title) -> bool (investment), allowUber: the Massive Ring
 function RadiusJewelFinderClass:Run(allowed, allowUber, maxApply)
 	local gen = self.gen
-	local sockets = self:Sockets(3)
+	-- (a ring that saves many points pays for a socket a few points away)
+	local sockets = self:Sockets(self.gen.options.radiusSocketPath or 5)
 	if #sockets == 0 then return nil end
 	-- 1. placements
 	local placements = { }
@@ -222,22 +223,57 @@ function RadiusJewelFinderClass:Run(allowed, allowUber, maxApply)
 			ConPrintf("[radius] %s in socket %d: %d passives, estimate %+.3f", p.version.label, p.socket.node.id, p.count, p.estimate)
 		end
 	end
-	-- 3. the best few for real
+	-- 3. the best few for real, each against the same passives reached the
+	-- usual way (their paths allocated, the tree refilled): the jewel is
+	-- worth the points it saves, not the passives - the tree could have
+	-- taken Heart of Flame one point further, and Impossible Escape got the
+	-- credit for the notable. Kept when it saves at least 2 points and beats
+	-- that tree.
 	local before = gen:FullScore()
 	local best
 	for i = 1, m_min(maxApply or 3, #placements) do
 		local p = placements[i]
 		if p.estimate > 0.01 then
 			local score, nodes = self:Apply(p, false)
-			if gen.options.debugTiming then ConPrintf("[radius] applied %s: %.3f (base %.3f), %d passives", p.version.label, score, before, #nodes) end
-			if score > before + 0.005 and (not best or score > best.score + 1e-9) then best = { placement = p, score = score } end
+			local altScore, saved = self:PathAlternative(nodes)
+			if gen.options.debugTiming then ConPrintf("[radius] applied %s: %.3f (base %.3f, the same passives by path %.3f, %d path points saved), %d passives", p.version.label, score, before, altScore or -1, saved or 0, #nodes) end
+			if score > m_max(before, altScore or before) + 0.005 and (saved or 0) >= 2 and (not best or score > best.score + 1e-9) then best = { placement = p, score = score, saved = saved } end
 		end
 	end
 	if not best then return nil end
 	local score, nodes = self:Apply(best.placement, true)
 	local names = { }
 	for _, node in ipairs(nodes) do if node.type ~= "Normal" then t_insert(names, node.dn) end end
-	return { label = best.placement.version.label, gain = score - before, nodes = nodes, names = names, title = best.placement.version.item.title }
+	return { label = best.placement.version.label, gain = score - before, nodes = nodes, names = names, title = best.placement.version.item.title, saved = best.saved }
+end
+
+-- The passives a jewel would reach, taken the usual way instead: their paths
+-- allocated, the tree trimmed to the budget and refilled. Returns the full
+-- score and the path points the jewel saves (everything put back)
+function RadiusJewelFinderClass:PathAlternative(nodes)
+	if not nodes or #nodes == 0 then return nil, 0 end
+	local gen, spec = self.gen, self.spec
+	local undo = spec:CreateUndoState()
+	local savedLog = #gen.log
+	local count = spec:CountAllocNodes()
+	for _, node in ipairs(nodes) do
+		if not node.alloc and node.path then spec:AllocNode(node) spec:BuildAllDependsAndPaths() end
+	end
+	spec:BuildAllDependsAndPaths()
+	local added = spec:CountAllocNodes() - count
+	local saved = m_max(0, added - #nodes)
+	gen:Recalculate()
+	local ok = pcall(function()
+		gen:TrimTree()
+		gen:AllocateTree(true)
+		gen:RefineTree(6)
+	end)
+	local score = ok and gen:FullScore() or nil
+	for i = #gen.log, savedLog + 1, -1 do table.remove(gen.log, i) end
+	spec:RestoreUndoState(undo)
+	spec:BuildAllDependsAndPaths()
+	gen:Recalculate()
+	return score, saved
 end
 
 -- Socket the jewel, allocate its passives while they gain, trim the tree to

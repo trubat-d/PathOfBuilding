@@ -4346,8 +4346,8 @@ function BuildGeneratorClass:ChooseRadiusJewels()
 	if not ok then ConPrintf("Radius jewels failed: %s", tostring(result)) return end
 	if result then
 		local price = prices.uniques[result.title]
-		self:Note(string.format("%s: %d passives allocated through it without a path%s, score %+.3f (%s)", result.label, #result.nodes,
-			#result.names > 0 and (" (" .. table.concat(result.names, ", ") .. ")") or "", result.gain, prices.FormatPrice(price)))
+		self:Note(string.format("%s: %d passives allocated through it without a path%s, %d path points saved against reaching them through the tree, score %+.3f (%s)", result.label, #result.nodes,
+			#result.names > 0 and (" (" .. table.concat(result.names, ", ") .. ")") or "", result.saved or 0, result.gain, prices.FormatPrice(price)))
 		self.costs = self.costs or { }
 		t_insert(self.costs, price or false)
 	end

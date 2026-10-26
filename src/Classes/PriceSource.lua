@@ -210,6 +210,13 @@ local function parseItems(json, into)
 		-- 5 / 6 link versions are priced separately; keep the cheapest version
 		if name and value and not (line.links and line.links >= 5) then
 			into[name] = into[name] and m_min(into[name], value) or value
+			-- (and each variant on its own: Impossible Escape's keystone,
+			-- a timeless jewel's conqueror - the cheapest one is no price for
+			-- the one a build needs)
+			if type(line.variant) == "string" and line.variant ~= "" then
+				local key = name .. "|" .. line.variant
+				into[key] = into[key] and m_min(into[key], value) or value
+			end
 		end
 	end
 end
@@ -391,7 +398,8 @@ end
 
 function PriceSourceClass:UniquePrice(item)
 	local title = item.title or (item.name and item.name:match("^([^,]+),")) or item.name
-	local price = title and self.uniques[title]
+	local variantName = item.variant and item.variantList and item.variantList[item.variant]
+	local price = title and variantName and self.uniques[title .. "|" .. variantName] or (title and self.uniques[title])
 	if price and self.phase and self.phase ~= "NOW" then price = price * self:PhaseFactor("unique", price) end
 	return price
 end
