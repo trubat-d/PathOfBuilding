@@ -7197,7 +7197,11 @@ function BuildGeneratorClass:Upgrade()
 	stage(4, "Jewels, anoint, tattoos, pantheon")
 	self:Move(1, 4, "Jewels")
 	if opts.jewels ~= false then self:FillEmptySockets() end
-	if opts.timeless ~= false then self:ChooseTimelessJewel() end
+	if opts.timeless ~= false then
+		local snap = self:Snapshot()
+		local ok, err = pcall(function() self:ChooseTimelessJewel() end)
+		if not ok then ConPrintf("Timeless jewel failed: %s", tostring(err)) self:Restore(snap) self:Recalculate() end
+	end
 	if opts.metaJewels ~= false then self:ChooseMetaJewels() end
 	self:Move(2, 4, "Anoint")
 	if opts.allowAnoints ~= false then self:ChooseAnoint() end
@@ -7674,7 +7678,17 @@ function BuildGeneratorClass:Run()
 		local ok, err = pcall(function() self:KeystoneMove(3) end)
 		if not ok then ConPrintf("Keystone move failed: %s", tostring(err)) end
 	end
-	if opts.timeless ~= false then self:ChooseTimelessJewel() end
+	if opts.timeless ~= false then
+		-- (a timeless jewel is an extra: its data failing to load - in a
+		-- background thread - doesn't end the generation)
+		local snap = self:Snapshot()
+		local ok, err = pcall(function() self:ChooseTimelessJewel() end)
+		if not ok then
+			ConPrintf("Timeless jewel failed: %s", tostring(err))
+			self:Restore(snap)
+			self:Recalculate()
+		end
+	end
 	self:Move(7, 10, "Forbidden, Watcher's Eye, Split Personality and other unique jewels")
 	if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
 	if opts.debugTiming then local _, r = self:FullScore() ConPrintf("[stage] after %s: score %.3f dps %.0f ehp %.0f", 'ChooseTimelessJewel', r.score, r.dps, r.ehp) end

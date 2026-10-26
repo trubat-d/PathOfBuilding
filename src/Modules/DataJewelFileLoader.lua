@@ -41,13 +41,23 @@ local function loadJewelFile(jewelTypeName, cacheUncompressed)
 		compressedFileAttr.modified = fileHandle:GetFileModifiedTime()
 	end
 
+	-- (no file search - a background thread - : the app's uncompressed copy if it made one)
+	if cacheUncompressed and not uncompressedFileAttr.modified and not compressedFileAttr.modified then
+		local uncompressedFile = io.open(scriptPath .. jewelPath .. ".bin", "rb")
+		if uncompressedFile then
+			local jewelData = uncompressedFile:read("*a")
+			uncompressedFile:close()
+			if jewelData and jewelData ~= "" then return jewelData end
+		end
+	end
 	if uncompressedFileAttr.modified and uncompressedFileAttr.modified > (compressedFileAttr.modified or 0) then
 		ConPrintf("Uncompressed jewel data is up-to-date, loading " .. uncompressedFileAttr.fileName)
 		local uncompressedFile = io.open(scriptPath .. jewelPath .. ".bin", "rb")
 		if uncompressedFile then
 			local jewelData = uncompressedFile:read("*a")
 			uncompressedFile:close()
-			if jewelData then
+			-- (an empty copy - a failed write - is made again from the compressed file)
+			if jewelData and jewelData ~= "" then
 				return jewelData
 			end
 		end
@@ -82,6 +92,20 @@ local function loadJewelFile(jewelTypeName, cacheUncompressed)
 	end
 
 	local jewelData = Inflate(compressedData)
+	if not jewelData then
+		-- (a background thread's Inflate can come back empty: the app's own
+		-- uncompressed copy instead, when there is one)
+		local uncompressedFile = io.open(scriptPath .. jewelPath .. ".bin", "rb")
+		if uncompressedFile then
+			jewelData = uncompressedFile:read("*a")
+			uncompressedFile:close()
+		end
+		if not jewelData or jewelData == "" then
+			ConPrintf("Failed to decompress jewel data: " .. jewelTypeName)
+			return
+		end
+		return jewelData
+	end
 	if cacheUncompressed then
 		local uncompressedFile = io.open(scriptPath .. jewelPath .. ".bin", "wb+")
 		if uncompressedFile then
