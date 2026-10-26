@@ -191,12 +191,30 @@ function AnimateGuardianSetupClass:Run()
 	local taken = { }
 	for _, c in pairs(chosen) do taken[c.slot == "Off Hand" and "Weapon" or c.slot] = true end
 	local maxLevel = self:MaxLevel()
+	-- (the build's main element: the guardian's hits can expose enemies to it)
+	local output = self.build.calcsTab.mainOutput or { }
+	local element, bestHit = "Fire", 0
+	for _, t in ipairs({ "Fire", "Cold", "Lightning" }) do
+		local v = (output[t .. "HitAverage"] or 0) + (output[t .. "Max"] or 0) + (output[t .. "Dot"] or 0)
+			+ (output.MainHand and ((output.MainHand[t .. "HitAverage"] or 0) + (output.MainHand[t .. "Max"] or 0)) or 0)
+		if v > bestHit then element, bestHit = t, v end
+	end
+	local levelNote = maxLevel < 100 and string.format(" (level requirement %d or less at this gem level)", maxLevel) or ""
 	for _, slot in ipairs(self.wornSlots) do
 		if not taken[slot] then
-			t_insert(names, string.format("%s: any rare %s with maximum life and elemental resistances%s, for its survival",
-				slot, slot == "Weapon" and "melee weapon or shield" or slot:lower(), maxLevel < 100 and string.format(" (level requirement %d or less at this gem level)", maxLevel) or ""))
+			local extra = ""
+			if slot == "Gloves" then
+				-- (what it hits is debuffed for the player too: Culling Strike, a Warlord
+				-- gloves suffix; Eater's "Inflict <element> Exposure on Hit" implicit)
+				extra = string.format("; best: Warlord gloves with Culling Strike, and an Eater implicit \"Inflict %s Exposure on Hit\" (the enemies it hits take more %s damage)", element, element:lower())
+			end
+			t_insert(names, string.format("%s: %s with maximum life and elemental resistances%s, for its survival%s",
+				slot, slot == "Weapon" and "a rare melee weapon or shield" or slot == "Gloves" and "rare gloves" or slot == "Boots" and "rare boots" or ("a rare " .. slot:lower()), levelNote, extra))
 		end
 	end
+	-- (poewiki: Eldritch implicits that need a unique enemy or a pinnacle boss
+	-- in your presence are always active on the guardian)
+	t_insert(names, "Eldritch implicits on its armour work at their \"Pinnacle Atlas Boss in your Presence\" strength on the guardian, always")
 	-- what the guardian wears, where the player looks for it: the group's title
 	-- in the Configuration tab and the build's notes (BuildGenerator:WriteNotes)
 	local titles = { }

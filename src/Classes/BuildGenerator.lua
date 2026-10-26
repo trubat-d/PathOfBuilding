@@ -7997,6 +7997,14 @@ function BuildGeneratorClass:Run()
 		if item and item.rarity == "RARE" and item.title and item.title:match("^Best Rare") and not slot.slotName:match("^Jewel") then
 			local ok, craft = pcall(function() return advisor:Describe(item) end)
 			if ok and craft then self:Note(string.format("Craft %s (%s): %s", slot.slotName, item.baseName, craft.text)) end
+			-- (and the process, step by step: in the build's notes)
+			local okPlan, plan = pcall(function() return advisor:Plan(item) end)
+			if okPlan and plan then
+				self.craftPlans = self.craftPlans or { }
+				t_insert(self.craftPlans, { slot = slot.slotName, base = item.baseName, steps = plan, difficulty = ok and craft and craft.difficulty })
+			elseif not okPlan then
+				ConPrintf("Craft plan for %s failed: %s", slot.slotName, tostring(plan))
+			end
 		end
 	end
 	-- what the build is built around and what carries it (each part taken
@@ -8086,6 +8094,15 @@ function BuildGeneratorClass:WriteNotes(assumptions, costLine)
 	t_insert(lines, "What the generator did, in order:")
 	for _, l in ipairs(self.log or { }) do t_insert(lines, "- " .. l) end
 	if costLine then t_insert(lines, "") t_insert(lines, costLine) end
+	-- how to make each generated rare (Classes/CraftAdvisor:Plan)
+	if self.craftPlans and self.craftPlans[1] then
+		t_insert(lines, "")
+		t_insert(lines, "How to craft the rares (or buy one with these mods: \"very hard\" ones are cheaper to buy):")
+		for _, p in ipairs(self.craftPlans) do
+			t_insert(lines, string.format("%s (%s)%s:", p.slot, p.base or "?", p.difficulty and (", " .. p.difficulty) or ""))
+			for _, s in ipairs(p.steps) do t_insert(lines, "   " .. s) end
+		end
+	end
 	local old = edit.buf or ""
 	-- (a previous generation's notes replaced, the player's own kept)
 	old = old:gsub("^Generated build %b().-\n%-%-%-%-\n", "")
