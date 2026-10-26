@@ -1759,7 +1759,15 @@ function BuildGeneratorClass:ChooseBloodline()
 	-- Boneshatter players wear three rings)
 	local ring3 = self.itemsTab.slots["Ring 3"]
 	local ring3Probe
-	if ring3 and (ring3.selItemId or 0) == 0 then
+	-- (only once the flasks are there: the slot's path can cost them -
+	-- Toad's Price disables utility flasks - and before they are chosen that
+	-- cost is nothing; the recheck on the finished build makes the trade)
+	local hasFlasks = false
+	for i = 1, 5 do
+		local slot = self.itemsTab.slots["Flask " .. i]
+		if slot and (slot.selItemId or 0) ~= 0 then hasFlasks = true end
+	end
+	if ring3 and (ring3.selItemId or 0) == 0 and hasFlasks then
 		for _, name in ipairs({ "Ring 1", "Ring 2" }) do
 			local item = self.itemsTab.items[self.itemsTab.slots[name].selItemId]
 			if not ring3Probe and item and item.rarity == "RARE" then
@@ -1845,6 +1853,49 @@ function BuildGeneratorClass:ChooseBloodline()
 		t_sort(names)
 		self:Note(string.format("Bloodline: %s (%s)", tree.alternate_ascendancies[bestId].name, table.concat(names, ", ")))
 	end
+end
+
+-- The bloodline chosen again on the finished build: it is chosen before the
+-- flasks, and some carry a cost only they show - the Nameless Bloodline's
+-- third ring comes through Toad's Price, utility flasks disabled (a mid-tier
+-- Righteous Fire took it for the ring and ended 0.8 below). Kept if better;
+-- a third ring left without its slot is taken out.
+function BuildGeneratorClass:BloodlineRecheck()
+	local spec = self.build.spec
+	if self.options.bloodlines == false or not spec.tree.alternate_ascendancies then return 0 end
+	local before = self:FullScore()
+	local snap = self:Snapshot()
+	local savedBloodline = self.bloodlineId
+	local savedLog = #self.log
+	local ok, err = pcall(function() self:ChooseBloodline() end)
+	if not ok then ConPrintf("Bloodline recheck failed: %s", tostring(err)) end
+	self:AutoConfigure()
+	local after = ok and self:FullScore() or before
+	if ok and after > before + 0.005 and self.bloodlineId ~= savedBloodline then
+		for i = #self.log, savedLog + 1, -1 do if not self.log[i]:match("^Bloodline") and not self.log[i]:match("^Third ring") then t_remove(self.log, i) end end
+		self:Note(string.format("Bloodline chosen again for the finished build: score %+.3f", after - before))
+	else
+		for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+		self:Restore(snap)
+		-- (the undo state doesn't keep the bloodline)
+		if spec.SelectSecondaryAscendClass and self.bloodlineId ~= savedBloodline then
+			local undo = spec:CreateUndoState()
+			spec:SelectSecondaryAscendClass(savedBloodline or 0)
+			spec:RestoreUndoState(undo)
+			self.bloodlineId = savedBloodline
+		end
+		self:AutoConfigure()
+		after = before
+	end
+	-- (no slot, no third ring)
+	local env = self.build.calcsTab.mainEnv
+	local ring3 = self.itemsTab.slots["Ring 3"]
+	if ring3 and (ring3.selItemId or 0) ~= 0 and env and not env.modDB:Flag(nil, "AdditionalRingSlot") then
+		ring3:SetSelItemId(0)
+		self.itemsTab:PopulateSlots()
+		self:Recalculate()
+	end
+	return after - before
 end
 
 -- Picks armour type, jewellery bases and weapons by testing white bases
@@ -7522,6 +7573,10 @@ function BuildGeneratorClass:Run()
 	stage(12, "Finishing: ascendancy, supports and passive tree")
 	self:Move(1, 6, "Choosing the ascendancy again")
 	if opts.ascendancyRecheck ~= false then self:AscendancyRecheck() end
+	if opts.bloodlineRecheck ~= false then
+		local ok, err = pcall(function() self:BloodlineRecheck() end)
+		if not ok then ConPrintf("Bloodline recheck failed: %s", tostring(err)) end
+	end
 	if opts.finalSupports ~= false then
 		self:Move(2, 6, "Choosing the supports again")
 		-- (new supports can want other passives: a short tree round when they change)
