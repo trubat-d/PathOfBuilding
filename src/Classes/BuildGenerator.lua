@@ -4443,8 +4443,14 @@ function BuildGeneratorClass:SecondaryCandidates()
 		for _, t in ipairs(damageTags) do
 			if tags[t] and mainTags[t] then shares = true end
 		end
-		if shares and gem ~= mainGem and self.GemFamily(gem) ~= self.GemFamily(mainGem)
-			and (not tags.minion or mainTags.minion)
+		-- (not the main skill again: its transfigured versions, "Holy Flame
+		-- Totem of Ire", are the same skill; and not a second totem next to a
+		-- totem main skill, or a second minion next to minions: they share
+		-- the totem / minion limit, which the full DPS doesn't split)
+		local baseName = function(name) return (name:gsub(" of %u%a+$", "")) end
+		if shares and gem ~= mainGem and self.GemFamily(gem) ~= self.GemFamily(mainGem) and baseName(gem.name) ~= baseName(mainGem.name)
+			and (not tags.minion or mainTags.minion) and not (tags.totem and mainTags.totem)
+			and not (tags.minion and mainTags.minion and types[SkillType.CreatesMinion])
 			and not types[SkillType.Buff] and setup:CanUse(entry.gemId) then
 			t_insert(list, entry.gemId)
 		end
