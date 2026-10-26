@@ -437,12 +437,20 @@ end
 -- (charge skills and supports whose condition a pinnacle boss doesn't meet:
 -- kills, or stuns a boss shrugs off - poewiki)
 local onKillChargeSkills = { ["Blood Rage"] = true, ["Assassin's Mark"] = true }
+-- (a charge source that needs you under an ailment the generated build
+-- doesn't keep on itself - The Red Trail's "on Hit while Bleeding": not a source)
+local function selfAilmentOnly(line)
+	for _, ailment in ipairs({ "bleeding", "poisoned", "ignited", "shocked", "chilled", "frozen" }) do
+		if line:find("while " .. ailment, 1, true) or line:find("while you are " .. ailment, 1, true) then return true end
+	end
+	return false
+end
 function AutoConfigClass:GeneratesCharge(kind, lines, gems, flags, boss, output)
 	local word = kind:lower()
 	for _, line in ipairs(lines) do
 		-- "gain a frenzy charge on hit", "grant an endurance, frenzy or power charge"...
 		if line:find(word, 1, true) and line:find("charge", 1, true) and (line:find("gain") or line:find("grant") or line:find("generat"))
-			and not line:find("lose") and not line:find("maximum") then
+			and not line:find("lose") and not line:find("maximum") and not selfAilmentOnly(line) then
 			return true
 		end
 	end
@@ -477,7 +485,7 @@ function AutoConfigClass:ChargeUptime(kind, lines, flags, output, boss)
 	local rate, sources = 0, { }
 	for _, line in ipairs(lines) do
 		if line:find(word, 1, true) and line:find("charge", 1, true) and (line:find("gain") or line:find("grant") or line:find("generat"))
-			and not line:find("lose") and not line:find("maximum") and not line:find("enemies", 1, true) then
+			and not line:find("lose") and not line:find("maximum") and not line:find("enemies", 1, true) and not selfAilmentOnly(line) then
 			local chance = (tonumber(line:match("([%d%.]+)%% chance")) or 100) / 100
 			local every = tonumber(line:match("every ([%d%.]+) seconds?")) or (line:find("every second", 1, true) or line:find("each second", 1, true)) and 1
 			local r

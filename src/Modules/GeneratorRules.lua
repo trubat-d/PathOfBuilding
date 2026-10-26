@@ -66,6 +66,11 @@ rules.uniques = {
 	["Vessel of Vinktar"] = { excluded = true, reason = "you are shocked during its effect (50% more damage taken)" },
 	["The Flawed Refuge"] = { excluded = true, reason = "you take all elemental damage from blocked hits" },
 	["Corrupted Energy"] = { excluded = true, reason = "physical damage bypasses energy shield with 5 corrupted items" },
+	-- (its frenzy charges need you bleeding; PoB doesn't count the bleeding it
+	-- causes you - half the attack hits you take)
+	["The Red Trail"] = { excluded = true, reason = "you bleed from half the attack hits you take (PoB counts none of that damage) and its frenzy charges need you bleeding" },
+	["Replica Red Trail"] = { excluded = true, reason = "spell hits poison you half the time (PoB counts none of that damage) and its power charges need you poisoned" },
+	["The Infinite Pursuit"] = { excluded = true, reason = "you bleed from half the attack hits you take (PoB counts none of that damage)" },
 	["Haunting Memories"] = { excluded = true, reason = "suppressed spell damage bypasses energy shield" },
 	-- (found by the unique combo search: PoB reads each of its timed effects as always on)
 	["Bound Fate"] = { excluded = true, reason = "every 5 seconds one random effect, half of them drawbacks; PoB counts the good ones as permanent" },
