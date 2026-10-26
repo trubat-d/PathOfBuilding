@@ -187,6 +187,7 @@ end
 
 -- Build lists of files to be updated or deleted
 local updateFiles = { }
+local missingCount
 for name, data in pairs(remoteFiles) do
 	data.name = name
 	local sanitizedName = name:gsub("{space}", " ")
@@ -195,7 +196,8 @@ for name, data in pairs(remoteFiles) do
 	elseif localFiles[name] then
 		local file = io.open(localFiles[name].fullPath, "rb")
 		if not file then
-			ConPrintf("Warning: '%s' doesn't exist, it will be re-downloaded", data.name)
+			-- (counted, one line for all: a fresh installation misses them all)
+			missingCount = (missingCount or 0) + 1
 			table.insert(updateFiles, data)
 		else
 			local content = file:read("*a")
@@ -230,6 +232,9 @@ downloadFile(localSource, "changelog.txt", scriptPath.."/changelog.txt")
 -- Download files that need updating
 local failedFile = false
 local zipFiles = { }
+if missingCount then
+	ConPrintf("%d files missing (a fresh installation downloads them all): downloading...", missingCount)
+end
 for index, data in ipairs(updateFiles) do
 	if UpdateProgress then
 		UpdateProgress("Downloading %d/%d", index, #updateFiles)
