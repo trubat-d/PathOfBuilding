@@ -2129,6 +2129,13 @@ local dmgTypes = {
 -- List of special modifiers
 ---@type table<string, Mod[]|fun(num: number, ...: string): Mod[]>
 local specialModList = {
+	-- Instilling Orb flask enchantments: when the flask is used (the build
+	-- generator's flask uptime takes the flask as used whenever it can be), and
+	-- flask charges gained from being hit (BuildScorer:FlaskUptime reads the line)
+	["used when charges reach full"] = { flag("FlaskUsedWhenChargesFull") },
+	["reused at the end of this flask's effect"] = { flag("FlaskReusedAtEndOfEffect") },
+	["used when (.+)"] = { flag("FlaskUsedOnCondition") },
+	["gain (%d+) charges? when you are hit by an enemy"] = function(num) return { mod("FlaskChargesOnBeingHit", "BASE", num) } end,
 	-- Explode mods
 	["enemies you kill have a (%d+)%% chance to explode, dealing a (.+) of their maximum life as (.+) damage"] = function(chance, _, amount, type)	-- Obliteration, Unspeakable Gifts (chaos cluster), synth implicit mod, current crusader body mod, Ngamahu Warmonger tattoo
 		return explodeFunc(chance, amount, type)

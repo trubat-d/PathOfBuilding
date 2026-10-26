@@ -2270,6 +2270,13 @@ function BuildGeneratorClass:MakeFlasks()
 	local result = gen:Generate({ calcFunc = self.calcFunc, override = { }, opts = { quality = self.options.quality, levelOnly = true }, tick = function() self:Tick() end })
 	local names = { }
 	for slotName, item in pairs(result.slots) do
+		-- (an Instilling Orb enchantment, as players put on their flasks: used
+		-- by itself when its charges are full, never in the way of gaining them)
+		if item.rarity == "MAGIC" and item.base and item.base.flask and not (item.base.flask.life or item.base.flask.mana)
+			and #(item.enchantModLines or { }) == 0 and self.options.instillFlasks ~= false then
+			item.enchantModLines = { { line = "Used when Charges reach full", enchant = true } }
+			item:BuildAndParseRaw()
+		end
 		self:Equip(item, slotName)
 		self.itemsTab.slots[slotName].active = true
 		if self.itemsTab.activeItemSet[slotName] then self.itemsTab.activeItemSet[slotName].active = true end
@@ -2299,12 +2306,19 @@ function BuildGeneratorClass:FlaskEnchantMove()
 	for _, slotName in ipairs({ "Flask 1", "Flask 2", "Flask 3", "Flask 4", "Flask 5" }) do
 		local slot = self.itemsTab.slots[slotName]
 		local item = slot and self.itemsTab.items[slot.selItemId]
+		-- (an Instilling enchantment - "Used when Charges reach full" - is
+		-- replaced: under Mageblood the flask is always up)
+		local instilled = true
+		for _, l in ipairs(item and item.enchantModLines or { }) do
+			if not (l.line or ""):match("^Used when") and not (l.line or ""):match("^Reused at") then instilled = false end
+		end
 		if item and item.base and item.base.flask and not (item.base.flask.life or item.base.flask.mana)
-			and item.rarity == "MAGIC" and #(item.enchantModLines or { }) == 0 then
+			and item.rarity == "MAGIC" and instilled then
 			local before = self:FullScore()
 			local best
 			for _, enchant in ipairs(enchants) do
 				local copy = new("Item"):Item(item:BuildRaw())
+				copy.enchantModLines = { }
 				for part in enchant:gmatch("[^/]+") do
 					-- (the top of the range: enchanting again is cheap)
 					local line = part:gsub("%((%d+)%-(%d+)%)", "%2")

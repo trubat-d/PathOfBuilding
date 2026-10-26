@@ -15755,7 +15755,6 @@ c["Gain +10 Life when you Taunt an Enemy 20% increased Endurance Charge Duration
 c["Gain +2% to Critical Strike Chance for 2 seconds after Spending a total of 800 Mana"]={{[1]={[1]={threshold=800,type="MultiplierThreshold",var="ManaSpentRecently"},flags=0,keywordFlags=0,name="CritChance",type="BASE",value=2}},nil}
 c["Gain +50 Life when you Taunt an Enemy"]={nil,"+50 Life when you Taunt an Enemy "}
 c["Gain +50 Life when you Taunt an Enemy You gain Onslaught for 1 seconds on Killing Taunted Enemies"]={{[1]={[1]={type="Condition",var="KilledTauntedEnemyRecently"},flags=0,keywordFlags=0,name="Condition:Onslaught",type="FLAG",value=true}},"+50  when you Taunt an Enemy You gain    "}
-c["Gain 1 Charge when you are Hit by an Enemy"]={{}," Charge when you are Hit by an Enemy "}
 c["Gain 1 Endurance Charge every second if you've been Hit Recently"]={{}," Endurance Charge every second  "}
 c["Gain 1 Endurance Charge every second if you've been Hit Recently +1 to Maximum Endurance Charges"]={{[1]={[1]={type="Condition",var="BeenHitRecently"},flags=0,keywordFlags=0,name="EnduranceChargesMax",type="BASE",value=1}}," Endurance Charge every second  +1 to  "}
 c["Gain 1 Endurance Charge every second if you've been Hit Recently and"]={{}," Endurance Charge every second  and "}
@@ -15914,7 +15913,6 @@ c["Gain 18% of Physical Damage as Extra Lightning Damage"]={{[1]={flags=0,keywor
 c["Gain 19% of Physical Damage as Extra Cold Damage"]={{[1]={flags=0,keywordFlags=0,name="PhysicalDamageGainAsCold",type="BASE",value=19}},nil}
 c["Gain 19% of Physical Damage as Extra Fire Damage"]={{[1]={flags=0,keywordFlags=0,name="PhysicalDamageGainAsFire",type="BASE",value=19}},nil}
 c["Gain 19% of Physical Damage as Extra Lightning Damage"]={{[1]={flags=0,keywordFlags=0,name="PhysicalDamageGainAsLightning",type="BASE",value=19}},nil}
-c["Gain 2 Charges when you are Hit by an Enemy"]={{}," Charges when you are Hit by an Enemy "}
 c["Gain 2 Endurance Charge on use"]={{}," Endurance Charge on use "}
 c["Gain 2 Endurance, Frenzy or Power Charges every 6 seconds"]={{}," Endurance,or Power Charges every 6 seconds "}
 c["Gain 2 Endurance, Frenzy or Power Charges every 6 seconds 172% increased Physical Damage"]={{[1]={[1]={includeTransfigured=true,skillName="Frenzy",type="SkillName"},flags=0,keywordFlags=0,name="PhysicalDamage",type="BASE",value=2}}," Endurance,or Power Charges every 6 seconds 172% increased  "}
@@ -16013,7 +16011,6 @@ c["Gain 28% of Physical Damage as Extra Cold Damage"]={{[1]={flags=0,keywordFlag
 c["Gain 29% of Physical Damage as Extra Cold Damage"]={{[1]={flags=0,keywordFlags=0,name="PhysicalDamageGainAsCold",type="BASE",value=29}},nil}
 c["Gain 29% of Physical Damage as Extra Fire Damage"]={{[1]={flags=0,keywordFlags=0,name="PhysicalDamageGainAsFire",type="BASE",value=29}},nil}
 c["Gain 29% of Physical Damage as Extra Lightning Damage"]={{[1]={flags=0,keywordFlags=0,name="PhysicalDamageGainAsLightning",type="BASE",value=29}},nil}
-c["Gain 3 Charges when you are Hit by an Enemy"]={{}," Charges when you are Hit by an Enemy "}
 c["Gain 3 Endurance Charge on use"]={{}," Endurance Charge on use "}
 c["Gain 3 Endurance Charge on use Gain 1 Frenzy Charge on use"]={{}," Endurance Charge on use Gain 1Charge on use "}
 c["Gain 3 Endurance Charges when you consume maximum Valour to place a Banner"]={{[1]={flags=0,keywordFlags=0,name="MaximumValour",type="BASE",value=3}}," Endurance Charges when you consume  to place a Banner "}
@@ -22597,10 +22594,6 @@ c["Unholy Might during Effect"]={{[1]={[1]={type="Condition",var="UsingFlask"},f
 c["Unnerve Enemies for 4 seconds on Hit"]={nil,"Unnerve Enemies for 4 seconds on Hit "}
 c["Unsealed Spells gain 5% more Damage each time their effects Reoccur"]={{[1]={flags=0,keywordFlags=0,name="MaxSealDamage",type="MORE",value=5}},nil}
 c["Unwavering Stance"]={{[1]={flags=0,keywordFlags=0,name="Keystone",type="LIST",value="Unwavering Stance"},[2]={flags=0,keywordFlags=0,name="Condition:HaveUnwaveringStance",type="FLAG",value=true}},nil}
-c["Used when Charges reach full"]={nil,"Used when Charges reach full "}
-c["Used when Charges reach full Creates a Smoke Cloud on Use"]={nil,"Used when Charges reach full Creates a Smoke Cloud on Use "}
-c["Used when Charges reach full Gain 3 Charges when you are Hit by an Enemy"]={nil,"Used when Charges reach full Gain 3 Charges when you are Hit by an Enemy "}
-c["Used when Charges reach full Taunts nearby Enemies on use"]={nil,"Used when Charges reach full Taunts nearby Enemies on use "}
 c["Uses both hand slots"]={{[1]={[1]={slotName="Weapon 2",type="DisablesItem"},[2]={num=1,type="SlotNumber"},flags=0,keywordFlags=0,name="CanNotUseItem",type="Flag",value=1},[2]={[1]={slotName="Weapon 1",type="DisablesItem"},[2]={num=2,type="SlotNumber"},flags=0,keywordFlags=0,name="CanNotUseItem",type="Flag",value=1}},nil}
 c["Utility Flasks are Disabled"]={{[1]={flags=0,keywordFlags=0,name="UtilityFlasksDoNotApplyToPlayer",type="FLAG",value=true}},nil}
 c["Utility Flasks gain 2 Charges every 3 seconds"]={{[1]={flags=0,keywordFlags=0,name="UtilityFlaskChargesGenerated",type="BASE",value=0.66666666666667}},nil}

@@ -188,7 +188,7 @@ function FlaskGeneratorClass:Generate(ctx)
 		elseif item.type == "Tincture" then
 			uptime = scorer:TinctureUptime(item, modDB, output)
 		else
-			uptime = scorer:FlaskUptime(item, modDB)
+			uptime = scorer:FlaskUptime(item, modDB, output)
 		end
 		local dps = slotOff.dps + uptime * (scorer:GetDPS(output) - slotOff.rawDps)
 		local ehp = slotOff.ehp + uptime * (scorer:GetEHP(output) - slotOff.rawEhp)

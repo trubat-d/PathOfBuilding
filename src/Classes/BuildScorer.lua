@@ -939,7 +939,10 @@ local function isUtilityFlask(item)
 end
 
 -- Estimated share of time a utility flask is up (0 to 1)
-function BuildScorerClass:FlaskUptime(item, modDB)
+-- (output: the build's, for the hits it takes - "Gain 2 Charges when you are
+-- Hit by an Enemy" fills a flask as fast as the build lets itself be hit: a
+-- build that tanks rather than avoids gets the most from it)
+function BuildScorerClass:FlaskUptime(item, modDB, output)
 	local fd = item.flaskData
 	if not fd or not fd.duration or fd.duration <= 0 then
 		return 1
@@ -956,6 +959,16 @@ function BuildScorerClass:FlaskUptime(item, modDB)
 	local gainedInc = modDB:Sum("INC", nil, "FlaskChargesGained") + modDB:Sum("INC", nil, "FlaskChargeRecovery")
 	local rate = self.chargesPerSecond * (1 + gainedInc / 100) * modDB:More(nil, "FlaskChargesGained") * (fd.gainMod or 1)
 	rate = rate + modDB:Sum("BASE", nil, "FlaskChargesGenerated") + modDB:Sum("BASE", nil, "UtilityFlaskChargesGenerated")
+	local onHit = 0
+	for _, modLine in ipairs(item.explicitModLines or { }) do
+		local n = (modLine.line or ""):match("^Gain (%d+) Charges? when you are Hit by an Enemy")
+		if n then onHit = onHit + tonumber(n) end
+	end
+	if onHit > 0 then
+		-- (a boss's regular hits, about one a second, less those evaded, blocked or suppressed)
+		local hits = (self.enemyHitsPerSecond or 1) * (output and self:DamageTakenShare(output) or 1)
+		rate = rate + onHit * hits * (1 + gainedInc / 100) * (fd.gainMod or 1)
+	end
 	if rate <= 0 then
 		return 0
 	end
@@ -1061,7 +1074,7 @@ function BuildScorerClass:GetFlaskUptimes(override)
 			elseif (left > 0 or right > 0) and item.rarity == "MAGIC" then
 				uptime = 0 -- "Magic Utility Flasks cannot be Used"
 			else
-				uptime = self:FlaskUptime(item, modDB)
+				uptime = self:FlaskUptime(item, modDB, env.player.output)
 			end
 			t_insert(list, { item = item, uptime = uptime, permanent = permanent[item] or false })
 		end
