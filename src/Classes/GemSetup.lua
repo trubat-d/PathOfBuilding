@@ -678,6 +678,26 @@ function GemSetupClass:ChooseMovement()
 	end
 end
 
+-- Corpse skills (Detonate Dead, Volatile Dead, Cremation) need corpses a
+-- pinnacle boss doesn't leave: Desecrate or Unearth cast between them
+-- (BuildScorer:CorpseFactor counts what they supply)
+function GemSetupClass:ChooseCorpses()
+	local main = self.gen.mainGem
+	if not main or main.grantedEffect.support then return end
+	local needs = false
+	for _, rule in ipairs(self.gen.scorer.corpseSkills or { }) do
+		if main.name:match(rule.pattern) and not rule.natural then needs = true end
+	end
+	if not needs then return end
+	local options = { }
+	for _, set in ipairs({ { "Desecrate", "Faster Casting" }, { "Desecrate" }, { "Unearth", "Faster Casting" }, { "Unearth" } }) do
+		local gems = { }
+		for _, n in ipairs(set) do t_insert(gems, gemId(n)) end
+		t_insert(options, { label = table.concat(set, " + "), gems = gems })
+	end
+	self:ChooseBest("Corpses", options, true)
+end
+
 -- Bow builds: Manaforged Arrows fires a second bow skill as mana is spent on the
 -- main one, applying its debuff for free (caustic ground, shock, exposure...).
 -- PoB doesn't add the triggered skill to the main skill's numbers.
@@ -872,6 +892,9 @@ function GemSetupClass:Run(maxBuffs, ignoreAttributes)
 	self:Clear()
 	self.hasMovement = false
 	self.gen:Recalculate()
+	-- (first: without corpses a corpse skill deals nothing on a boss, and the
+	-- other choices would be measured against no damage)
+	self:ChooseCorpses()
 	self:ChooseCurses()
 	self:ChooseAuras(maxBuffs)
 	self:ChooseGuard()

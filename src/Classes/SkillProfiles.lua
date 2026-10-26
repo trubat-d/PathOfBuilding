@@ -104,9 +104,10 @@ SkillProfilesClass.list = {
 		local cycle = (0.5 + castTime) / (speed * 0.5)
 		return m_max(1, m_floor((blades + 1) / cycle + 0.5))
 	end, note = "the lingering blades the build makes, detonated: blade hits a second" },
-	{ pattern = "^Detonate Dead", part = "Corpse Explosion", note = "corpse explosions" },
-	{ pattern = "^Volatile Dead", part = "Corpse Explosion", note = "corpse explosions" },
-	{ pattern = "^Cremation", part = "Corpse Explosion", note = "corpse eruptions" },
+	{ pattern = "^Detonate Dead", combine = { { part = "Spell", weight = 1 }, { part = "Corpse Explosion", weight = 1 } }, note = "each corpse's spell hit and explosion (corpses: BuildScorer:CorpseFactor)" },
+	{ pattern = "^Volatile Dead", combine = { { part = "Spell", weight = 1 }, { part = "Corpse Explosion", weight = 1 } }, note = "each corpse's explosion and orb (corpses: BuildScorer:CorpseFactor)" },
+	-- (Cremation: up to 3 geysers firing at once, each from a corpse that exploded)
+	{ pattern = "^Cremation", combine = { { part = "Corpse Explosion", weight = 1 }, { part = "Spell", weight = 3 } }, note = "each corpse's explosion and its 3 geysers firing (corpses: BuildScorer:CorpseFactor)" },
 	-- elements to choose from: the best one
 	-- (poewiki: each attack picks an element at random, never the same twice in
 	-- a row - the three in turn, unless Combat Focus jewels ("Prismatic Skills

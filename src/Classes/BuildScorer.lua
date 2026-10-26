@@ -416,6 +416,57 @@ function BuildScorerClass:ElementalOverloadDPS(output, dps)
 	return dps * (1 + 0.4 * uptime) / 1.4
 end
 
+-- Corpse skills (poewiki): Detonate Dead, Volatile Dead and Cremation need
+-- corpses, and a pinnacle boss leaves none - a corpse source the build casts
+-- between them (Desecrate: 5 corpses a 0.6 s cast, Unearth: 1 a 0.3 s cast).
+-- PoB counts one corpse's damage a cast; the share of it a fight really gets:
+-- corpses made a cycle x the skill's cast time / (the source's cast + the
+-- skill's casts using them up). Detonate Dead of Scavenging can't use corpses
+-- skills create: none on a boss. While mapping, the packs leave corpses.
+BuildScorerClass.corpseSkills = {
+	{ pattern = "^Detonate Dead of Scavenging", natural = true },
+	{ pattern = "^Detonate Dead", perCast = 1 },
+	{ pattern = "^Volatile Dead", perCast = 3 },
+	{ pattern = "^Cremation", perCast = 1 },
+}
+BuildScorerClass.corpseSources = {
+	{ name = "Desecrate", corpses = 5, castTime = 0.6 },
+	{ name = "Unearth", corpses = 1, castTime = 0.3 },
+}
+function BuildScorerClass:CorpseFactor(output)
+	local env = self.build.calcsTab and self.build.calcsTab.mainEnv
+	local mainSkill = env and env.player and env.player.mainSkill
+	local name = mainSkill and mainSkill.activeEffect and mainSkill.activeEffect.grantedEffect.name
+	if not name then return 1 end
+	local rule
+	for _, r in ipairs(self.corpseSkills) do
+		if name:match(r.pattern) then rule = r break end
+	end
+	if not rule then return 1 end
+	local input = self.build.configTab and self.build.configTab.input or { }
+	if (input.enemyIsBoss or "None") == "None" then return 1 end
+	if rule.natural then return 0 end
+	local speed = output.Speed or 0
+	local baseCast = mainSkill.activeEffect.grantedEffect.castTime or 0.6
+	if speed <= 0 then return 0 end
+	local castSpeed = speed * baseCast
+	local best = 0
+	for _, group in ipairs(self.build.skillsTab.socketGroupList or { }) do
+		if group.enabled ~= false then
+			for _, g in ipairs(group.gemList or { }) do
+				for _, source in ipairs(self.corpseSources) do
+					if g.enabled ~= false and g.gemData and g.gemData.name == source.name then
+						local tMain, tSource = 1 / speed, source.castTime / castSpeed
+						local factor = source.corpses * tMain / (tSource + source.corpses / rule.perCast * tMain)
+						if factor > best then best = factor end
+					end
+				end
+			end
+		end
+	end
+	return best
+end
+
 -- Totems of the main skill hitting together (1 when it isn't a totem skill)
 function BuildScorerClass:TotemCount(output)
 	local env = self.build.calcsTab and self.build.calcsTab.mainEnv
@@ -463,6 +514,8 @@ function BuildScorerClass:GetDPS(output)
 		local per = (output.TotalDPS or 0) * (self.hitScale or 1) + (output.TotalPoisonDPS or 0) + (output.ImpaleDPS or 0) + stackingDot
 		dps = dps + (totems - 1) * per
 	end
+	-- corpse skills: the corpses a boss fight gives them
+	dps = dps * self:CorpseFactor(output)
 	-- minions likewise: PoB's minion figures are one minion's
 	local minions = self:MinionCount(output)
 	if minions > 1 and output.Minion then
