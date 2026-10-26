@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610261801" />
+	<Version number="2.67.2-ia.202610261807" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -161,7 +161,7 @@
 	<File name="Classes/GemSelectControl.lua" part="program" sha1="8954e020052121d13122873b578b87e0bb7c60fc" />
 	<File name="Classes/GemSetup.lua" part="program" sha1="adc5b10f2c960548cb04320527f6d3be5000d35a" />
 	<File name="Classes/GemTooltip.lua" part="program" sha1="11a6d37e2e2cb86f4b1a130968db7fd4154da6c2" />
-	<File name="Classes/GenerationQueue.lua" part="program" sha1="a7e636278066b7c79a36ea28514cc8fce695c499" />
+	<File name="Classes/GenerationQueue.lua" part="program" sha1="06a16d1f20282dedef0313121f1855c6ca19876e" />
 	<File name="Classes/HitOverlap.lua" part="program" sha1="c8902c12bf6c8be7dbe67ac49376c1270a3f49e1" />
 	<File name="Classes/IdeaMiner.lua" part="program" sha1="c1093941cacff453124e7723ccc1db2598426e84" />
 	<File name="Classes/ImportTab.lua" part="program" sha1="c90ed141decea20fc4ebac4d9f256ac6b0480b9b" />
