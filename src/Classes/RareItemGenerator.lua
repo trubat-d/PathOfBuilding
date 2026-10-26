@@ -746,11 +746,17 @@ function RareItemGeneratorClass:AddEldritch(item, slotName, ctx, maxTier, range,
 		subject.implicitModLines = saved
 		return power
 	end
-	-- Highest available tier of each mod (base and each presence variant separately)
-	local function candidates(kind)
+	-- Highest available tier of each mod (base and each presence variant
+	-- separately), up to cap; with the mod's share of its kind's spawn weight
+	-- on this base (an Ichor / Ember rolls one at random)
+	local function candidates(kind, cap)
 		local best = { }
+		local total = 0
 		for _, entry in ipairs(getEldritchMods()) do
-			if entry.type == kind and entry.tier <= maxTier and allowed[entry.presence] and subject:GetModSpawnWeight(entry.mod) > 0 then
+			if entry.type == kind and entry.tier == 1 and entry.presence == "" then total = total + subject:GetModSpawnWeight(entry.mod) end
+		end
+		for _, entry in ipairs(getEldritchMods()) do
+			if entry.type == kind and entry.tier <= cap and allowed[entry.presence] and subject:GetModSpawnWeight(entry.mod) > 0 then
 				local key = entry.name .. entry.presence
 				if not best[key] or entry.tier > best[key].tier then
 					best[key] = entry
@@ -758,26 +764,61 @@ function RareItemGeneratorClass:AddEldritch(item, slotName, ctx, maxTier, range,
 			end
 		end
 		local list = { }
-		for _, entry in pairs(best) do t_insert(list, entry) end
+		for _, entry in pairs(best) do
+			entry.share = total > 0 and subject:GetModSpawnWeight(entry.mod) / total or 0.05
+			t_insert(list, entry)
+		end
 		table.sort(list, function(a, b) return a.modId < b.modId end)
 		return list
 	end
-	local labels = { }
-	for _, kind in ipairs({ "Exarch", "Eater" }) do
-		local flag = kind == "Exarch" and "exarch" or "eater"
-		local best, bestPower, bestLabel = nil, measure(nil), nil
-		for _, entry in ipairs(candidates(kind)) do
-			local lines = linesFor(entry, flag)
-			local power = measure(lines)
-			if power > bestPower + math.abs(bestPower) * 0.002 then
-				best, bestPower, bestLabel = lines, power, lines[1] and lines[1].line
-			end
-		end
-		if best then
-			for _, l in ipairs(best) do t_insert(chosen, l) end
-			t_insert(labels, kind .. ": " .. bestLabel)
+	-- Tiers (poewiki): Lesser, Greater, Grand, Exceptional come from Ichors and
+	-- Embers, Exquisite and Perfect only from Orbs of Conflict. Up to the
+	-- level's tier, Exceptional at most - Exquisite (level tier 5) only for an
+	-- implicit the build really leans on (Strike skills hitting another
+	-- target...), Perfect only at the no-limit level
+	local normalCap = maxTier >= 6 and 6 or m_min(maxTier, 4)
+	local function upgraded(entry)
+		for _, e in ipairs(getEldritchMods()) do
+			if e.name == entry.name and e.presence == entry.presence and e.type == entry.type and e.tier == 5 and subject:GetModSpawnWeight(e.mod) > 0 then return e end
 		end
 	end
+	local labels = { }
+	local bestOf = { }
+	local function pick(kind, mustAdd)
+		local flag = kind == "Exarch" and "exarch" or "eater"
+		local base = measure(nil)
+		local best, bestPower, bestLabel, bestEntry, bestValue
+		for _, entry in ipairs(candidates(kind, normalCap)) do
+			local lines = linesFor(entry, flag)
+			local power = measure(lines)
+			-- (a rare one costs more rolls: about 5% of the pool is the
+			-- common share; one at 1.6% asks for three times the tries)
+			local value = power - math.abs(base) * 0.002 * m_max(0, 0.053 / m_max(entry.share, 0.005) - 1)
+			if not bestValue or value > bestValue then
+				best, bestPower, bestLabel, bestEntry, bestValue = lines, power, lines[1] and lines[1].line, entry, value
+			end
+		end
+		if not best then return nil end
+		local threshold = mustAdd and -math.abs(base) * 0.0005 or math.abs(base) * 0.002
+		if bestValue - base <= threshold then return nil end
+		if maxTier == 5 then
+			local top = upgraded(bestEntry)
+			if top and top.tier > bestEntry.tier then
+				local lines = linesFor(top, flag)
+				local power = measure(lines)
+				if power - bestPower > math.abs(base) * 0.015 then best, bestPower, bestLabel = lines, power, lines[1] and lines[1].line end
+			end
+		end
+		for _, l in ipairs(best) do t_insert(chosen, l) end
+		t_insert(labels, kind .. ": " .. bestLabel)
+		return true
+	end
+	local got = { }
+	for _, kind in ipairs({ "Exarch", "Eater" }) do got[kind] = pick(kind, false) end
+	-- (one of them taken: the other comes with it - the item is rolled with
+	-- eldritch currency of both kinds anyway; anything not harmful)
+	if got.Exarch and not got.Eater then pick("Eater", true)
+	elseif got.Eater and not got.Exarch then pick("Exarch", true) end
 	if #chosen == 0 then
 		return nil
 	end
