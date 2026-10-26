@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610261952" />
+	<Version number="2.67.2-ia.202610261954" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -122,7 +122,7 @@
 	<File name="Assets/vestigialicon.png" part="program" sha1="ecb5dd4b9aed1cac0c1a677b18838ae9c62744d7" />
 	<File name="Assets/warlordicon.png" part="program" sha1="cca050c84884f5c0bb1380ece51d3c4b32be4900" />
 	<File name="Classes/AnimateGuardianSetup.lua" part="program" sha1="40777ebb38411b982f2fcf8448ef9e5be7162f24" />
-	<File name="Classes/AutoConfig.lua" part="program" sha1="af9bcb3a4f1d5c2dbefe821b9649d1f883cd9936" />
+	<File name="Classes/AutoConfig.lua" part="program" sha1="77c6763f25b3c8f40837d3156d58173d2f78a30e" />
 	<File name="Classes/BestItemFinder.lua" part="program" sha1="3af5aa67f70351eee5070cc47f46b94a859145f8" />
 	<File name="Classes/BestItemListControl.lua" part="program" sha1="75edb896520eedbfb9fa2f7ede7f109c3d4bc39b" />
 	<File name="Classes/BuildArchetypes.lua" part="program" sha1="290a9451d9bb0e709de2fd5ab5d8098aa021b080" />
@@ -208,7 +208,7 @@
 	<File name="Classes/SharedItemListControl.lua" part="program" sha1="3a347adb4941dd1a528603c4d42c1d55391383f9" />
 	<File name="Classes/SharedItemSetListControl.lua" part="program" sha1="3b29c71e57f89cc4fc20b9e363d8005bd5c0d77d" />
 	<File name="Classes/SkillListControl.lua" part="program" sha1="6d9dfc64bb870315cdde11a9055bbc954b2395b8" />
-	<File name="Classes/SkillProfiles.lua" part="program" sha1="a0727b1037a24ff1c4420a05ff61cf48a75964ec" />
+	<File name="Classes/SkillProfiles.lua" part="program" sha1="3332574c82585e7864768fee84cac4829c843d8e" />
 	<File name="Classes/SkillSetListControl.lua" part="program" sha1="36e0fef7ce81df44fd01fe8e5c41147c0b4e811a" />
 	<File name="Classes/SkillsTab.lua" part="program" sha1="c80ebae86b21a8f2f483ffd42af298f5514d5522" />
 	<File name="Classes/SliderControl.lua" part="program" sha1="f0da4053b101d3a716e29940352f9d95071262c2" />
