@@ -163,6 +163,7 @@ function GenerationQueueClass:StartBatch(batch)
 	self:RunPhase(batch, "planning the archetypes", { { archetype = batch.standard, quick = true, plan = true } }, function(results)
 		local r = results[1]
 		if not r then return self:Fail(batch, batch.failures[1] or "the first quick build failed") end
+		batch.combos = r.summary.combos
 		local scan = { }
 		scan[batch.standard.id] = { score = r.summary.score, built = true }
 		-- the most promising archetypes get a quick build of their own
@@ -234,6 +235,19 @@ function GenerationQueueClass:RankAndBuild(batch, scan)
 		local hybrid = batch.hybrid(ranked[1].archetype, ranked[2].archetype)
 		if hybrid then t_insert(candidates, hybrid) end
 	end
+	-- (and the build doctor's two best combinations of commitments)
+	local added = 0
+	for _, c in ipairs(batch.combos or { }) do
+		if added >= 2 then break end
+		if batch.comboArchetype and c.ids and c.ids:find("+", 1, true) and (c.predicted or 0) >= 1.5 then
+			local combo = batch.comboArchetype(c.ids)
+			if combo then
+				combo.label = string.format("Combination: %s (predicted x%.1f damage)", c.ids, c.predicted)
+				t_insert(candidates, combo)
+				added = added + 1
+			end
+		end
+	end
 	if #candidates == 0 then candidates = { batch.standard } end
 	self:FullPhase(batch, candidates)
 end
@@ -286,6 +300,11 @@ function GenerationQueueClass:Finish(batch, best, results)
 	pcall(MakeDir, folder)
 	local path = folder .. name .. ".xml"
 	local f = io.open(path, "w")
+	if not f then
+		-- (no Generated folder: the builds folder itself)
+		path = main.buildPath .. name .. ".xml"
+		f = io.open(path, "w")
+	end
 	if f then
 		f:write(xml)
 		f:close()
@@ -343,7 +362,7 @@ function GenerationQueueClass:Describe(batch)
 		return "^7" .. batch.title, line2, line3
 	elseif batch.status == "done" then
 		return "^x33FF77" .. batch.title, string.format("^7Done in %s: %s, score %.2f%s", formatSeconds(elapsed), batch.best.spec.archetype.label, batch.best.summary.score,
-			batch.file and " (saved in Generated)" or "")
+			batch.file and " (saved in your builds folder)" or " (not saved: open it and save it)")
 	elseif batch.status == "stopped" then
 		return "^xC0C0C0" .. batch.title, "^xC0C0C0Stopped"
 	else

@@ -226,7 +226,8 @@ return function(jobJson, userPath, scriptBase)
 	local co = coroutine.create(function() return generator:Run() end)
 	local ok, result = coroutine.resume(co)
 	while ok and coroutine.status(co) ~= "dead" do ok, result = coroutine.resume(co) end
-	if not ok then error(tostring(result)) end
+	-- (with the generation's own stack: where it failed)
+	if not ok then error(debug.traceback(co, tostring(result)), 0) end
 	runCallback("OnFrame")
 
 	local summary = {
@@ -248,11 +249,19 @@ return function(jobJson, userPath, scriptBase)
 	end
 	table.sort(summary.keystones)
 	if job.plan then
+		-- (outside the coroutine now: no yielding)
+		generator.options.yieldEvery = nil
 		local plan = new("ScalingPlanner"):ScalingPlanner(generator):Run(archetypeList, { units = 20 })
 		summary.plan = { }
 		for _, p in ipairs(plan or { }) do
 			table.insert(summary.plan, { archetypeId = p.archetype.id, error = p.error and tostring(p.error), score = p.score, dps = p.dps, minHit = p.minHit,
 				commitments = p.commitments, plan = p.plan })
+		end
+		-- (and the build doctor's combinations of commitments predicted on it)
+		local okCombos, combos = pcall(function() return new("BuildDoctor"):BuildDoctor(generator):PredictCombos(archetypeList, 3) end)
+		if okCombos and combos then
+			summary.combos = { }
+			for _, c in ipairs(combos) do table.insert(summary.combos, { ids = c.ids, predicted = c.predicted, why = c.why }) end
 		end
 	end
 	local xml = build:SaveDB("code")

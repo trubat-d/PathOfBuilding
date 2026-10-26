@@ -1435,6 +1435,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 			archetypes = list, standard = standard, selected = selected, remembered = remembered,
 			tries = tonumber(controls.tries.list[controls.tries.selIndex]) or 1,
 			hybrid = hybrids and function(a, b) return archetypeLib.Hybrid(a, b) end or nil,
+			comboArchetype = function(ids) return archetypeLib.ById(data.gems[skill.gemId], ids) end,
+			combos = remembered and loadScanMemory()[scanMemoryKey(baseOptions)].combos or nil,
 			learningContext = state.learningContext(),
 			scanBuilds = math.max(3, 2 * pgStatic.MaxWorkers()),
 			makeJob = function(archetype, quick, variant, plan)
