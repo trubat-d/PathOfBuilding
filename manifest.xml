@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610262248" />
+	<Version number="2.67.2-ia.202610262320" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -127,7 +127,7 @@
 	<File name="Classes/BestItemListControl.lua" part="program" sha1="75edb896520eedbfb9fa2f7ede7f109c3d4bc39b" />
 	<File name="Classes/BuildArchetypes.lua" part="program" sha1="290a9451d9bb0e709de2fd5ab5d8098aa021b080" />
 	<File name="Classes/BuildDoctor.lua" part="program" sha1="df978e7c1c71920e3edce2759cbd2b8cb3628be3" />
-	<File name="Classes/BuildGenerator.lua" part="program" sha1="adb80d7b6a814c2493da4b2a1775075f1d594d51" />
+	<File name="Classes/BuildGenerator.lua" part="program" sha1="55cb1a9e6e722cfd5830a945ce00af9c0562ce87" />
 	<File name="Classes/BuildIdeaListControl.lua" part="program" sha1="6645c5ae1b6a7db6927041851c7188055c83ab7f" />
 	<File name="Classes/BuildIdeasPopup.lua" part="program" sha1="ac9b9e81150dc49cb3afb1506606ebf695f49c83" />
 	<File name="Classes/BuildListControl.lua" part="program" sha1="f60f0d7f6aecbe851db896913cd1aa707c7fb304" />
