@@ -966,7 +966,9 @@ function AutoConfigClass:Run()
 		local configTab = self.build.configTab
 		configTab.autoSelfBuffs = configTab.autoSelfBuffs or { }
 		local found = { }
-		for _, state in ipairs(comboFinder.SelfBuffs(lines, hitRate, boss, ((output.CritChance or (output.MainHand and output.MainHand.CritChance)) or 0) / 100)) do
+		for _, state in ipairs(comboFinder.SelfBuffs(lines, hitRate, boss, ((output.CritChance or (output.MainHand and output.MainHand.CritChance)) or 0) / 100,
+			-- (hits taken a second: a boss's regular hits, less those avoided; block chance)
+			1 * (self.scorer or new("BuildScorer"):BuildScorer(self.build, { })):DamageTakenShare(output), (output.EffectiveBlockChance or output.BlockChance or 0) / 100)) do
 			setIfUsed(state.var, state.on, state.reason)
 			if state.on then found[state.var] = true configTab.autoSelfBuffs[state.var] = true end
 		end

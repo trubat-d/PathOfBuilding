@@ -55,6 +55,9 @@ local function triggerOf(line)
 	if has("on kill", "when you kill", "on melee kill", "on rampage") then return "kill" end
 	if has("on critical strike", "when you deal a critical strike", "on crit") then return "crit" end
 	if has("on hit", "when you hit", "when you or your totems hit") then return "hit" end
+	-- (hits taken: a boss hits about once a second; blocks: a share of them)
+	if has("when hit", "when you are hit", "when you take a savage hit") and not has("savage") then return "hitTaken" end
+	if has("when you block", "on block") then return "block" end
 	if has(" when ", " after ", " every ", " on reaching", " on use", " on block", "when hit", " on ") then return "event" end
 	if has(" while ", " if ", " during ") then return "conditional" end
 	return "always"
@@ -67,7 +70,7 @@ UniqueComboFinderClass.TriggerOf = triggerOf
 -- skill's hit rate over the state's duration (4 seconds when not given); a
 -- state from another event (a block, a flask, reaching low life, ward
 -- breaking...) or only under a condition isn't counted as kept up
-function UniqueComboFinderClass.SelfBuffs(lines, hitRate, boss, crit)
+function UniqueComboFinderClass.SelfBuffs(lines, hitRate, boss, crit, takenRate, blockChance)
 	local list = { }
 	for _, state in ipairs(UniqueComboFinderClass.states) do
 		local best, source = 0, nil
@@ -89,6 +92,11 @@ function UniqueComboFinderClass.SelfBuffs(lines, hitRate, boss, crit)
 					elseif trigger == "hit" or trigger == "crit" then
 						if trigger == "crit" then p = p * m_min(1, crit or 0) end
 						uptime = p >= 1 and 1 or (1 - (1 - p) ^ (m_max(0.5, hitRate or 1) * duration))
+					elseif trigger == "hitTaken" or trigger == "block" then
+						-- (hits taken in the state's duration: the rate a boss lands them,
+						-- blocks a share of them)
+						local rate = (takenRate or 0.5) * (trigger == "block" and m_min(1, blockChance or 0) or 1)
+						uptime = 1 - (1 - p) ^ (rate * duration)
 					end
 					if uptime > best then best, source = uptime, line end
 				end
