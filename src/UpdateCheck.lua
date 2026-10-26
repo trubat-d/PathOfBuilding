@@ -72,16 +72,28 @@ local function downloadFile(source, file, outName)
 		local file = io.open(outName, "wb+")
 		easy:setopt_writefunction(file)
 		local _, error = easy:perform()
+		-- (GitHub answers "429 Too Many Requests" when a whole installation is
+		-- downloaded file by file: waited out and tried again)
+		local okCode, code = pcall(function() return easy:getinfo_response_code() end)
 		easy:close()
 		file:close()
-		if not error then
+		local busy = not error and okCode and type(code) == "number" and (code == 429 or code >= 500)
+		if not error and not busy then
 			return true
 		end
-		ConPrintf("Download failed (%s)", error:msg())
-		if globalRetryLimit == 0 or i == 5 then
-			return nil, error:msg()
+		if busy then
+			local wait = math.min(60, 5 * i)
+			ConPrintf("Server busy (HTTP %d), waiting %d seconds...", code, wait)
+			local untilTime = os.time() + wait
+			while os.time() < untilTime do end
+			if i == 5 then return nil, "HTTP " .. code end
+		else
+			ConPrintf("Download failed (%s)", error:msg())
+			if globalRetryLimit == 0 or i == 5 then
+				return nil, error:msg()
+			end
+			globalRetryLimit = globalRetryLimit - 1
 		end
-		globalRetryLimit = globalRetryLimit - 1
 	end
 	return true
 end
