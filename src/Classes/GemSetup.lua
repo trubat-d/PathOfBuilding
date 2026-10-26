@@ -769,6 +769,29 @@ function GemSetupClass:ChooseMovement()
 	end
 end
 
+-- Ice Nova of Frostbolts and Vortex of Projection are cast on Frostbolts
+-- (their more damage there, poewiki): a Frostbolt to cast first
+function GemSetupClass:ChooseFrostbolt()
+	local main = self.gen.mainGem
+	local name = main and main.name or ""
+	if name ~= "Ice Nova of Frostbolts" and name ~= "Vortex of Projection" then return end
+	for _, group in ipairs(self.skillsTab.socketGroupList) do
+		for _, g in ipairs(group.gemList or { }) do
+			if g.gemData and g.gemData.name:match("^Frostbolt") then return end
+		end
+	end
+	local slot = self:SlotFor(2) and 2 or (self:SlotFor(1) and 1)
+	if not slot or not gemId("Frostbolt") then return end
+	local gems = { gemEntry(gemId("Frostbolt")) }
+	if slot == 2 and gemId("Faster Casting") then t_insert(gems, gemEntry(gemId("Faster Casting"))) end
+	self:Keep("Frostbolt", gems, self:SlotFor(#gems))
+	local input = self.build.configTab.input
+	input[name == "Vortex of Projection" and "vortexCastOnFrostbolt" or "iceNovaCastOnFrostbolt"] = true
+	self.build.configTab:BuildModList()
+	self.gen:Recalculate()
+	self.gen:Note("Frostbolt setup: " .. name .. " cast on the Frostbolts")
+end
+
 -- Corpse skills (Detonate Dead, Volatile Dead, Cremation) need corpses a
 -- pinnacle boss doesn't leave: Desecrate or Unearth cast between them
 -- (BuildScorer:CorpseFactor counts what they supply)
@@ -986,6 +1009,7 @@ function GemSetupClass:Run(maxBuffs, ignoreAttributes)
 	-- (first: without corpses a corpse skill deals nothing on a boss, and the
 	-- other choices would be measured against no damage)
 	self:ChooseCorpses()
+	self:ChooseFrostbolt()
 	self:ChooseCurses()
 	self:ChooseBrandSpells()
 	self:ChooseAuras(maxBuffs)
