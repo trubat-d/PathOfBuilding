@@ -932,7 +932,9 @@ function AutoConfigClass:Run()
 		local leechReason
 		if leech > 0 then
 			local mod = env.player.modDB
-			local overleech = mod:Flag(nil, "CanLeechLifeOnFullLife")
+			-- (Strength of Blood: non-instant leech isn't applied, so it never
+			-- fills life and keeps going once life is below full)
+			local overleech = mod:Flag(nil, "CanLeechLifeOnFullLife") or mod:Flag(nil, "UnaffectedByNonInstantLifeLeech")
 			for _, group in ipairs(self.build.skillsTab.socketGroupList) do
 				if group.enabled ~= false then
 					for _, g in ipairs(group.gemList or { }) do
