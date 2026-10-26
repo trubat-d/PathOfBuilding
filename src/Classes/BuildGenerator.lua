@@ -4588,10 +4588,12 @@ function BuildGeneratorClass:FitTotalBudget()
 	local budget = self.options.totalBudget
 	if not budget or budget <= 0 or not GetPriceSource().loaded then return end
 	local replaced = { }
-	for _ = 1, 6 do
+	local kept = { }
+	for _ = 1, 8 do
 		local total = self:BuildCost()
 		if total <= budget then break end
-		local values = self:PartValues(0.5, true)
+		local values = { }
+		for _, e in ipairs(self:PartValues(0.5, true)) do if not kept[e.label] then t_insert(values, e) end end
 		t_sort(values, function(a, b) return a.loss / a.price < b.loss / b.price end)
 		local entry = values[1]
 		if not entry then break end
@@ -4603,9 +4605,26 @@ function BuildGeneratorClass:FitTotalBudget()
 			over = over - e.price
 			if over <= 0 or #chosen >= 3 then break end
 		end
+		-- (each replacement checked on the real build, its configuration
+		-- updated: a part's worth measured alone can miss what it holds up -
+		-- Ralakesh's Impatience valued at +0.09 kept the power charges at
+		-- their maximum; without it the build lost 1.9)
 		for _, e in ipairs(chosen) do
+			local before = self:FullScore()
+			local snap = self:Snapshot()
+			local savedLog = #self.log
 			if self:CheapVersion(e) then
-				t_insert(replaced, string.format("%s (%s, %+.3f)", e.label, GetPriceSource().FormatPrice(e.price), -e.loss))
+				self:AutoConfigure()
+				local after = self:FullScore()
+				if before - after > m_max(3 * e.loss, e.loss + 0.1) then
+					self:Restore(snap)
+					for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+					self:AutoConfigure()
+					kept[e.label] = true
+					if self.options.debugTiming then ConPrintf("[budget] %s kept: estimated %+.3f, real %+.3f", e.label, -e.loss, after - before) end
+				else
+					t_insert(replaced, string.format("%s (%s, %+.3f)", e.label, GetPriceSource().FormatPrice(e.price), after - before))
+				end
 			end
 		end
 		self:RefineTree(6)
