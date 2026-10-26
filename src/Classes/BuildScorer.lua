@@ -391,6 +391,31 @@ function BuildScorerClass:ClearRampDPS(output, dps)
 	return dps ^ (1 - clearShare) * clearDps ^ clearShare
 end
 
+-- Elemental Overload (poewiki: 40% more elemental damage if you've crit in
+-- the past 8 seconds): PoB turns it on with any crit chance above 0; with 2%
+-- crit and 2 hits a second it's up a quarter of the time. Its share of the
+-- damage scaled by the chance of a crit among the hits of 8 seconds
+function BuildScorerClass:ElementalOverloadDPS(output, dps)
+	if dps <= 0 then return dps end
+	local env = self.build.calcsTab and self.build.calcsTab.mainEnv
+	if not env then return dps end
+	local has = false
+	for _, node in pairs(self.build.spec.allocNodes or { }) do
+		if node.dn == "Elemental Overload" then has = true break end
+	end
+	if not has then
+		for _, k in ipairs(env.player.modDB:List(nil, "Keystone") or { }) do
+			if k == "Elemental Overload" then has = true end
+		end
+	end
+	if not has then return dps end
+	local crit = (output.CritChance or (output.MainHand and output.MainHand.CritChance) or 0) / 100
+	local rate = output.HitSpeed or output.Speed or (output.MainHand and output.MainHand.Speed) or 1
+	local uptime = 1 - (1 - m_min(1, crit)) ^ (rate * 8)
+	if uptime >= 0.98 then return dps end
+	return dps * (1 + 0.4 * uptime) / 1.4
+end
+
 function BuildScorerClass:GetDPS(output)
 	local dps
 	if output.FullDPS and output.FullDPS > 0 then
@@ -411,6 +436,7 @@ function BuildScorerClass:GetDPS(output)
 	if self.clearRamp ~= false then
 		dps = self:ClearRampDPS(output, dps)
 	end
+	dps = self:ElementalOverloadDPS(output, dps)
 	-- (no real build deals this: a calculation broken by an extreme value -
 	-- speed reduced past -100%, a negative multiplier - scores nothing)
 	if dps ~= dps or dps < 0 or dps > 1e11 then
