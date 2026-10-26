@@ -2509,6 +2509,19 @@ function BuildGeneratorClass:MakeRares(withInfluences)
 		end
 		options.slots = slots
 	end
+	-- (a rare that can't be made - three "+1 to Level of all ... Gems", too
+	-- many affixes - isn't kept as the one to beat: a white base instead)
+	do
+		local rg = finder.rareGenerator
+		for _, slotName in ipairs(finder:GetActiveSlots()) do
+			local slot = self.itemsTab.slots[slotName]
+			local item = slot and not locked[slotName] and self.itemsTab.items[slot.selItemId]
+			if item and item.rarity == "RARE" and rg and rg.Validate and #rg.Validate(item) > 0 and item.baseName then
+				self:Equip(makeBase(item.baseName), slotName)
+			end
+		end
+		self.itemsTab:PopulateSlots()
+	end
 	-- weapons: compare the finalists with rares on them
 	if self.weaponFinalists and self.weaponFinalists[2] and not locked["Weapon 1"] and not locked["Weapon 2"] then
 		local best, bestScore

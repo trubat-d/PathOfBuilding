@@ -383,6 +383,24 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 	for i = 1, m_min(opts.shortlistSize or 20, #scores) do
 		addToShortlist(scores[i])
 	end
+	-- (and a few mods of each kind that cost nothing, to fill the affixes
+	-- the strong ones leave: a rare is finished with six mods - a resistance
+	-- already capped still goes on an exalted orb)
+	do
+		local spare = { Prefix = { }, Suffix = { } }
+		for _, candidate in ipairs(candidates) do
+			if not inList[candidate] and not candidate.crafted and (candidate.gain or 0) >= 0 and spare[candidate.type] then
+				t_insert(spare[candidate.type], candidate)
+			end
+		end
+		for _, list in pairs(spare) do
+			t_sort(list, function(a, b)
+				if (a.gain or 0) ~= (b.gain or 0) then return (a.gain or 0) > (b.gain or 0) end
+				return a.modId < b.modId
+			end)
+			for i = 1, m_min(4, #list) do addToShortlist(list[i]) end
+		end
+	end
 	if blankDeficit > 0 then
 		local fixers = { }
 		for _, candidate in ipairs(candidates) do
@@ -465,6 +483,19 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			for _, f in ipairs(families(candidate)) do usedFamilies[f] = usedFamilies[f] or candidate end
 		end
 		local maxGemLevel = opts.maxGemLevelMods or 1
+		-- ("+1 to Level of all ... Gems": an amulet with three of them is next to
+		-- impossible to make or find - one, two only at the top budgets)
+		local maxAllGemLevel = opts.maxAllGemLevelMods or (opts.multiCraft and 2 or 1)
+		local function isAllGemLevel(candidate)
+			if candidate.allGemLevelMod == nil then
+				candidate.allGemLevelMod = false
+				local lines = candidate.lines or (candidate.mod and candidate.mod) or { }
+				for _, line in ipairs(lines) do
+					if type(line) == "string" and line:match("to Level of all .*Gems") then candidate.allGemLevelMod = true end
+				end
+			end
+			return candidate.allGemLevelMod
+		end
 		local function isGemLevel(candidate)
 			if candidate.gemLevelMod == nil then
 				candidate.gemLevelMod = false
@@ -503,6 +534,7 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			if seed.crafted then counts.crafted = counts.crafted + 1 end
 			if isInfluence(seed) then counts.influence = counts.influence + 1 end
 			if isGemLevel(seed) then counts.gemLevel = counts.gemLevel + 1 end
+			if isAllGemLevel(seed) then counts.allGemLevel = (counts.allGemLevel or 0) + 1 end
 			useStats(seed)
 			local output, power = evaluate()
 			currentPower, currentDeficit = power, deficit(output, ctx.baseOutput, opts)
@@ -521,6 +553,7 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 		while counts.Prefix + counts.Suffix < total do
 			local natural = counts.Prefix + counts.Suffix - counts.crafted
 			local best, bestPower, bestDeficit
+			local bestNatural, bestNaturalPower, bestNaturalDeficit
 			local order = { }
 			for _, candidate in ipairs(shortlist) do
 				local needMeta = candidate.crafted and counts.crafted >= 1 and not metaTaken
@@ -530,6 +563,7 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 					and metaRoom and not (opts.maxAffixes and not candidate.crafted and natural >= opts.maxAffixes)
 					and not (isInfluence(candidate) and counts.influence >= maxInfluence)
 					and not (isGemLevel(candidate) and counts.gemLevel >= maxGemLevel)
+					and not (isAllGemLevel(candidate) and (counts.allGemLevel or 0) >= maxAllGemLevel)
 					and not statClash(candidate) then
 					t_insert(order, candidate)
 				end
@@ -558,11 +592,28 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 					if better then
 						best, bestPower, bestDeficit = candidate, power, d
 					end
+					if not candidate.crafted and (not bestNatural or power > bestNaturalPower + 1e-9) then
+						bestNatural, bestNaturalPower, bestNaturalDeficit = candidate, power, d
+					end
 				end
+			end
+			-- (a bench craft that adds nothing doesn't end the item: the best
+			-- natural mod fills the affix instead; one that costs a hair - a
+			-- requirement, a rounding - still does: six mods, as players make them)
+			local tol = math.abs(currentPower) * 0.0005
+			if best and best.crafted and bestPower <= currentPower and bestNatural and bestNaturalPower >= currentPower - tol then
+				best, bestPower, bestDeficit = bestNatural, bestNaturalPower, bestNaturalDeficit
+			end
+			if best and bestPower < currentPower - 1e-9 and bestPower >= currentPower - tol and not best.crafted and bestDeficit <= currentDeficit then
+				currentPower = bestPower
 			end
 			-- Stop when nothing is left to add, or the best makes it worse: a
 			-- mod that adds nothing still fills its affix (an exalted orb on a
 			-- rare is cheap at any budget - six mods, as players make them)
+			if os.getenv("DEBUG_FILL") then
+				ConPrintf("[fill] %s: %d/%d mods, best %s %+.5f (deficit %s -> %s), %d candidates",
+					tostring(slotName), counts.Prefix + counts.Suffix, total, best and best.label or "none", best and (bestPower - currentPower) or 0, tostring(currentDeficit), tostring(bestDeficit), #order)
+			end
 			if not best or (bestPower < currentPower - 1e-9 and bestDeficit >= currentDeficit)
 				or (bestPower <= currentPower and bestDeficit >= currentDeficit and best.crafted) then
 				break
@@ -583,6 +634,7 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			if best.crafted then counts.crafted = counts.crafted + 1 end
 			if isInfluence(best) then counts.influence = counts.influence + 1 end
 			if isGemLevel(best) then counts.gemLevel = counts.gemLevel + 1 end
+			if isAllGemLevel(best) then counts.allGemLevel = (counts.allGemLevel or 0) + 1 end
 			useStats(best)
 			currentPower, currentDeficit = bestPower, bestDeficit
 		end
@@ -876,6 +928,11 @@ function RareItemGeneratorClass.Validate(item)
 		if l.crafted and (l.line or ""):match("^Can have up to 3 Crafted Modifiers") then multi = true end
 	end
 	if crafts > (multi and 4 or 1) then t_insert(problems, string.format("%d bench crafts (max %s)", crafts, multi and "3 with the multi-mod craft" or "1 without the multi-mod craft")) end
+	local allLevels = 0
+	for _, l in ipairs(item.explicitModLines or { }) do
+		if not l.crafted and (l.line or ""):match("to Level of all .*Gems") then allLevels = allLevels + 1 end
+	end
+	if allLevels > 2 then t_insert(problems, string.format("%d \"+1 to Level of all ... Gems\" mods (next to impossible to make or find)", allLevels)) end
 	local influenced = false
 	for _, key in ipairs({ "shaper", "elder", "adjudicator", "basilisk", "crusader", "eyrie" }) do if item[key] then influenced = true end end
 	if influenced then
