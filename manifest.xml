@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610262123" />
+	<Version number="2.67.2-ia.202610262127" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -122,7 +122,7 @@
 	<File name="Assets/vestigialicon.png" part="program" sha1="ecb5dd4b9aed1cac0c1a677b18838ae9c62744d7" />
 	<File name="Assets/warlordicon.png" part="program" sha1="cca050c84884f5c0bb1380ece51d3c4b32be4900" />
 	<File name="Classes/AnimateGuardianSetup.lua" part="program" sha1="40777ebb38411b982f2fcf8448ef9e5be7162f24" />
-	<File name="Classes/AutoConfig.lua" part="program" sha1="38d9432a6816dc21aa8795258150cd4f5055cb11" />
+	<File name="Classes/AutoConfig.lua" part="program" sha1="8db8a9a37c77df5f71f0278d6eaa68d9092a4979" />
 	<File name="Classes/BestItemFinder.lua" part="program" sha1="3af5aa67f70351eee5070cc47f46b94a859145f8" />
 	<File name="Classes/BestItemListControl.lua" part="program" sha1="75edb896520eedbfb9fa2f7ede7f109c3d4bc39b" />
 	<File name="Classes/BuildArchetypes.lua" part="program" sha1="290a9451d9bb0e709de2fd5ab5d8098aa021b080" />
@@ -139,7 +139,7 @@
 	<File name="Classes/CalcSectionControl.lua" part="program" sha1="ace88981a36381c6ccecbdb76ee1b9b04d1afeaf" />
 	<File name="Classes/CalcsTab.lua" part="program" sha1="9fd061578b5685bf3918ad0802273bb9f84bceb3" />
 	<File name="Classes/CheckBoxControl.lua" part="program" sha1="021e4ea29d62a600ab14e69e6ed0ad33832d78ab" />
-	<File name="Classes/ClusterJewelGenerator.lua" part="program" sha1="22316eb77eb336ea8e1946816f7bbf036bfc6e91" />
+	<File name="Classes/ClusterJewelGenerator.lua" part="program" sha1="73bf6c97f2335a0c5a87ac57c45a9072c9db7dbd" />
 	<File name="Classes/CompareBuySimilar.lua" part="program" sha1="c0f38a17a648a4d37cab89805a203c422d02e355" />
 	<File name="Classes/CompareCalcsHelpers.lua" part="program" sha1="61d00298ee05ed78238cf16b575fff0526b2342b" />
 	<File name="Classes/CompareEntry.lua" part="program" sha1="13c14eac4521a3717fa8f0a51d0a83994167ed3e" />
@@ -231,7 +231,7 @@
 	<File name="Classes/TreeTab.lua" part="program" sha1="8f425b2ffa76f0ec7c1a950061d0a449ee2d26d5" />
 	<File name="Classes/TriggerSetups.lua" part="program" sha1="dc646fb6c48722649b2a6bc527ca738d1389aff6" />
 	<File name="Classes/UndoHandler.lua" part="program" sha1="586afba2e6fea36e34c1109d21498bd86d6ead93" />
-	<File name="Classes/UniqueComboFinder.lua" part="program" sha1="f24618c4ae3a3f2b21af80e672fc0e344d13668b" />
+	<File name="Classes/UniqueComboFinder.lua" part="program" sha1="a8e48cf91ab6b4c60a171ee4215eb0f3091b945d" />
 	<File name="Data/Bases/amulet.lua" part="program" sha1="2e886a02beb4c6f0d8c59b317bee21d5c0936ad1" />
 	<File name="Data/Bases/axe.lua" part="program" sha1="38bc875294c7a00574cd6865625b53430cbc4695" />
 	<File name="Data/Bases/belt.lua" part="program" sha1="5b68882f15060971f1b9bbaa1be2369d71cce3df" />
