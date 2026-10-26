@@ -134,3 +134,18 @@ BuildLoadouts): tree, item set, skill set and configuration set with the same
 "{n}" tag, each with the configuration it was scored with; bench/
 merge_loadouts.lua merges files and checks every loadout calculates as its
 source did.
+
+#### Spending the budget, and where a generation spends its time
+- **The total budget is spent, not only respected**: the level is the one
+  whose rares fit six times in the total (80 divines: High), and the fit only
+  took parts away, so a mid-tier build ended at 47 of its 80 divines. The rare
+  gear slots are now made at the next level and kept by score per extra
+  divine while under the total (SpendBudgetMove: 47 -> 74 div, +0.20).
+- **Profile** (bench/profile.lua, PROFILE=1; a 3186 s mid-tier RF): half the
+  time is the 100,000 quick scores (16 ms each, PoB's calculation), the rest
+  in the steps that remake rares (FinalRares ~100 s a call), the tree
+  (AllocateTree, RefineTree) and the build doctor's plans (both kept: they
+  gain 0.1-0.6). Supreme Ostentation took 24% for a jewel it never kept: its
+  baseline is now made only when a trial wins, and a trial stops after the
+  tree when the rares can't make it a gain. PoB's environment reuse
+  (accelerate flags) was no faster for node trials and not exact: not used.

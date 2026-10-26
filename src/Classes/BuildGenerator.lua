@@ -4542,7 +4542,9 @@ function BuildGeneratorClass:SecondaryDamageMove()
 			end
 			return sustain
 		end
-		for i = 1, m_min(4, #ranked) do
+		-- (the best three: in the traces the winner was the first after the
+		-- ranking by what the build can pay for)
+		for i = 1, m_min(self.options.secondaryFinalists or 3, #ranked) do
 			self.mainGem = data.gems[ranked[i].gemId]
 			try(ranked[i].gemId)
 			self:ChooseSupports(3)
