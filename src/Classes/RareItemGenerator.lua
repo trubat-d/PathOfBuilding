@@ -850,6 +850,7 @@ function RareItemGeneratorClass:AddEldritch(item, slotName, ctx, maxTier, range,
 				best, bestPower, bestLabel, bestEntry, bestValue = lines, power, lines[1] and lines[1].line, entry, value
 			end
 		end
+		if os.getenv("DEBUG_ELDRITCH") then ConPrintf("[eldritch] %s %s: best %s %+.5f (base %.4f), %d candidates", tostring(slotName), kind, tostring(bestLabel), (bestValue or base) - base, base, #candidates(kind, normalCap)) end
 		if not best then return nil end
 		local threshold = mustAdd and -math.abs(base) * 0.0005 or math.abs(base) * 0.002
 		if bestValue - base <= threshold then return nil end
@@ -865,14 +866,26 @@ function RareItemGeneratorClass:AddEldritch(item, slotName, ctx, maxTier, range,
 		t_insert(labels, kind .. ": " .. bestLabel)
 		return true
 	end
-	local got = { }
-	for _, kind in ipairs({ "Exarch", "Eater" }) do got[kind] = pick(kind, false) end
-	-- (one of them taken: the other comes with it - the item is rolled with
-	-- eldritch currency of both kinds anyway; anything not harmful)
-	if got.Exarch and not got.Eater then pick("Eater", true)
-	elseif got.Eater and not got.Exarch then pick("Exarch", true) end
+	-- (both kinds, always, whenever not harmful: an Ichor and an Ember of the
+	-- lower tiers are cheap and the armour piece has nothing in their place -
+	-- a helmet left with no implicit at all is a half-made item)
+	for _, kind in ipairs({ "Exarch", "Eater" }) do pick(kind, true) end
 	if #chosen == 0 then
 		return nil
+	end
+	-- (the base's own implicit is what they replace - Two-Toned Boots'
+	-- resistances, a Bone Helmet's minion damage: kept when worth more)
+	if item.implicitModLines and #item.implicitModLines > 0 then
+		local own = { }
+		for _, l in ipairs(item.implicitModLines) do
+			local modList, extra = modLib.parseMod(l.line)
+			t_insert(own, { line = l.line, modList = modList or { }, extra = extra, modTags = l.modTags or { } })
+		end
+		local saved = chosen
+		chosen = { }
+		local ownPower = measure(own)
+		chosen = saved
+		if ownPower >= measure(nil) then return nil end
 	end
 	item.implicitModLines = { }
 	for _, l in ipairs(chosen) do
