@@ -424,6 +424,19 @@ function BuildScorerClass:TotemCount(output)
 	return m_max(1, output.TotemsSummoned or output.ActiveTotemLimit or 1)
 end
 
+-- Minions of the main skill fighting together: its minion limit, or what the
+-- cast rate keeps up for minions with a duration (1 when it summons none)
+function BuildScorerClass:MinionCount(output)
+	local env = self.build.calcsTab and self.build.calcsTab.mainEnv
+	local mainSkill = env and env.player and env.player.mainSkill
+	if not (mainSkill and mainSkill.minion and output.Minion) then return 1 end
+	local limit = output.ActiveMinionLimit or 1
+	if output.Duration and (output.Speed or 0) > 0 then
+		limit = m_min(limit, output.Speed * output.Duration)
+	end
+	return m_max(1, limit)
+end
+
 function BuildScorerClass:GetDPS(output)
 	local dps
 	if output.FullDPS and output.FullDPS > 0 then
@@ -449,6 +462,13 @@ function BuildScorerClass:GetDPS(output)
 		local stackingDot = mainSkill and mainSkill.skillFlags and mainSkill.skillFlags.DotCanStack and (output.TotalDot or 0) or 0
 		local per = (output.TotalDPS or 0) * (self.hitScale or 1) + (output.TotalPoisonDPS or 0) + (output.ImpaleDPS or 0) + stackingDot
 		dps = dps + (totems - 1) * per
+	end
+	-- minions likewise: PoB's minion figures are one minion's
+	local minions = self:MinionCount(output)
+	if minions > 1 and output.Minion then
+		local m = output.Minion
+		local per = (m.TotalDPS or 0) + (m.TotalPoisonDPS or 0) + (m.ImpaleDPS or 0)
+		dps = dps + (minions - 1) * per
 	end
 	if self.overlap then
 		dps = self.overlap:AdjustDPS(output, dps)
