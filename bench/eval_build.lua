@@ -52,6 +52,10 @@ for _, entry in ipairs(scorerClass.focusList) do
 end
 local scorer = new("BuildScorer"):BuildScorer(build, { focus = focus, hitFloor = focus.hitFloor, chargesPerSecond = 1.5, bossTier = os.getenv("TIER") or "uber" })
 scorer.useChecklist = true
+-- (a boss fought standing in place, as the generator scores it: "while
+-- stationary" lines count, but for the share of the fight spent moving;
+-- STATIONARY=0 leaves them out)
+scorer.stationaryBlend = os.getenv("STATIONARY") ~= "0"
 
 local fair = dofile(benchDir .. "/fair.lua")
 local fairGen

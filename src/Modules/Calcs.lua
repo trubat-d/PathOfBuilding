@@ -86,6 +86,25 @@ end
 ---@param build Build
 ---@return fun(override?: CalcOverride, useFullDPS?: boolean): Output calcFunc
 ---@return Output output
+-- Does a mod database have lines that work while stationary ("while you
+-- are Stationary", directly or on enemies: Chieftain's Ramako)?
+local function hasStationaryTag(mod)
+	for _, tag in ipairs(mod) do
+		if type(tag) == "table" and tag.var == "Stationary" then return true end
+	end
+	local value = mod.value
+	if type(value) == "table" and type(value.mod) == "table" then return hasStationaryTag(value.mod) end
+	return false
+end
+function calcs.hasStationaryLines(modDB)
+	for _, list in pairs(modDB and modDB.mods or { }) do
+		for _, mod in ipairs(list) do
+			if hasStationaryTag(mod) then return true end
+		end
+	end
+	return false
+end
+
 function calcs.getMiscCalculator(build)
 	-- Run base calculation pass
 	local env, cachedPlayerDB, cachedEnemyDB, cachedMinionDB = calcs.initEnv(build, "CALCULATOR")
@@ -114,6 +133,11 @@ function calcs.getMiscCalculator(build)
 		-- (kept beside the output, not in it: UI code iterates outputs)
 		GeneratorOutputItems = GeneratorOutputItems or setmetatable({ }, { __mode = "k" })
 		GeneratorOutputItems[env.player.output] = env.player.itemList
+		-- (and whether it has "while stationary" lines: BuildScorer's boss fight
+		-- blend. A flag, not the modDB: its actor holds the output, and a weak
+		-- key whose value refers back to it is never collected in LuaJIT)
+		GeneratorOutputStationary = GeneratorOutputStationary or setmetatable({ }, { __mode = "k" })
+		GeneratorOutputStationary[env.player.output] = calcs.hasStationaryLines(env.player.modDB)
 		return env.player.output
 	end, env.player.output
 end

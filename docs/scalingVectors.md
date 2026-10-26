@@ -101,3 +101,36 @@ data at the players' median cost, 18.34 / 13.3M (level 92) and 18.40 / 12.0M
   undone left slots empty.
 - **Kill speed as a defence**: the defence term counts the fight's length
   (boss life / DPS, at least 8 s).
+
+#### A mid-tier guide build (Pohx's Righteous Fire, loadout {8})
+A guide build at level 95 for about 79 divines, no chase item: 16.14 / 3.38M
+DPS with its own configuration, 15.05 / 1.16M under ours. The difference was
+one condition: **stationary**. Chieftain's Ramako ("Nearby Enemy Monsters'
+Fire Resistance against Damage over Time is -20% while you are Stationary")
+and Rational Doctrine (Consecrated Ground while stationary) were worth x2.3,
+and the generator never counted them (AutoConfig assumed stationary only for
+channelled skills). Now:
+- **A boss is fought standing in place, but not all the time**: a build with
+  "while stationary" lines is calculated stationary and its damage blended
+  with the damage it keeps while moving, for the share of the fight the fight
+  simulation spends moving and dodging (BuildScorer:Evaluate). Pohx under our
+  scoring: 15.79 / 2.36M.
+- **Mid-tier as an option** (options.midTier, the Uniques window's "No chase
+  uniques"): no Mageblood, Headhunter, Pearl of Tsoatha, Forbidden jewels...
+  (PriceSource.chaseUniques) and no unique over 30 divines; with a total
+  budget it is the level of a player without the league's top items.
+- **A second damage skill when the hands are free**: Righteous Fire, totems
+  and persistent minions take no action time, so another skill that scales
+  off the same layers adds to them (Pohx's Fire Trap; Scorching Ray found by
+  the generator: +108% on our RF). Measured bare, the best few with their own
+  supports and their own cost checked, kept in a 4-link if the whole build
+  scores better (SecondaryDamageMove). Never for a cast or attack main skill:
+  PoB's full DPS would count both as used all the time.
+
+#### Every fully built build kept (loadouts)
+A generation that fully builds several builds (tries, archetypes in
+parallel) keeps them all in the opened build as loadouts (Modules/
+BuildLoadouts): tree, item set, skill set and configuration set with the same
+"{n}" tag, each with the configuration it was scored with; bench/
+merge_loadouts.lua merges files and checks every loadout calculates as its
+source did.

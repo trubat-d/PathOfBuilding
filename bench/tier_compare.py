@@ -23,9 +23,13 @@ import playable
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CODES = os.environ.get("CODES", "/home/claude/ninja/codes")
-CHASE = {"Mageblood", "Headhunter", "Pearl of Tsoatha", "Original Sin", "Nimis", "Squire", "Progenesis",
+# (the same list as PriceSource.chaseUniques, the generator's midTier option:
+# timeless jewels aren't in it, a random seed is cheap and a chosen one is
+# priced by the generator)
+CHASE = {"Mageblood", "Headhunter", "Pearl of Tsoatha", "Original Sin", "Nimis", "The Squire", "Squire", "Progenesis",
          "Ashes of the Stars", "Voices", "Forbidden Flame", "Forbidden Flesh", "Watcher's Eye", "Kalandra's Touch",
-         "Bottled Faith", "Dying Sun", "Militant Faith", "Glorious Vanity", "Lethal Pride", "Brutal Restraint", "Elegant Hubris"}
+         "Bottled Faith", "Dying Sun", "Melding of the Flesh", "Aul's Uprising", "Sublime Vision", "Badge of the Brotherhood",
+         "Megalomaniac", "Replica Dragonfang's Flight"}
 
 
 def lua_env():

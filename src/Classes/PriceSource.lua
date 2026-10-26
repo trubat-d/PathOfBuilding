@@ -59,6 +59,19 @@ PriceSourceClass.scarceUniques = {
 	["Thread of Hope"] = false,
 }
 
+-- The league's chase uniques: what makes a build "high-end" whatever one copy
+-- costs (options.midTier leaves them out; bench/tier_compare.py splits the
+-- players' builds by them). Timeless jewels aren't here: a random seed is
+-- cheap, and the generator prices the seed it picks.
+PriceSourceClass.chaseUniques = {
+	["Mageblood"] = true, ["Headhunter"] = true, ["Pearl of Tsoatha"] = true, ["Original Sin"] = true,
+	["Nimis"] = true, ["The Squire"] = true, ["Progenesis"] = true, ["Ashes of the Stars"] = true,
+	["Voices"] = true, ["Forbidden Flame"] = true, ["Forbidden Flesh"] = true, ["Watcher's Eye"] = true,
+	["Kalandra's Touch"] = true, ["Bottled Faith"] = true, ["Dying Sun"] = true, ["Melding of the Flesh"] = true,
+	["Aul's Uprising"] = true, ["Sublime Vision"] = true, ["Badge of the Brotherhood"] = true,
+	["Megalomaniac"] = true, ["Squire"] = true, ["Replica Dragonfang's Flight"] = true,
+}
+
 -- The investment level for a total budget (divines for the whole build): the
 -- highest level whose rares fit about six times in it, with per-item caps from the total (one item
 -- can't take more than half of it). The build is then fitted under the total

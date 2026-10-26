@@ -1880,6 +1880,7 @@ function BuildGeneratorClass:RunRaresParallel(finder, options)
 		lens = sc.lens, lens2 = sc.lens2, avoidanceWeight = sc.avoidanceWeight, pastTarget = sc.pastTarget, fightWeight = sc.fightWeight,
 		smoothBuffs = sc.smoothBuffs, reservationSlope = sc.reservationSlope, focusEhp = sc.focus and sc.focus.ehp,
 		clearBoost = sc.clearBoost, clearBuffs = sc.clearBuffs, fightSim = sc.fightSim, softSustain = sc.softSustain,
+		secondaryTrim = sc.secondaryTrim, stationaryBlend = sc.stationaryBlend,
 	}
 	local xml = self.build:SaveDB("code")
 	-- weapons first (their seeded fills take longest), then round robin
@@ -4393,6 +4394,188 @@ function BuildGeneratorClass:BossSkillMove()
 end
 
 ------------------------------------------------------------------------------
+-- A second damage skill next to the main one
+------------------------------------------------------------------------------
+
+-- Does the main skill deal its damage without taking the player's actions?
+-- Righteous Fire (a buff, no cast time), totems and ballistae, persistent
+-- minions: the player's hands are free for another skill, and PoB's full DPS
+-- (each included skill as if used all the time) adds both up honestly. Not
+-- for a skill that is cast or attacked with: two of them would both count
+-- the whole time.
+function BuildGeneratorClass:MainTakesNoActionTime()
+	local gem = self.mainGem
+	local effect = gem and gem.grantedEffect
+	if not effect then return false end
+	local types = effect.skillTypes or { }
+	if (effect.castTime or 1) == 0 and types[SkillType.Buff] and types[SkillType.DamageOverTime] then return true end
+	local env = self.build.calcsTab.mainEnv
+	local skill = env and env.player.mainSkill
+	local flags = skill and skill.skillFlags or { }
+	if flags.totem or flags.ballista then return true end
+	if types[SkillType.CreatesMinion] and (types[SkillType.HasReservation] or types[SkillType.MinionsPersistWhenSkillRemoved]) then return true end
+	return false
+end
+
+-- The skills a second damage skill is taken from: sharing the main skill's
+-- scaling (a damage type, or damage over time / burning for a burning main
+-- skill), usable with the equipped weapons, not a minion skill unless the
+-- main one is
+function BuildGeneratorClass:SecondaryCandidates()
+	local mainGem = self.mainGem
+	local mainTags = mainGem.tags or { }
+	local setup = new("GemSetup"):GemSetup(self)
+	local list = { }
+	for _, entry in ipairs(self.SkillList()) do
+		local gem = data.gems[entry.gemId]
+		local tags = gem.tags or { }
+		local types = gem.grantedEffect.skillTypes or { }
+		local shares = false
+		for _, t in ipairs(damageTags) do
+			if tags[t] and mainTags[t] then shares = true end
+		end
+		if shares and gem ~= mainGem and self.GemFamily(gem) ~= self.GemFamily(mainGem)
+			and (not tags.minion or mainTags.minion)
+			and not types[SkillType.Buff] and setup:CanUse(entry.gemId) then
+			t_insert(list, entry.gemId)
+		end
+	end
+	return list
+end
+
+-- A second damage skill in a 4-link of the helmet, gloves or boots, counted
+-- in the full DPS with the main skill (Pohx's Fire Trap next to Righteous
+-- Fire: it scales off the same fire damage over time, burning and fire
+-- resistance layers). Each candidate is measured bare, the best few with
+-- their own supports; the best is linked, the utility setups packed again
+-- around it, and kept if the whole build scores better.
+function BuildGeneratorClass:SecondaryDamageMove()
+	local mainGem, mainGroup = self.mainGem, self.mainGroup
+	if not mainGem or not mainGroup or not self:MainTakesNoActionTime() then return 0 end
+	local skillsTab = self.build.skillsTab
+	for _, g in ipairs(skillsTab.socketGroupList) do
+		if (g.label or ""):find("(generated secondary)", 1, true) then return 0 end
+	end
+	local setup = new("GemSetup"):GemSetup(self)
+	local slotName, fewest
+	for _, name in ipairs({ "Helmet", "Gloves", "Boots" }) do
+		if setup:SlotSockets(name) >= 4 and mainGroup.slot ~= name then
+			local gems = 0
+			for _, g in ipairs(skillsTab.socketGroupList) do if g.slot == name then gems = gems + #g.gemList end end
+			if not fewest or gems < fewest then slotName, fewest = name, gems end
+		end
+	end
+	if not slotName then return 0 end
+	local candidates = self:SecondaryCandidates()
+	if #candidates == 0 then return 0 end
+	local before = self:FullScore()
+	local snap = self:Snapshot()
+	local savedLog = #self.log
+	local savedMainGem, savedLimit, savedArchetype, savedTrigger = self.mainGem, self.mainLinkLimit, self.options.archetype, self.triggerFixed
+	local best
+	local ok, err = pcall(function()
+		-- the main skill in the full DPS (alone it is the same number)
+		mainGroup.includeInFullDPS = true
+		self:Recalculate()
+		local baseDps = self.scorer:GetDPS(self.build.calcsTab.mainOutput)
+		-- the slot's own setups out (packed again elsewhere at the end)
+		local list = skillsTab.socketGroupList
+		for i = #list, 1, -1 do if list[i].slot == slotName and list[i] ~= mainGroup then t_remove(list, i) end end
+		local group = { label = "Secondary damage (generated secondary)", enabled = true, includeInFullDPS = true, slot = slotName, gemList = { } }
+		t_insert(list, group)
+		local function try(gemId)
+			local gem = data.gems[gemId]
+			group.gemList = { { level = self:GemLevel(gem), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = gemId } }
+			local part = self.RealisticSkillPart(gem.grantedEffect)
+			if part then group.gemList[1].skillPart, group.gemList[1].skillPartCalcs = part, part end
+			skillsTab:ProcessSocketGroup(group)
+			self:Recalculate()
+			return self.scorer:GetDPS(self.build.calcsTab.mainOutput)
+		end
+		-- 1. bare
+		local ranked = { }
+		for _, gemId in ipairs(candidates) do
+			local dps = try(gemId)
+			if dps > baseDps * 1.01 then t_insert(ranked, { gemId = gemId, dps = dps }) end
+			self:Tick()
+		end
+		t_sort(ranked, function(a, b) return a.dps > b.dps end)
+		if self.options.debugTiming then
+			for i = 1, m_min(8, #ranked) do ConPrintf("[secondary] %s %+.1f%%", data.gems[ranked[i].gemId].name, (ranked[i].dps / baseDps - 1) * 100) end
+		end
+		-- (its own cost paid? the scorer prices only the main skill's: the
+		-- second skill calculated as the main one, its sustain share taken off
+		-- what it adds)
+		local function sustainOf()
+			local savedIndex = self.build.mainSocketGroup
+			for i, g in ipairs(list) do if g == group then self.build.mainSocketGroup = i end end
+			self:Recalculate()
+			local sustain = self.scorer:SustainFactor(self.build.calcsTab.mainOutput)
+			self.build.mainSocketGroup = savedIndex
+			self:Recalculate()
+			return sustain or 1
+		end
+		-- 2. the best few with their own three supports (the whole build's
+		-- score: both skills count); no archetype supports forced on it
+		self.mainGroup, self.mainLinkLimit, self.options.archetype, self.triggerFixed = group, 3, nil, nil
+		for i = 1, m_min(4, #ranked) do
+			self.mainGem = data.gems[ranked[i].gemId]
+			try(ranked[i].gemId)
+			self:ChooseSupports(3)
+			self:Recalculate()
+			local dps = self.scorer:GetDPS(self.build.calcsTab.mainOutput)
+			local sustain = sustainOf()
+			local value = baseDps + (dps - baseDps) * sustain
+			if self.options.debugTiming then ConPrintf("[secondary] %s with supports: %+.1f%%, its cost paid %.0f%%", self.mainGem.name, (dps / baseDps - 1) * 100, sustain * 100) end
+			if sustain >= 0.8 and (not best or value > best.value) then
+				local gems = { }
+				for _, g in ipairs(group.gemList) do t_insert(gems, g) end
+				best = { gemId = ranked[i].gemId, dps = dps, gems = gems, value = value, sustain = sustain }
+			end
+		end
+		if best then best.baseDps = baseDps end
+	end)
+	if not ok then ConPrintf("Secondary skill search failed: %s", tostring(err)) end
+	self.mainGem, self.mainGroup, self.mainLinkLimit, self.options.archetype, self.triggerFixed = savedMainGem, mainGroup, savedLimit, savedArchetype, savedTrigger
+	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+	self:Restore(snap)
+	mainGroup.includeInFullDPS = snap.groups and (function()
+		for _, e in ipairs(snap.groups.list) do if e.group == mainGroup then return e.fullDPS end end
+	end)() or nil
+	self:Recalculate()
+	if not best then return 0 end
+	-- linked for real: the slot's setups packed again around it
+	local list = skillsTab.socketGroupList
+	for i = #list, 1, -1 do if list[i].slot == slotName and list[i] ~= mainGroup then t_remove(list, i) end end
+	local group = { label = "Secondary damage (generated secondary)", enabled = true, includeInFullDPS = true, slot = slotName, gemList = best.gems }
+	t_insert(list, group)
+	mainGroup.includeInFullDPS = true
+	skillsTab:ProcessSocketGroup(group)
+	-- (the part of its damage it can't pay for taken off from now on:
+	-- BuildScorer:GetDPS while the group is there)
+	local share = best.dps > 0 and m_max(0, 1 - best.baseDps / best.dps) or 0
+	self.scorer.secondaryTrim = best.sustain < 0.999 and (1 - (1 - best.sustain) * share) or nil
+	self:ChooseUtilityGems()
+	self:Recalculate()
+	local after = self:FullScore()
+	local names = { }
+	for i, g in ipairs(best.gems) do if i > 1 then t_insert(names, data.gems[g.gemId].name) end end
+	local text = string.format("%s in the %s (with %s): damage %+.0f%% on top of the main skill%s",
+		data.gems[best.gemId].name, slotName, #names > 0 and table.concat(names, ", ") or "no supports", (best.dps / m_max(best.baseDps, 1) - 1) * 100,
+		best.sustain < 0.999 and string.format(" (its own cost paid %.0f%% of the time)", best.sustain * 100) or "")
+	if after < before + (self.options.secondaryMinGain or 0.02) then
+		self.scorer.secondaryTrim = nil
+		self:Restore(snap)
+		for _, e in ipairs(snap.groups.list) do if e.group == mainGroup then mainGroup.includeInFullDPS = e.fullDPS end end
+		self:Recalculate()
+		if self.options.debugTiming then ConPrintf("[secondary] %s not kept: %.3f -> %.3f", text, before, after) end
+		return 0
+	end
+	self:Note("Secondary damage skill (the main skill takes no action time, both count in the full DPS): " .. text .. string.format(", score %+.3f", after - before))
+	return after - before
+end
+
+------------------------------------------------------------------------------
 -- Stat target planning for stacking archetypes
 ------------------------------------------------------------------------------
 
@@ -4737,7 +4920,7 @@ end
 function BuildGeneratorClass:SupremeOstentationMove()
 	local investment = self.options.investment or { }
 	if not investment.awakenedGems or investment.timeless == false then return 0 end
-	if self.rules and self.rules.userExcluded and self.rules.userExcluded["Elegant Hubris"] then return 0 end
+	if GetGeneratorRules().userExcluded["Elegant Hubris"] then return 0 end
 	local spec = self.build.spec
 	self:Recalculate()
 	local output = self.build.calcsTab.mainOutput
@@ -4841,7 +5024,10 @@ function BuildGeneratorClass:SupremeOstentationMove()
 		local after = ok and self:FullScore() or before
 		firstAfter = firstAfter or after
 		if self.options.debugTiming then ConPrintf("[ostentation] socket %d (historic %s, keystones %d, near %s): %.3f -> %.3f", socket.node.id, tostring(historicSocket), socket.keystones, socket.nearKeystone and socket.nearKeystone.dn or "-", before, after) end
-		if ok and after > before + 0.01 then
+		-- (a clear gain only: the jewel takes a socket and a seed hunt, and a
+		-- socket another timeless jewel or a rare would use; +0.021 on a
+		-- Righteous Fire was the noise of the tree chosen again, not the keystone)
+		if ok and after > before + (self.options.ostentationMinGain or 0.1) then
 			self:Note(string.format("Elegant Hubris (Caspiro, seed %d): Supreme Ostentation, attribute requirements ignored; the passives and rare mods that were there for attributes spent on other stats: score %+.3f", seed, after - before))
 			self.costs = self.costs or { }
 			t_insert(self.costs, GetPriceSource():UniquePrice(self.itemsTab.items[self.itemsTab.slots["Jewel " .. socket.node.id].selItemId]) or false)
@@ -5458,7 +5644,7 @@ function BuildGeneratorClass:SaveGroups()
 	for i, group in ipairs(skillsTab.socketGroupList) do
 		local gems = { }
 		for j, g in ipairs(group.gemList) do gems[j] = g end
-		saved.list[i] = { group = group, gems = gems, slot = group.slot }
+		saved.list[i] = { group = group, gems = gems, slot = group.slot, fullDPS = group.includeInFullDPS }
 	end
 	for i, l in ipairs(self.log) do saved.log[i] = l end
 	return saved
@@ -5472,6 +5658,7 @@ function BuildGeneratorClass:RestoreGroups(saved)
 		for j = #group.gemList, 1, -1 do group.gemList[j] = nil end
 		for j, g in ipairs(entry.gems) do group.gemList[j] = g end
 		group.slot = entry.slot
+		group.includeInFullDPS = entry.fullDPS
 		list[i] = group
 		skillsTab:ProcessSocketGroup(group)
 	end
@@ -6788,12 +6975,23 @@ function BuildGeneratorClass:PrepareOptions()
 		rules.userExcluded, rules.userForced = { }, { }
 		for title in pairs(opts.excludedUniques or { }) do rules.userExcluded[title] = true end
 		for _, title in ipairs(opts.forcedUniques or { }) do rules.userForced[title] = true end
+		-- options.midTier: no chase unique (Mageblood, Headhunter, Pearl of
+		-- Tsoatha... PriceSource.chaseUniques), none over midTierMaxUnique
+		-- divines (30): the build a player without the league's top items has
+		if opts.midTier then
+			for title in pairs(new("PriceSource"):PriceSource().chaseUniques) do rules.userExcluded[title] = true end
+		end
 	end
 	-- the moment of the league prices are for (PriceSource.phases)
 	GetPriceSource().phase = opts.leaguePhase or "NOW"
 	-- Investment level decides rare quality and influences unless set
 	local probe = new("PriceSource"):PriceSource()
 	opts.investment = opts.investment or probe.levels[probe.defaultLevel]
+	if opts.midTier then
+		opts.investment = copyTable(opts.investment, true)
+		local cap = opts.midTierMaxUnique or 30
+		opts.investment.maxUnique = opts.investment.maxUnique and m_min(opts.investment.maxUnique, cap) or cap
+	end
 	if not opts.quality then
 		local finderProbe = new("BestItemFinder"):BestItemFinder(self.itemsTab)
 		opts.quality = finderProbe.rareQualityList[opts.investment.quality or 2]
@@ -7177,6 +7375,12 @@ function BuildGeneratorClass:Run()
 	if opts.ostentation ~= false then
 		local ok, err = pcall(function() self:SupremeOstentationMove() end)
 		if not ok then ConPrintf("Supreme Ostentation move failed: %s", tostring(err)) end
+	end
+	-- a second damage skill next to a main skill that takes no action time
+	-- (Righteous Fire, totems, persistent minions): Fire Trap next to RF
+	if opts.secondarySkill ~= false then
+		local ok, err = pcall(function() self:SecondaryDamageMove() end)
+		if not ok then ConPrintf("Secondary damage skill move failed: %s", tostring(err)) end
 	end
 	-- a second skill for bosses (builds made for clearing)
 	if opts.bossSkill ~= false then

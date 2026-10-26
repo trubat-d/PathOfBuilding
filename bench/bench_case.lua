@@ -71,6 +71,13 @@ local configScenario
 for _, sc in ipairs(new("AutoConfig"):AutoConfig(build).scenarioList) do
 	if sc.id == os.getenv("CONFIG") then configScenario = sc end
 end
+-- PROFILE=1: where the time goes (bench/profile.lua), printed at the end
+local profiler
+if os.getenv("PROFILE") == "1" then
+	profiler = dofile("../bench/profile.lua")
+	profiler.Install({ "BuildGenerator", "GemSetup", "BestItemFinder", "RareItemGenerator", "TreeOptimizer", "ClusterJewelGenerator", "MetaJewelFinder",
+		"RadiusJewelFinder", "TimelessJewelFinder", "SynergyFinder", "UniqueComboFinder", "BuildDoctor", "AutoConfig", "ScalingAnalyzer", "BuildScorer" })
+end
 local gen = new("BuildGenerator"):BuildGenerator(build, {
 	meta = meta, configScenario = configScenario,
 	-- (LEARN=1: the player data steers the build; otherwise it's only shown)
@@ -161,3 +168,4 @@ end
 result.seconds = math.floor(os.clock() - t0)
 result.fullScores, result.recalcs = gen.fullScoreCount, gen.recalcCount
 print("BENCH " .. dkjson.encode(result))
+if profiler then profiler.Report(80) end

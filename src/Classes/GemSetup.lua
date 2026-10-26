@@ -189,6 +189,12 @@ function GemSetupClass:FreeSockets()
 			free[group.slot] = free[group.slot] - math.max(#group.gemList, group.capacity or 0)
 		end
 	end
+	-- a second damage skill linked by the generator (BuildGenerator:SecondaryDamageMove)
+	for _, group in ipairs(self.skillsTab.socketGroupList) do
+		if group.slot and free[group.slot] and (group.label or ""):find("(generated secondary)", 1, true) then
+			free[group.slot] = math.max(0, free[group.slot] - #group.gemList)
+		end
+	end
 	-- the main skill moved out of the body armour (e.g. for Kaom's Heart)
 	local main = self.gen.mainGroup
 	if main and main.slot and free[main.slot] then

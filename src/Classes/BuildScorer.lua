@@ -330,10 +330,20 @@ function BuildScorerClass:SustainFactor(output)
 end
 
 -- DPS figure used for scoring (player + minions, full DPS when the build uses it)
+function BuildScorerClass:HasSecondarySkill()
+	for _, group in ipairs(self.build.skillsTab and self.build.skillsTab.socketGroupList or { }) do
+		if group.enabled ~= false and group.includeInFullDPS and (group.label or ""):find("(generated secondary)", 1, true) then return true end
+	end
+	return false
+end
+
 function BuildScorerClass:GetDPS(output)
 	local dps
 	if output.FullDPS and output.FullDPS > 0 then
 		dps = output.FullDPS
+		-- (a generated second damage skill whose own cost isn't always paid:
+		-- BuildGenerator:SecondaryDamageMove)
+		if self.secondaryTrim and self:HasSecondarySkill() then dps = dps * self.secondaryTrim end
 	else
 		dps = (output.CombinedDPS or 0) + (output.Minion and output.Minion.CombinedDPS or 0)
 	end
@@ -1054,10 +1064,37 @@ end
 -- calcFunc: from calcsTab:GetMiscCalculator(); override: calculator override
 -- opts.flasks: "full" (measure each flask), "ratio" (reuse ratios), or false
 -- Returns { score, dps, ehp, rawDps, rawEhp, penalty, penalties, output, flasks }
+-- Does a calculation have lines that work while stationary ("while you are
+-- Stationary": Chieftain's Ramako, Rational Doctrine, armour masteries)?
+-- (from the calculation's own mods, Modules/Calcs: a candidate node or item counts)
+function BuildScorerClass:StationaryRelevant(output)
+	return GeneratorOutputStationary and GeneratorOutputStationary[output] or false
+end
+
 function BuildScorerClass:Evaluate(calcFunc, override, opts)
 	opts = opts or { }
 	override = override or { }
+	-- A boss fight is mostly fought standing in place (the fight simulation
+	-- charges the time spent moving and dodging): the build is calculated
+	-- stationary, and when it has "while stationary" lines its damage is
+	-- blended with the damage it keeps while moving for that share (below).
+	-- Without it those lines (Ramako's -20% fire resistance against damage
+	-- over time, Consecrated Ground) were never counted: Pohx's Righteous Fire
+	-- deals 2.3 times as much stationary. (Stationary changes nothing for a
+	-- build without such lines: one calculation either way; the moving one is
+	-- made on full evaluations and its ratio reused by the quick ones.)
+	local moveOverride
+	if (self.fightSim or self.stationaryBlend) and self.stationaryBlend ~= false
+		and not (self.build.configTab and self.build.configTab.input.conditionStationary) then
+		moveOverride = override
+		local copy = { }
+		for k, v in pairs(override) do copy[k] = v end
+		copy.conditions = { "Stationary" }
+		for _, c in ipairs(override.conditions or { }) do t_insert(copy.conditions, c) end
+		override = copy
+	end
 	local output = calcFunc(override, opts.useFullDPS)
+	if moveOverride and not self:StationaryRelevant(output) then moveOverride = nil end
 	local rawDps, rawEhp = self:GetDPS(output), self:GetEHP(output)
 	local dps, ehp = rawDps, rawEhp
 	local flasks
@@ -1089,6 +1126,27 @@ function BuildScorerClass:Evaluate(calcFunc, override, opts)
 		dps = rawDps * opts.ratio.dps
 		ehp = rawEhp * opts.ratio.ehp
 	end
+	local stationaryShare
+	if moveOverride and rawDps > 0 then
+		-- (moving + dodging share m, damage that keeps going while moving p:
+		-- stationary damage S for 1 - m, the moving damage M for m p, where
+		-- GetDPS charged S for (1 - m (1 - p)))
+		local r = self.stationaryRatio
+		if opts.flasks ~= "ratio" or not r then
+			r = m_min(1, self:GetDPS(calcFunc(moveOverride, opts.useFullDPS)) / rawDps)
+			self.stationaryRatio = r
+		end
+		local uptime, moving, dodge = self:FightUptime(output)
+		local m = (moving or 0) + (dodge or 0)
+		local p = m > 0 and m_max(0, m_min(1, 1 - (1 - uptime) / m)) or 1
+		-- (without the fight simulation nothing stops while moving: only the
+		-- stationary lines are lost for that share)
+		if not self.fightSim then p = 1 end
+		local blend = ((1 - m) + r * m * p) / m_max(1e-6, 1 - m * (1 - p))
+		dps = dps * blend
+		stationaryShare = 1 - r
+	end
+	self.lastStationaryShare = stationaryShare
 	local penalty, penalties = self:GetPenalties(output)
 	local bonus = self:UncountedBonus(output, override)
 	return {

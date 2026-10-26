@@ -63,6 +63,7 @@ local function loadUniqueChoices()
 		if ok and type(data) == "table" then
 			uniqueChoices.excluded = type(data.excluded) == "table" and data.excluded or { }
 			uniqueChoices.forced = type(data.forced) == "table" and data.forced or { }
+			uniqueChoices.midTier = data.midTier == true
 		end
 	end
 	return uniqueChoices
@@ -350,6 +351,11 @@ local function openUniqueChoices()
 	end)
 	controls.note = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {16, 150, 0, 14},
 		"^xC0C0C0Stranglegasp is excluded unless forced (it needs the right anoints already on it).")
+	-- the league's chase uniques left out (PriceSource.chaseUniques), none over 30 div
+	controls.midTier = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {200, 176, 18}, "No chase uniques:", function(on)
+		choices.midTier = on
+		saveUniqueChoices()
+	end, "A mid-tier build: no Mageblood, Headhunter, Pearl of Tsoatha, Forbidden jewels and the other\nchase uniques of the league, and no unique over 30 divines. The build a player without\nthe league's top items can have (top players' builds mostly hold one or more of them).", choices.midTier == true)
 	controls.done = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {556, 176, 80, 20}, "Done", function()
 		main:ClosePopup()
 	end)
@@ -769,6 +775,12 @@ function BuildIdeasPopupClass:OpenGenerator()
 		end
 	end, "Experimental: background threads build several archetypes (and rare items) at once.\nEach thread holds its own copy of the game data (about 1 GB). Off by default:\nit crashed the app on one PC. Without it everything runs one after the other.", main.generatorThreads == true)
 	controls.threads.enabled = idle
+	-- every build fully built in a generation kept as a loadout of the opened
+	-- one (Modules/BuildLoadouts), each with its own configuration
+	controls.loadouts = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {1010, 105, 18}, "All as loadouts:", function(on)
+		main.generatorLoadouts = on
+	end, "When several builds are fully built (tries, archetypes with \"Several cores\"), the opened build\nkeeps the others as loadouts: tree, items, skills and configuration switch together from\nthe Loadouts drop-down next to the ascendancy. The best one is the active loadout.", main.generatorLoadouts ~= false)
+	controls.loadouts.enabled = idle
 
 	-- Archetypes: the ways this skill can scale; "Scan" builds each one quickly to compare them
 	local archetypeLib = new("BuildArchetypes"):BuildArchetypes()
@@ -937,6 +949,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 		for _, title in ipairs(choices.excluded) do options.excludedUniques[title] = true end
 		options.forcedUniques = { }
 		for _, title in ipairs(choices.forced) do t_insert(options.forcedUniques, title) end
+		options.midTier = choices.midTier or nil
 		return options
 	end
 
@@ -1043,6 +1056,13 @@ function BuildIdeasPopupClass:OpenGenerator()
 					t_insert(lines, string.format("^7- Tries combined (passives, gear and links crossed, then partly rebuilt): score %.2f -> %.2f", result.final.score or 0, final.score or 0))
 					for _, l in ipairs(combined.log or { }) do if l:match("^Population search") then t_insert(lines, "^7- " .. l) end end
 				end
+				-- (the other tries kept as loadouts)
+				local others = { }
+				for _, r in ipairs(tryRecords) do
+					if r ~= bestTry then t_insert(others, { xml = r.xml, title = (options.archetype and options.archetype.label or "Try") .. " try " .. r.variant, score = r.score, dps = r.result.final.dps, ehp = r.result.final.ehp }) end
+				end
+				local kept = state.keepAsLoadouts((options.archetype and options.archetype.label or "Best") .. (combined and " combined" or " try " .. bestTry.variant), final.score, others, buildName)
+				if kept > 0 then t_insert(lines, string.format("^7- The other %d tr%s kept as loadouts (Loadouts drop-down next to the ascendancy).", kept, kept == 1 and "y is" or "ies are")) end
 				for _, l in ipairs(result.log) do t_insert(lines, "^7- " .. l) end
 				t_insert(lines, "^xC0C0C0" .. result.costLine)
 				for _, c in ipairs(result.configChanges or { }) do t_insert(lines, "^x66CCFFConfig: ^7" .. c) end
@@ -1417,6 +1437,28 @@ function BuildIdeasPopupClass:OpenGenerator()
 		if #candidates < 2 then return false end
 		return state.fullParallel(candidates, tonumber(controls.tries.list[controls.tries.selIndex]) or 1)
 	end
+	-- The open build with the other fully built builds as loadouts (best
+	-- first, at most 8): entries = { { xml, title, score }, ... }; the open
+	-- build is loadout 1. Returns the number of loadouts added.
+	state.keepAsLoadouts = function(firstTitle, firstScore, entries, buildName)
+		if main.generatorLoadouts == false or not entries or #entries == 0 then return 0 end
+		local opened = main.modes["BUILD"]
+		if not opened then return 0 end
+		table.sort(entries, function(a, b) return (a.score or -math.huge) > (b.score or -math.huge) end)
+		local list = { { xml = opened:SaveDB("code"), title = string.format("%s %.2f", firstTitle, firstScore or 0) } }
+		for i = 1, m_min(7, #entries) do
+			local e = entries[i]
+			t_insert(list, { xml = e.xml, title = string.format("%s %.2f", e.title, e.score or 0),
+				summary = e.dps and string.format("damage %s, effective hit pool %s", formatNumSep(string.format("%.0f", e.dps)), formatNumSep(string.format("%.0f", e.ehp or 0))) or nil })
+		end
+		local ok, merged, err = pcall(LoadModule("Modules/BuildLoadouts").Merge, list)
+		if not ok or not merged then
+			ConPrintf("Keeping the builds as loadouts failed: %s", tostring(ok and err or merged))
+			return 0
+		end
+		main:SetMode("BUILD", false, buildName, merged)
+		return #list - 1
+	end
 	-- Full builds in background threads: each archetype, each try (variant),
 	-- the best one opened. false when background threads aren't available
 	-- The open build (the best try) crossed with the other tries' builds
@@ -1482,7 +1524,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 				best = { archetype = archetype, summary = summary, xml = xml, variant = variant }
 			end
 			state.parallelResults = state.parallelResults or { }
-			t_insert(state.parallelResults, { archetype = archetype, summary = summary, variant = variant })
+			t_insert(state.parallelResults, { archetype = archetype, summary = summary, variant = variant, xml = xml })
 		end, function(archetype, err)
 			t_insert(failures, archetype.label .. ": " .. tostring(err))
 		end, function()
@@ -1539,6 +1581,19 @@ function BuildIdeasPopupClass:OpenGenerator()
 				for _, alt in ipairs(alternatives) do t_insert(list, { label = string.format("%s (%+.2f)", alt.archetype.label, alt.score - result.score), alt = alt }) end
 				controls.alternatives:SetList(list)
 				controls.alternatives.selIndex = 1
+			end
+			-- (every other fully built build kept as a loadout)
+			do
+				local entries = { }
+				for _, r in ipairs(state.parallelResults or { }) do
+					if r.summary ~= best.summary and r.xml and r.summary.score then
+						t_insert(entries, { xml = r.xml, title = r.archetype.label .. " try " .. (r.variant or 1), score = r.summary.score, dps = r.summary.dps, ehp = r.summary.ehp })
+					end
+				end
+				local finalScore = combined and combined.final.score or result.score
+				local kept = state.keepAsLoadouts(best.archetype.label .. (combined and " combined" or " try " .. (best.variant or 1)), finalScore, entries,
+					"Generated " .. skill.label .. " " .. asc.ascendName .. " (" .. best.archetype.label .. ")")
+				if kept > 0 then t_insert(lines, 2, string.format("^7- %d other fully built build%s kept as loadouts (Loadouts drop-down next to the ascendancy).", kept, kept == 1 and " is" or "s are")) end
 			end
 			if combined then
 				t_insert(lines, 2, string.format("^7- Best builds combined (passives, gear and links crossed, then partly rebuilt): score %.2f -> %.2f, damage %s, effective hit pool %s",
