@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610261915" />
+	<Version number="2.67.2-ia.202610261923" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -127,9 +127,9 @@
 	<File name="Classes/BestItemListControl.lua" part="program" sha1="75edb896520eedbfb9fa2f7ede7f109c3d4bc39b" />
 	<File name="Classes/BuildArchetypes.lua" part="program" sha1="290a9451d9bb0e709de2fd5ab5d8098aa021b080" />
 	<File name="Classes/BuildDoctor.lua" part="program" sha1="df978e7c1c71920e3edce2759cbd2b8cb3628be3" />
-	<File name="Classes/BuildGenerator.lua" part="program" sha1="3c21a239a07a0745eb58ced7f11972c5d54e7503" />
+	<File name="Classes/BuildGenerator.lua" part="program" sha1="8a93fc7d6d55e3194508ba5116ead4f89fe15bd2" />
 	<File name="Classes/BuildIdeaListControl.lua" part="program" sha1="6645c5ae1b6a7db6927041851c7188055c83ab7f" />
-	<File name="Classes/BuildIdeasPopup.lua" part="program" sha1="3c1ebc0c196b62b1d1827e18c0fbc8ea012992a7" />
+	<File name="Classes/BuildIdeasPopup.lua" part="program" sha1="ac9b9e81150dc49cb3afb1506606ebf695f49c83" />
 	<File name="Classes/BuildListControl.lua" part="program" sha1="f60f0d7f6aecbe851db896913cd1aa707c7fb304" />
 	<File name="Classes/BuildMetaSource.lua" part="program" sha1="49121c15f4d2ff04bfb09556a88c9d480e4d30eb" />
 	<File name="Classes/BuildReview.lua" part="program" sha1="43ae7d5ee40faf05b9d96dd65f66c8e9b2256a98" />
@@ -161,7 +161,7 @@
 	<File name="Classes/GemSelectControl.lua" part="program" sha1="8954e020052121d13122873b578b87e0bb7c60fc" />
 	<File name="Classes/GemSetup.lua" part="program" sha1="adc5b10f2c960548cb04320527f6d3be5000d35a" />
 	<File name="Classes/GemTooltip.lua" part="program" sha1="11a6d37e2e2cb86f4b1a130968db7fd4154da6c2" />
-	<File name="Classes/GenerationQueue.lua" part="program" sha1="d01b22a6db59b410097c4257401634361b6f9a52" />
+	<File name="Classes/GenerationQueue.lua" part="program" sha1="60f2fd136a3c8d8c12fa792ca8c269209f5eae71" />
 	<File name="Classes/HitOverlap.lua" part="program" sha1="c8902c12bf6c8be7dbe67ac49376c1270a3f49e1" />
 	<File name="Classes/IdeaMiner.lua" part="program" sha1="c1093941cacff453124e7723ccc1db2598426e84" />
 	<File name="Classes/ImportTab.lua" part="program" sha1="c90ed141decea20fc4ebac4d9f256ac6b0480b9b" />
