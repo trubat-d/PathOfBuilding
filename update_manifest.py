@@ -73,7 +73,10 @@ def create_manifest(version: str | None = None, replace: bool = False) -> None:
         logging.critical(f"Manifest configuration file not found in path '{base_path}'")
         return
 
-    base_url = "https://raw.githubusercontent.com/PathOfBuildingCommunity/PathOfBuilding/{branch}/"
+    # (POB_REPO=owner/name: the repository the installed copies update from)
+    import os
+    repo = os.environ.get("POB_REPO", "PathOfBuildingCommunity/PathOfBuilding")
+    base_url = "https://raw.githubusercontent.com/" + repo + "/{branch}/"
     parts: list[dict[str, str]] = []
     for part in config.sections():
         url = base_url + config[part]["path"]

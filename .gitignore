@@ -51,3 +51,4 @@ src/GeneratorWorker_*.log
 src/GeneratorThreads.log
 .claude/
 bench/__pycache__/
+PathOfBuildingIA-Setup*.exe

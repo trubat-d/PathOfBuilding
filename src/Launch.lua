@@ -30,6 +30,21 @@ function launch:OnInit()
 	local firstRunFile = io.open("first.run", "r")
 	if firstRunFile then
 		firstRunFile:close()
+	else
+		-- (an installed copy whose main script is missing - its first start's
+		-- download failed or was cut off - completes its installation the
+		-- same way: a manifest with a branch is an installed copy's)
+		local mainFile = io.open("Modules/Main.lua", "r")
+		if mainFile then
+			mainFile:close()
+		else
+			local manFile = io.open("manifest.xml", "r")
+			local manText = manFile and manFile:read("*a") or ""
+			if manFile then manFile:close() end
+			firstRunFile = manText:match('<Version[^>]-branch="') and true or nil
+		end
+	end
+	if firstRunFile then
 		os.remove("first.run")
 		-- This is a fresh installation
 		-- Perform an immediate update to download the latest version
