@@ -752,8 +752,47 @@ function AutoConfigClass:Run()
 		if inspired or anyLine({ "gain an? inspiration charge", "gain inspiration charges" }) then
 			self:Set("useInspirationCharges", true, "the build generates Inspiration charges")
 		end
+		-- Withered (poewiki): each stack has its own 2 s duration (not
+		-- refreshed), up to 15 - the stacks a build keeps up are the rate it
+		-- inflicts them x their duration, not always 15 (Withering Touch on a 5
+		-- attacks/s skill: 25% x 5 x 2 s = 2.5)
 		if modDB:Flag(nil, "Condition:CanWither") then
-			self:Set("multiplierWitheredStackCount", 15, "withering is kept up at its maximum")
+			local hitRate = speedOf(output)
+			local stacks, cap, sources = 0, 15, { }
+			for _, line in ipairs(lines) do
+				local chance, dur = line:match("(%d+)%% chance to inflict withered for (%d+) seconds on hit")
+				if not chance then
+					chance = line:match("(%d+)%% chance to inflict withered for two seconds on hit")
+					if chance then dur = 2 end
+					local few = line:match("if there are (%d+) or fewer withered debuffs")
+					if few then cap = m_min(cap, tonumber(few) + 1) end
+				end
+				if chance then
+					stacks = stacks + hitRate * tonumber(chance) / 100 * tonumber(dur)
+					t_insert(sources, line)
+				else
+					dur = line:match("^inflict withered for (%d+) seconds on hit")
+					if dur then stacks = stacks + hitRate * tonumber(dur) t_insert(sources, line) end
+					dur = line:match("every second, inflict withered on nearby enemies for (%d+) seconds")
+					if dur then stacks = stacks + tonumber(dur) t_insert(sources, line) end
+					local n = line:match("inflict (%d+) withered debuffs for (%d+) seconds")
+					local n2, d2 = line:match("inflict (%d+)%-?%d* withered debuffs for (%d+) seconds")
+					if n2 then stacks = stacks + hitRate * tonumber(n2) * tonumber(d2) t_insert(sources, line) end
+					if line:find("inflict up to 15 withered debuffs", 1, true) then stacks = 15 t_insert(sources, line) end
+				end
+			end
+			for _, name in ipairs(gems) do
+				if name == "Withering Touch" then stacks = stacks + hitRate * 0.25 * 2 t_insert(sources, name) end
+				-- (Wither channelled, Toxic Rain of Withering's pods, Withering Step's
+				-- cloud: many stacks in quick succession)
+				if name == "Wither" or name == "Toxic Rain of Withering" then stacks = 15 t_insert(sources, name) end
+				if name == "Withering Step" then stacks = stacks + 3 t_insert(sources, name) end
+			end
+			-- (a source PoB knows but not found here - Unholy Might... - counted
+			-- as a few stacks)
+			if #sources == 0 then stacks = 5 end
+			local value = m_max(1, m_floor(m_min(cap, stacks)))
+			self:Set("multiplierWitheredStackCount", value, string.format("%d Withered kept up (%s)", value, #sources > 0 and table.concat(sources, "; "):sub(1, 120) or "a source PoB knows"))
 		end
 
 		-- counts estimated from the build's own numbers (Indigon's mana spent recently...)
