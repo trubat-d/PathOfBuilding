@@ -226,8 +226,17 @@ return function(jobJson, userPath, scriptBase)
 	local co = coroutine.create(function() return generator:Run() end)
 	local ok, result = coroutine.resume(co)
 	while ok and coroutine.status(co) ~= "dead" do ok, result = coroutine.resume(co) end
-	-- (with the generation's own stack: where it failed)
-	if not ok then error(debug.traceback(co, tostring(result)), 0) end
+	-- (failed: the build made so far goes back with the error, so it isn't
+	-- lost - Classes/GenerationQueue keeps it; with the generation's own stack)
+	if not ok then
+		local err = debug.traceback(co, tostring(result))
+		trace("generation failed: " .. err)
+		local okXml, partialXml = pcall(function() return build:SaveDB("code") end)
+		if job.partialOnError and okXml and partialXml then
+			return dkjson.encode({ partial = true, error = err, archetypeId = job.archetypeId, seconds = os.clock() - startClock }), partialXml
+		end
+		error(err, 0)
+	end
 	runCallback("OnFrame")
 
 	local summary = {

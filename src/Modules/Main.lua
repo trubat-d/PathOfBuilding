@@ -286,7 +286,19 @@ the "Releases" section of the GitHub page.]])
 				data.printMissingMinionSkills()
 			end
 			ConPrintf("Startup time: %d ms", GetTime() - launch.startTime)
-		end
+		end,
+		-- background generations left when the app closed go on
+		-- (Classes/GenerationQueue), once the item databases are loaded
+		["GenerationQueueRestore"] = function()
+			if self.uniqueDB and self.uniqueDB.loading then return end
+			self.onFrameFuncs["GenerationQueueRestore"] = nil
+			if not self.userPath or self.generationQueue then return end
+			local f = io.open(self.userPath .. "GenerationQueue/queue.json", "r")
+			if not f then return end
+			f:close()
+			local ok, err = pcall(function() self.generationQueue = new("GenerationQueue"):GenerationQueue() end)
+			if not ok then ConPrintf("Restoring the background generations failed: %s", tostring(err)) end
+		end,
 	}
 
 	if not self.saveNewModCache then

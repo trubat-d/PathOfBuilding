@@ -1426,29 +1426,30 @@ function BuildIdeasPopupClass:OpenGenerator()
 			end
 		end
 		local pgStatic = new("ParallelGenerator"):ParallelGenerator()
-		local hybrids = controls.hybrids.state
-		local meta
+		local baseOptions2 = { }
+		for k, v in pairs(baseOptions) do baseOptions2[k] = v end
+		baseOptions2.archetype = nil
+		local rememberedResults
+		if remembered then
+			rememberedResults = { }
+			for id, r in pairs(remembered) do
+				if type(r) == "table" then rememberedResults[id] = { score = r.score, built = r.built, error = r.error } end
+			end
+		end
+		local memory = remembered and loadScanMemory()[scanMemoryKey(baseOptions)]
 		local batch = {
 			title = skill.label .. " " .. asc.ascendName .. (selected and (" (" .. selected.label .. ")") or "") .. ", " .. controls.investment.list[controls.investment.selIndex].label:gsub(" %(.*", ""),
 			buildName = "Generated " .. skill.label .. " " .. asc.ascendName,
 			skillLabel = skill.label,
-			archetypes = list, standard = standard, selected = selected, remembered = remembered,
+			gemId = skill.gemId,
+			selectedId = selected and selected.id or nil,
+			standardId = standard and standard.id or "STANDARD",
+			remembered = rememberedResults,
+			combos = memory and memory.combos or nil,
+			hybrid = controls.hybrids.state or nil,
 			tries = tonumber(controls.tries.list[controls.tries.selIndex]) or 1,
-			hybrid = hybrids and function(a, b) return archetypeLib.Hybrid(a, b) end or nil,
-			comboArchetype = function(ids) return archetypeLib.ById(data.gems[skill.gemId], ids) end,
-			combos = remembered and loadScanMemory()[scanMemoryKey(baseOptions)].combos or nil,
 			learningContext = state.learningContext(),
 			scanBuilds = math.max(3, 2 * pgStatic.MaxWorkers()),
-			makeJob = function(archetype, quick, variant, plan)
-				local o = { }
-				for k, v in pairs(baseOptions) do o[k] = v end
-				o.archetype = archetype
-				o.quick = quick or nil
-				if quick then o.synergies = false end
-				o.variant = variant
-				o.meta = meta
-				return pgStatic.JobFromOptions(o, plan and { plan = true } or nil)
-			end,
 		}
 		-- poe.ninja's statistics first (as the scan does), then queued
 		local key = "GenerationQueueMeta" .. tostring(batch)
@@ -1458,7 +1459,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 			if queued then return end
 			queued = true
 			main.onFrameFuncs[key] = nil
-			meta = entryMeta
+			baseOptions2.meta = entryMeta
+			batch.baseJob = pgStatic.JobFromOptions(baseOptions2)
 			queue:Add(batch)
 		end
 		main.onFrameFuncs[key] = function() if GetTime() - t0 > 60000 then go(nil) end end

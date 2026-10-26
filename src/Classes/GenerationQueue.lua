@@ -16,8 +16,16 @@
 --          (ScalingPlanner), when no archetype was chosen and no recent scan
 --          is known;
 --   quick: quick builds of the most promising archetypes;
---   full:  full builds of the best ones (and anchors, a hybrid), each try.
+--   full:  full builds of the best ones (and anchors, a hybrid, the build
+--          doctor's combinations), each try.
 -- The batches run one after the other.
+--
+-- Nothing is lost: the queue, each phase's jobs and every build a worker
+-- finished are saved as they come (GenerationQueue/ in the user folder). A
+-- generation the app was closed on goes on when the app opens again, from
+-- the builds still missing; a job that fails is tried once more, and the
+-- build it had made so far is kept; a failed or stopped generation can be
+-- resumed from the panel.
 --
 local t_insert = table.insert
 local t_remove = table.remove
@@ -28,9 +36,38 @@ local m_floor = math.floor
 ---@class GenerationQueue
 local GenerationQueueClass = newClass("GenerationQueue")
 
+local maxAttempts = 2
+
+local function folder()
+	return (main.userPath or "") .. "GenerationQueue/"
+end
+
+local function readFile(path)
+	local f = path and io.open(path, "rb")
+	if not f then return nil end
+	local text = f:read("*a")
+	f:close()
+	return text
+end
+
+local function writeFile(path, text)
+	local f = io.open(path, "wb")
+	if not f then return false end
+	f:write(text)
+	f:close()
+	return true
+end
+
+local function formatSeconds(s)
+	s = m_floor(s or 0)
+	if s >= 3600 then return string.format("%d:%02d:%02d", m_floor(s / 3600), m_floor(s / 60) % 60, s % 60) end
+	return string.format("%d:%02d", m_floor(s / 60), s % 60)
+end
+
 function GenerationQueueClass:GenerationQueue()
 	self.batches = { }
 	self.byTrace = { }
+	self.archetypeCache = { }
 	self.collapsed = false
 	self:BuildPanel()
 	-- the workers' progress (Modules/GeneratorWorker calls it from its thread)
@@ -42,20 +79,15 @@ function GenerationQueueClass:GenerationQueue()
 			entry.progress = (count and count > 0) and (((index or 1) - 1 + (sub or 0)) / count) or entry.progress
 		end
 	end
+	self:Load()
 	return self
 end
 
-local function formatSeconds(s)
-	s = m_floor(s or 0)
-	if s >= 3600 then return string.format("%d:%02d:%02d", m_floor(s / 3600), m_floor(s / 60) % 60, s % 60) end
-	return string.format("%d:%02d", m_floor(s / 60), s % 60)
-end
-
--- The queue: one per app
-function GetGenerationQueue()
-	if not main.generationQueue then
-		main.generationQueue = new("GenerationQueue"):GenerationQueue()
-	end
+-- The queue, created when the app starts if generations were left in it
+function GenerationQueueClass.Restore()
+	if main.generationQueue then return main.generationQueue end
+	if not readFile(folder() .. "queue.json") then return nil end
+	main.generationQueue = new("GenerationQueue"):GenerationQueue()
 	return main.generationQueue
 end
 
@@ -63,18 +95,81 @@ function GenerationQueueClass:Available()
 	return new("ParallelGenerator"):ParallelGenerator().Available()
 end
 
--- batch: { title, buildName, makeJob = function(archetype, quick, variant, plan) -> job,
---   archetypes (all, for the scan), standard, selected (an archetype or nil),
---   tries, remembered (scan results by archetype id, or nil), hybrid = function(a, b) or nil,
---   learningContext, skillLabel, scanBuilds }
+------------------------------------------------------------------------------
+-- Saving
+------------------------------------------------------------------------------
+
+local savedKeys = { "id", "title", "buildName", "skillLabel", "gemId", "baseJob", "tries", "scanBuilds", "learningContext",
+	"selectedId", "standardId", "remembered", "combos", "hybrid", "status", "phase", "specs", "scan", "quickScores", "full",
+	"bestScore", "error", "file", "fileBuildName", "partialFile", "startedWall", "finishedWall", "elapsedBefore", "forceQuick", "best" }
+
+function GenerationQueueClass:Save()
+	local dkjson = require "dkjson"
+	local list = { }
+	for _, b in ipairs(self.batches) do
+		local copy = { }
+		for _, k in ipairs(savedKeys) do copy[k] = b[k] end
+		t_insert(list, copy)
+	end
+	pcall(MakeDir, folder())
+	local ok, text = pcall(dkjson.encode, { version = 1, batches = list })
+	if ok and text then writeFile(folder() .. "queue.json", text) end
+end
+
+function GenerationQueueClass:Load()
+	local text = readFile(folder() .. "queue.json")
+	if not text then return end
+	local ok, data = pcall(require("dkjson").decode, text)
+	if not ok or type(data) ~= "table" or type(data.batches) ~= "table" then return end
+	for _, b in ipairs(data.batches) do
+		-- (the app was closed while it ran: it goes on from what is missing)
+		if b.status == "running" then
+			b.status = "waiting"
+			b.resumed = true
+		end
+		for _, s in ipairs(b.specs or { }) do
+			if s.state == "running" then s.state = "pending" end
+		end
+		t_insert(self.batches, b)
+	end
+	self:Pump()
+end
+
+------------------------------------------------------------------------------
+-- Archetypes (kept by id in the saved queue)
+------------------------------------------------------------------------------
+
+function GenerationQueueClass:Archetype(batch, id)
+	if not id then return nil end
+	local key = tostring(batch.gemId) .. "|" .. id
+	if self.archetypeCache[key] == nil then
+		local gem = data.gems[batch.gemId]
+		local ok, a = pcall(function() return new("BuildArchetypes"):BuildArchetypes().ById(gem, id, batch.baseJob and batch.baseJob.meta) end)
+		self.archetypeCache[key] = ok and a or false
+	end
+	return self.archetypeCache[key] or nil
+end
+
+function GenerationQueueClass:Label(batch, id)
+	local a = self:Archetype(batch, id)
+	return a and a.label or id or "?"
+end
+
+------------------------------------------------------------------------------
+-- Running
+------------------------------------------------------------------------------
+
+-- batch (from the Generate window): { title, buildName, skillLabel, gemId,
+--   baseJob (ParallelGenerator.JobFromOptions without an archetype), tries,
+--   scanBuilds, learningContext, selectedId, standardId, remembered (scan
+--   results by archetype id), combos, hybrid (true: the best two together) }
 function GenerationQueueClass:Add(batch)
+	self.counter = (self.counter or 0) + 1
+	batch.id = os.date("%Y%m%d%H%M%S") .. "_" .. self.counter
 	batch.status = "waiting"
-	batch.added = GetTime()
-	batch.results = { }
-	batch.failures = { }
-	batch.jobsDone, batch.jobsTotal = 0, 0
 	t_insert(self.batches, batch)
 	self.collapsed = false
+	self:Save()
 	self:Pump()
 	return batch
 end
@@ -89,119 +184,195 @@ function GenerationQueueClass:Pump()
 	if self:Running() then return end
 	for _, b in ipairs(self.batches) do
 		if b.status == "waiting" then
-			b.status = "running"
-			b.started = GetTime()
-			-- (launched from a frame, never from a worker's callback)
+			-- (launched from a frame, never from a worker's callback, once the app's data is loaded)
 			main.onFrameFuncs["GenerationQueueStart"] = function()
+				if main.uniqueDB.loading or (main.rareDB and main.rareDB.loading) then return end
 				main.onFrameFuncs["GenerationQueueStart"] = nil
-				self:StartBatch(b)
+				if b.status ~= "waiting" or self:Running() then return end
+				b.status = "running"
+				b.startedWall = os.time()
+				b.finishedWall = nil
+				local ok, err = pcall(function() self:Advance(b) end)
+				if not ok then self:Fail(b, err) end
 			end
 			return
 		end
 	end
 end
 
--- Runs one phase: jobs = { { archetype, quick, variant, plan } }; onDone(list of { spec, summary, xml } or errors)
-function GenerationQueueClass:RunPhase(batch, label, specs, onDone)
+-- The next thing to do for a batch: start its first phase, run what is
+-- pending in its phase, or go to the next phase
+function GenerationQueueClass:Advance(batch)
+	if not batch.phase then
+		if batch.selectedId then
+			return self:SetPhase(batch, "full", self:FullSpecs(batch, { batch.selectedId }))
+		elseif batch.remembered then
+			batch.scan = batch.remembered
+			return self:RankAndBuild(batch)
+		end
+		return self:SetPhase(batch, "scan", { { archetypeId = batch.standardId, quick = true, plan = true } })
+	end
+	local pending = { }
+	for i, s in ipairs(batch.specs or { }) do
+		if s.state == "pending" then t_insert(pending, i) end
+	end
+	if #pending > 0 then return self:RunPending(batch, pending) end
+	-- (a failed job: once more)
+	local retry = { }
+	for i, s in ipairs(batch.specs or { }) do
+		if s.state == "failed" and (s.attempts or 0) < maxAttempts then
+			s.state = "pending"
+			t_insert(retry, i)
+		end
+	end
+	if #retry > 0 then return self:RunPending(batch, retry) end
+	return self:PhaseDone(batch)
+end
+
+function GenerationQueueClass:SetPhase(batch, phase, specs)
+	batch.phase = phase
+	batch.specs = specs
+	for _, s in ipairs(specs) do s.state = "pending" s.attempts = 0 end
+	self:Save()
+	return self:Advance(batch)
+end
+
+function GenerationQueueClass:FullSpecs(batch, ids)
+	local specs = { }
+	for _, id in ipairs(ids) do
+		for v = 1, m_max(1, batch.tries or 1) do t_insert(specs, { archetypeId = id, variant = v }) end
+	end
+	return specs
+end
+
+function GenerationQueueClass:MakeJob(batch, spec)
+	local job = { }
+	for k, v in pairs(batch.baseJob or { }) do job[k] = v end
+	job.archetypeId = spec.archetypeId
+	job.quick = spec.quick or batch.forceQuick or nil
+	if spec.quick then job.synergies = false end
+	job.variant = spec.variant
+	job.plan = spec.plan or nil
+	job.traceName = nil
+	-- (a failed job sends back the build it had made: Modules/GeneratorWorker)
+	job.partialOnError = true
+	return job
+end
+
+function GenerationQueueClass:RunPending(batch, indexes)
 	local pg = new("ParallelGenerator"):ParallelGenerator()
 	batch.pg = pg
-	batch.phase = label
 	batch.running = { }
 	local jobs = { }
-	for i, spec in ipairs(specs) do
-		jobs[i] = batch.makeJob(spec.archetype, spec.quick, spec.variant, spec.plan)
+	for n, i in ipairs(indexes) do
+		jobs[n] = self:MakeJob(batch, batch.specs[i])
+		batch.specs[i].state = "running"
+		batch.specs[i].attempts = (batch.specs[i].attempts or 0) + 1
 	end
-	batch.jobsTotal = batch.jobsTotal + #jobs
-	local results = { }
+	self:Save()
 	pg:Run(jobs, {
-		onStart = function(index)
-			local entry = { spec = specs[index], started = GetTime(), stage = "starting" }
-			batch.running[index] = entry
-			if jobs[index].traceName then self.byTrace[jobs[index].traceName] = entry end
+		onStart = function(n)
+			local spec = batch.specs[indexes[n]]
+			local entry = { spec = spec, started = GetTime(), stage = "starting" }
+			batch.running[n] = entry
+			if jobs[n].traceName then self.byTrace[jobs[n].traceName] = entry end
 		end,
-		onDone = function(index, summary, xml)
-			batch.running[index] = nil
-			batch.jobsDone = batch.jobsDone + 1
-			t_insert(results, { spec = specs[index], summary = summary, xml = xml })
-			if summary.score and (not batch.bestScore or summary.score > batch.bestScore) and not specs[index].quick then batch.bestScore = summary.score end
+		onDone = function(n, summary, xml)
+			batch.running[n] = nil
+			local i = indexes[n]
+			local spec = batch.specs[i]
+			local path = folder() .. string.format("%s_%s_%d%s.xml", batch.id, batch.phase, i, summary.partial and "_partial" or "")
+			local saved = xml and writeFile(path, xml)
+			if summary.partial then
+				-- (the job failed: the build it had made so far is kept)
+				spec.state = "failed"
+				spec.error = summary.error
+				if saved then spec.partialFile = path end
+				ConPrintf("Background generation failed (build kept so far): %s", tostring(summary.error))
+			else
+				spec.state = "done"
+				spec.file = saved and path or nil
+				spec.score, spec.dps, spec.ehp = summary.score, summary.dps, summary.ehp
+				spec.plan, spec.combos = summary.plan, summary.combos
+				if batch.phase == "full" and summary.score and (not batch.bestScore or summary.score > batch.bestScore) then batch.bestScore = summary.score end
+			end
+			self:Save()
 		end,
-		onError = function(index, err)
-			batch.running[index] = nil
-			batch.jobsDone = batch.jobsDone + 1
-			t_insert(batch.failures, (specs[index].archetype and specs[index].archetype.label or "?") .. ": " .. tostring(err))
+		onError = function(n, err)
+			batch.running[n] = nil
+			local spec = batch.specs[indexes[n]]
+			spec.state = "failed"
+			spec.error = tostring(err)
 			ConPrintf("Background generation failed: %s", tostring(err))
+			self:Save()
 		end,
 		onAllDone = function()
 			batch.pg = nil
 			if batch.status ~= "running" then return end
-			-- (the next phase starts from a frame)
-			main.onFrameFuncs["GenerationQueuePhase"] = function()
-				main.onFrameFuncs["GenerationQueuePhase"] = nil
-				local ok, err = pcall(onDone, results)
+			-- (the next step from a frame)
+			main.onFrameFuncs["GenerationQueueAdvance"] = function()
+				main.onFrameFuncs["GenerationQueueAdvance"] = nil
+				local ok, err = pcall(function() self:Advance(batch) end)
 				if not ok then self:Fail(batch, err) end
 			end
 		end,
 	})
 end
 
-function GenerationQueueClass:Fail(batch, err)
-	batch.status = "failed"
-	batch.error = tostring(err)
-	batch.finished = GetTime()
-	ConPrintf("Background generation failed: %s", tostring(err))
-	self:Pump()
-end
-
-function GenerationQueueClass:StartBatch(batch)
-	if batch.selected then
-		return self:FullPhase(batch, { batch.selected })
+function GenerationQueueClass:PhaseDone(batch)
+	local done = { }
+	for _, s in ipairs(batch.specs or { }) do
+		if s.state == "done" then t_insert(done, s) end
 	end
-	if batch.remembered then
-		return self:RankAndBuild(batch, batch.remembered)
-	end
-	-- the scan: a quick build of the skill and every archetype planned on top
-	self:RunPhase(batch, "planning the archetypes", { { archetype = batch.standard, quick = true, plan = true } }, function(results)
-		local r = results[1]
-		if not r then return self:Fail(batch, batch.failures[1] or "the first quick build failed") end
-		batch.combos = r.summary.combos
-		local scan = { }
-		scan[batch.standard.id] = { score = r.summary.score, built = true }
+	if batch.phase == "scan" then
+		local r = done[1]
+		if not r then return self:Fail(batch, self:FirstError(batch) or "the first quick build failed") end
+		batch.combos = r.combos
+		batch.scan = { [batch.standardId] = { score = r.score, built = true } }
 		-- the most promising archetypes get a quick build of their own
-		local plan = r.summary.plan or { }
+		local plan = r.plan or { }
 		table.sort(plan, function(a, b) return (a.score or -math.huge) > (b.score or -math.huge) end)
-		local byId = { }
-		for _, a in ipairs(batch.archetypes) do byId[a.id] = a end
-		local quick = { }
+		local quick, listed = { }, { }
 		for _, p in ipairs(plan) do
-			if not p.error and p.archetypeId ~= batch.standard.id and byId[p.archetypeId] and #quick < (batch.scanBuilds or 6) then
-				t_insert(quick, { archetype = byId[p.archetypeId], quick = true })
+			if not p.error and p.archetypeId ~= batch.standardId and not listed[p.archetypeId] and #quick < (batch.scanBuilds or 6) then
+				listed[p.archetypeId] = true
+				t_insert(quick, { archetypeId = p.archetypeId, quick = true })
 			end
 		end
 		-- (anchors - builds made around one unique - always: their quick build can't show it)
-		for _, a in ipairs(batch.archetypes) do
-			if a.forced and #a.forced > 0 then
-				local listed = false
-				for _, q in ipairs(quick) do if q.archetype == a then listed = true end end
-				if not listed then t_insert(quick, { archetype = a, quick = true }) end
+		local gem = data.gems[batch.gemId]
+		for _, a in ipairs(new("BuildArchetypes"):BuildArchetypes().ForSkill(gem, batch.baseJob and batch.baseJob.meta)) do
+			if a.forced and #a.forced > 0 and not listed[a.id] then
+				listed[a.id] = true
+				t_insert(quick, { archetypeId = a.id, quick = true })
 			end
 		end
-		if #quick == 0 then return self:RankAndBuild(batch, scan) end
-		self:RunPhase(batch, "quick builds of the promising archetypes", quick, function(quickResults)
-			for _, q in ipairs(quickResults) do
-				if q.summary.score then scan[q.spec.archetype.id] = { score = q.summary.score, built = true } end
-			end
-			self:RankAndBuild(batch, scan)
-		end)
-	end)
+		if #quick == 0 then return self:RankAndBuild(batch) end
+		return self:SetPhase(batch, "quick", quick)
+	elseif batch.phase == "quick" then
+		batch.scan = batch.scan or { }
+		for _, s in ipairs(done) do
+			if s.score then batch.scan[s.archetypeId] = { score = s.score, built = true } end
+		end
+		return self:RankAndBuild(batch)
+	else
+		return self:Finish(batch)
+	end
+end
+
+function GenerationQueueClass:FirstError(batch)
+	for _, s in ipairs(batch.specs or { }) do
+		if s.error then return self:Label(batch, s.archetypeId) .. ": " .. tostring(s.error) end
+	end
 end
 
 -- The best archetypes of a scan fully built (as the automatic mode does it)
-function GenerationQueueClass:RankAndBuild(batch, scan)
+function GenerationQueueClass:RankAndBuild(batch)
 	local learning = LoadModule("Modules/GeneratorLearning")
 	local ranked = { }
-	for _, a in ipairs(batch.archetypes) do
-		local s = scan[a.id]
-		if s and s.built and not s.error and s.score then
+	for id, s in pairs(batch.scan or { }) do
+		local a = self:Archetype(batch, id)
+		if a and type(s) == "table" and s.built and not s.error and s.score then
 			t_insert(ranked, { archetype = a, quick = s.score, priority = learning.Priority(a.id, s.score, batch.learningContext) })
 		end
 	end
@@ -209,107 +380,113 @@ function GenerationQueueClass:RankAndBuild(batch, scan)
 		if a.priority ~= b.priority then return a.priority > b.priority end
 		return a.archetype.id < b.archetype.id
 	end)
-	local candidates, scores, inList = { }, { }, { }
+	local ids, scores, inList = { }, { }, { }
 	batch.quickScores = { }
 	local best
 	for _, r in ipairs(ranked) do
 		local same = false
 		for _, s in ipairs(scores) do if math.abs(s - r.quick) < 1e-6 then same = true end end
 		best = best or r.priority
-		if not same and (#candidates < 3 or (#candidates < 5 and r.priority >= best - 0.5)) then
-			t_insert(candidates, r.archetype)
+		if not same and (#ids < 3 or (#ids < 5 and r.priority >= best - 0.5)) then
+			t_insert(ids, r.archetype.id)
 			t_insert(scores, r.quick)
-			inList[r.archetype] = true
+			inList[r.archetype.id] = true
 			batch.quickScores[r.archetype.id] = r.quick
 		end
 	end
 	local anchors = 0
 	for _, r in ipairs(ranked) do
-		if anchors < 2 and r.archetype.forced and not inList[r.archetype] then
-			t_insert(candidates, r.archetype)
+		if anchors < 2 and r.archetype.forced and not inList[r.archetype.id] then
+			t_insert(ids, r.archetype.id)
+			inList[r.archetype.id] = true
 			batch.quickScores[r.archetype.id] = r.quick
 			anchors = anchors + 1
 		end
 	end
+	-- (the best two together, when they can be combined)
 	if batch.hybrid and ranked[1] and ranked[2] then
-		local hybrid = batch.hybrid(ranked[1].archetype, ranked[2].archetype)
-		if hybrid then t_insert(candidates, hybrid) end
+		local hybridId = ranked[1].archetype.id .. "+" .. ranked[2].archetype.id
+		if self:Archetype(batch, hybridId) and not inList[hybridId] then t_insert(ids, hybridId) inList[hybridId] = true end
 	end
 	-- (and the build doctor's two best combinations of commitments)
 	local added = 0
 	for _, c in ipairs(batch.combos or { }) do
 		if added >= 2 then break end
-		if batch.comboArchetype and c.ids and c.ids:find("+", 1, true) and (c.predicted or 0) >= 1.5 then
-			local combo = batch.comboArchetype(c.ids)
-			if combo then
-				combo.label = string.format("Combination: %s (predicted x%.1f damage)", c.ids, c.predicted)
-				t_insert(candidates, combo)
-				added = added + 1
-			end
+		if c.ids and c.ids:find("+", 1, true) and (c.predicted or 0) >= 1.5 and not inList[c.ids] and self:Archetype(batch, c.ids) then
+			t_insert(ids, c.ids)
+			inList[c.ids] = true
+			added = added + 1
 		end
 	end
-	if #candidates == 0 then candidates = { batch.standard } end
-	self:FullPhase(batch, candidates)
-end
-
-function GenerationQueueClass:FullPhase(batch, archetypes)
-	local specs = { }
-	for _, a in ipairs(archetypes) do
-		for v = 1, m_max(1, batch.tries or 1) do t_insert(specs, { archetype = a, variant = v }) end
-	end
-	self:RunPhase(batch, "full builds", specs, function(results)
-		local learning = LoadModule("Modules/GeneratorLearning")
-		local bestR
-		for _, r in ipairs(results) do
-			local quick = batch.quickScores and batch.quickScores[r.spec.archetype.id]
-			if quick and r.summary.score and (r.spec.variant or 1) == 1 then
-				pcall(learning.Record, r.spec.archetype.id, batch.skillLabel, quick, r.summary.score, batch.learningContext)
-			end
-			if r.summary.score and (not bestR or r.summary.score > bestR.summary.score) then bestR = r end
-		end
-		if not bestR then return self:Fail(batch, batch.failures[1] or "no build was made") end
-		self:Finish(batch, bestR, results)
-	end)
+	if #ids == 0 then ids = { batch.standardId } end
+	return self:SetPhase(batch, "full", self:FullSpecs(batch, ids))
 end
 
 -- The best build with the others as loadouts, saved in the builds folder
-function GenerationQueueClass:Finish(batch, best, results)
-	local list = { { xml = best.xml, title = string.format("%s try %d %.2f", best.spec.archetype.label, best.spec.variant or 1, best.summary.score) } }
-	local others = { }
-	for _, r in ipairs(results) do
-		if r ~= best and r.xml and r.summary.score then t_insert(others, r) end
+function GenerationQueueClass:Finish(batch)
+	local learning = LoadModule("Modules/GeneratorLearning")
+	local results = { }
+	for _, s in ipairs(batch.specs or { }) do
+		if s.state == "done" and s.file and s.score then
+			local xml = readFile(s.file)
+			if xml then t_insert(results, { spec = s, xml = xml }) end
+			local quick = batch.quickScores and batch.quickScores[s.archetypeId]
+			if quick and (s.variant or 1) == 1 then
+				pcall(learning.Record, s.archetypeId, batch.skillLabel, quick, s.score, batch.learningContext)
+			end
+		end
 	end
-	table.sort(others, function(a, b) return a.summary.score > b.summary.score end)
-	for i = 1, m_min(7, #others) do
-		local r = others[i]
-		t_insert(list, { xml = r.xml, title = string.format("%s try %d %.2f", r.spec.archetype.label, r.spec.variant or 1, r.summary.score),
-			summary = r.summary.dps and string.format("damage %s, effective hit pool %s", formatNumSep(string.format("%.0f", r.summary.dps)), formatNumSep(string.format("%.0f", r.summary.ehp or 0))) or nil })
+	table.sort(results, function(a, b) return a.spec.score > b.spec.score end)
+	local best = results[1]
+	if not best then
+		-- (no build finished: the best partial one is kept, it can be opened)
+		for _, s in ipairs(batch.specs or { }) do
+			if s.partialFile and not batch.partialFile then batch.partialFile = s.partialFile end
+		end
+		return self:Fail(batch, self:FirstError(batch) or "no build was made")
+	end
+	local list = { }
+	for i = 1, m_min(8, #results) do
+		local r = results[i]
+		t_insert(list, { xml = r.xml, title = string.format("%s try %d %.2f", self:Label(batch, r.spec.archetypeId), r.spec.variant or 1, r.spec.score),
+			summary = r.spec.dps and string.format("damage %s, effective hit pool %s", formatNumSep(string.format("%.0f", r.spec.dps)), formatNumSep(string.format("%.0f", r.spec.ehp or 0))) or nil })
 	end
 	local xml = best.xml
 	if #list > 1 and main.generatorLoadouts ~= false then
 		local ok, merged = pcall(LoadModule("Modules/BuildLoadouts").Merge, list)
 		if ok and merged then xml = merged end
 	end
-	batch.best = best
-	batch.xml = xml
-	batch.status = "done"
-	batch.finished = GetTime()
+	batch.best = { archetypeId = best.spec.archetypeId, score = best.spec.score }
 	-- saved: Generated/<name>.xml in the builds folder
-	local name = (batch.buildName .. " " .. best.spec.archetype.label .. " " .. os.date("%Y-%m-%d %H%M")):gsub("[\\/:%*%?\"<>|]", "-")
-	local folder = main.buildPath .. "Generated/"
-	pcall(MakeDir, folder)
-	local path = folder .. name .. ".xml"
-	local f = io.open(path, "w")
-	if not f then
+	local name = (batch.buildName .. " " .. self:Label(batch, best.spec.archetypeId) .. " " .. os.date("%Y-%m-%d %H%M")):gsub("[\\/:%*%?\"<>|]", "-")
+	local dir = main.buildPath .. "Generated/"
+	pcall(MakeDir, dir)
+	local path = dir .. name .. ".xml"
+	if not writeFile(path, xml) then
 		-- (no Generated folder: the builds folder itself)
 		path = main.buildPath .. name .. ".xml"
-		f = io.open(path, "w")
+		if not writeFile(path, xml) then path = nil end
 	end
-	if f then
-		f:write(xml)
-		f:close()
+	if path then
 		batch.file, batch.fileBuildName = path, name
+	else
+		-- (kept in the queue's folder, opened from there)
+		batch.file = folder() .. batch.id .. "_result.xml"
+		writeFile(batch.file, xml)
+		batch.fileBuildName = nil
 	end
+	batch.status = "done"
+	batch.finishedWall = os.time()
+	self:Save()
+	self:Pump()
+end
+
+function GenerationQueueClass:Fail(batch, err)
+	batch.status = "failed"
+	batch.error = tostring(err)
+	batch.finishedWall = os.time()
+	ConPrintf("Background generation failed: %s", tostring(err))
+	self:Save()
 	self:Pump()
 end
 
@@ -317,8 +494,25 @@ function GenerationQueueClass:Stop(batch)
 	if batch.pg then batch.pg:Stop() batch.pg = nil end
 	if batch.status == "running" or batch.status == "waiting" then
 		batch.status = "stopped"
-		batch.finished = GetTime()
+		batch.finishedWall = os.time()
+		for _, s in ipairs(batch.specs or { }) do
+			if s.state == "running" then s.state = "pending" s.attempts = m_max(0, (s.attempts or 1) - 1) end
+		end
 	end
+	self:Save()
+	self:Pump()
+end
+
+-- A stopped or failed generation goes on from what is missing
+function GenerationQueueClass:Resume(batch)
+	if batch.status ~= "stopped" and batch.status ~= "failed" then return end
+	for _, s in ipairs(batch.specs or { }) do
+		if s.state == "failed" or s.state == "running" then s.state = "pending" s.attempts = 0 end
+	end
+	batch.error = nil
+	batch.status = "waiting"
+	batch.resumed = true
+	self:Save()
 	self:Pump()
 end
 
@@ -327,14 +521,21 @@ function GenerationQueueClass:Remove(batch)
 	for i, b in ipairs(self.batches) do
 		if b == batch then t_remove(self.batches, i) break end
 	end
+	-- (its builds in the queue's folder; a finished one stays in the builds folder)
+	for _, s in ipairs(batch.specs or { }) do
+		if s.file then os.remove(s.file) end
+		if s.partialFile and s.partialFile ~= batch.partialFile then os.remove(s.partialFile) end
+	end
+	self:Save()
 end
 
 function GenerationQueueClass:Open(batch)
 	local function open()
-		if batch.file then
+		if batch.file and batch.fileBuildName then
 			main:SetMode("BUILD", batch.file, batch.fileBuildName)
-		elseif batch.xml then
-			main:SetMode("BUILD", false, batch.buildName, batch.xml)
+		else
+			local xml = readFile(batch.file or batch.partialFile)
+			if xml then main:SetMode("BUILD", false, batch.buildName .. (batch.file and "" or " (partly built)"), xml) end
 		end
 	end
 	local current = main.modes["BUILD"]
@@ -345,36 +546,55 @@ function GenerationQueueClass:Open(batch)
 	end
 end
 
--- One line of text per batch
+------------------------------------------------------------------------------
+-- Panel
+------------------------------------------------------------------------------
+
+local phaseLabels = { scan = "planning the archetypes", quick = "quick builds of the promising archetypes", full = "full builds" }
+
+-- The lines of text for a batch
 function GenerationQueueClass:Describe(batch)
-	local now = GetTime()
-	local elapsed = ((batch.finished or now) - (batch.started or now)) / 1000
+	local elapsed = (batch.elapsedBefore or 0) + ((batch.finishedWall or os.time()) - (batch.startedWall or os.time()))
+	local done, total = 0, 0
+	for _, s in ipairs(batch.specs or { }) do
+		total = total + 1
+		if s.state == "done" then done = done + 1 end
+	end
 	if batch.status == "waiting" then
-		return "^7" .. batch.title, "^xC0C0C0waiting for the generation before it"
+		return "^7" .. batch.title, batch.resumed and "^xC0C0C0waiting to go on from where it stopped" or "^xC0C0C0waiting for the generation before it"
 	elseif batch.status == "running" then
 		local stage
 		for _, e in pairs(batch.running or { }) do
 			if not stage or (e.progress or 0) > (stage.progress or 0) then stage = e end
 		end
-		local line2 = string.format("^xC0C0C0%s: %d/%d builds done%s, %s", batch.phase or "starting", batch.jobsDone, batch.jobsTotal,
-			batch.bestScore and string.format(", best %.2f", batch.bestScore) or "", formatSeconds(elapsed))
-		local line3 = stage and string.format("^x808080%s: %s", stage.spec.archetype and stage.spec.archetype.label or "", tostring(stage.stage or "")) or ""
+		local line2 = string.format("^xC0C0C0%s: %d/%d builds done%s, %s", phaseLabels[batch.phase] or "starting", done, total,
+			batch.bestScore and string.format(", best %.2f", batch.bestScore) or "", formatSeconds(os.time() - (batch.startedWall or os.time())))
+		local line3 = stage and string.format("^x808080%s: %s", self:Label(batch, stage.spec.archetypeId), tostring(stage.stage or "")) or ""
 		return "^7" .. batch.title, line2, line3
 	elseif batch.status == "done" then
-		return "^x33FF77" .. batch.title, string.format("^7Done in %s: %s, score %.2f%s", formatSeconds(elapsed), batch.best.spec.archetype.label, batch.best.summary.score,
-			batch.file and " (saved in your builds folder)" or " (not saved: open it and save it)")
+		return "^x33FF77" .. batch.title, string.format("^7Done: %s, score %.2f%s", self:Label(batch, batch.best and batch.best.archetypeId), batch.best and batch.best.score or 0,
+			batch.fileBuildName and " (saved in your builds folder, Generated)" or "")
 	elseif batch.status == "stopped" then
-		return "^xC0C0C0" .. batch.title, "^xC0C0C0Stopped"
+		return "^xC0C0C0" .. batch.title, string.format("^xC0C0C0Stopped (%s, %d/%d builds done): Resume goes on from there", phaseLabels[batch.phase] or "not started", done, total)
 	else
-		return colorCodes.NEGATIVE .. batch.title, colorCodes.NEGATIVE .. "Failed: ^7" .. tostring(batch.error or "?"):sub(1, 80)
+		return colorCodes.NEGATIVE .. batch.title, colorCodes.NEGATIVE .. "Failed: ^7" .. tostring(batch.error or "?"):gsub("\n.*", ""),
+			batch.partialFile and "^xC0C0C0The build made so far is kept: Open. Resume tries again." or "^xC0C0C0Resume tries again."
 	end
 end
 
-local width, rowHeight, maxRows = 460, 54, 6
+local width, rowHeight, maxRows = 500, 54, 6
 
 function GenerationQueueClass:Height()
 	if self.collapsed then return 26 end
 	return 30 + m_max(1, m_min(maxRows, #self.batches)) * rowHeight
+end
+
+local function fit(text, size, maxWidth)
+	if DrawStringWidth(size, "VAR", text) > maxWidth then
+		while #text > 4 and DrawStringWidth(size, "VAR", text .. "...") > maxWidth do text = text:sub(1, -2) end
+		text = text .. "..."
+	end
+	return text
 end
 
 function GenerationQueueClass:BuildPanel()
@@ -395,27 +615,27 @@ function GenerationQueueClass:BuildPanel()
 		local y = 28 + (i - 1) * rowHeight
 		controls["line1_" .. i] = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {8, y, 0, 14}, function()
 			local b = batch()
-			return b and (select(1, queue:Describe(b))) or ""
+			return b and fit((select(1, queue:Describe(b))), 14, width - 200) or ""
 		end)
 		controls["line2_" .. i] = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {8, y + 16, 0, 12}, function()
 			local b = batch()
-			return b and (select(2, queue:Describe(b))) or ""
+			return b and fit((select(2, queue:Describe(b))) or "", 12, width - 16) or ""
 		end)
 		controls["line3_" .. i] = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {8, y + 31, 0, 12}, function()
 			local b = batch()
-			local text = b and (select(3, queue:Describe(b))) or ""
-			if DrawStringWidth(12, "VAR", text) > width - 150 then
-				while #text > 4 and DrawStringWidth(12, "VAR", text .. "...") > width - 150 do text = text:sub(1, -2) end
-				text = text .. "..."
-			end
-			return text
+			return b and fit((select(3, queue:Describe(b))) or "", 12, width - 16) or ""
 		end)
-		controls["open_" .. i] = new("ButtonControl"):ButtonControl({"TOPRIGHT",nil,"TOPRIGHT"}, {-72, y + 2, 60, 18}, "Open", function()
+		controls["open_" .. i] = new("ButtonControl"):ButtonControl({"TOPRIGHT",nil,"TOPRIGHT"}, {-128, y, 56, 18}, "Open", function()
 			local b = batch()
 			if b then queue:Open(b) end
 		end)
-		controls["open_" .. i].shown = function() local b = batch() return b and b.status == "done" end
-		controls["stop_" .. i] = new("ButtonControl"):ButtonControl({"TOPRIGHT",nil,"TOPRIGHT"}, {-6, y + 2, 60, 18}, function()
+		controls["open_" .. i].shown = function() local b = batch() return b and (b.status == "done" or (b.status ~= "running" and b.partialFile ~= nil)) end
+		controls["resume_" .. i] = new("ButtonControl"):ButtonControl({"TOPRIGHT",nil,"TOPRIGHT"}, {-66, y, 58, 18}, "Resume", function()
+			local b = batch()
+			if b then queue:Resume(b) end
+		end)
+		controls["resume_" .. i].shown = function() local b = batch() return b and (b.status == "stopped" or b.status == "failed") end
+		controls["stop_" .. i] = new("ButtonControl"):ButtonControl({"TOPRIGHT",nil,"TOPRIGHT"}, {-6, y, 56, 18}, function()
 			local b = batch()
 			return b and (b.status == "running" or b.status == "waiting") and "Stop" or "Remove"
 		end, function()
