@@ -767,6 +767,17 @@ function AutoConfigClass:Run()
 			self:Set("traumaStacks", stacks, string.format("trauma held at %d of the %d the attack rate keeps up: each stack costs %.0f life a hit, recovery %.0f a second",
 				stacks, math.floor(output.SustainableTrauma), perStack, recovery))
 		end
+		-- Brands: PoB counts none active unless told ("per brand" lines then give
+		-- nothing); a player keeps as many out as the cast rate and the brand
+		-- duration allow, up to the limit
+		local mainSkill = env.player.mainSkill
+		if mainSkill and mainSkill.skillTypes and mainSkill.skillTypes[SkillType.Brand] and (output.ActiveBrandLimit or 0) > 0 then
+			-- (no duration: the brand stays attached until it acts - Penance Brand, poewiki)
+			local sustained = output.Duration and (output.Speed or 0) * output.Duration or output.ActiveBrandLimit
+			local brands = math.max(1, math.min(output.ActiveBrandLimit, math.floor(sustained)))
+			setIfUsed("ActiveBrands", brands, output.Duration and string.format("%d brands out: %.1f casts a second x %.1f s duration, limit %d", brands, output.Speed or 0, output.Duration, output.ActiveBrandLimit)
+				or string.format("%d brands out (the limit): they stay attached until they act", brands))
+		end
 		if (output.EnergyShield or 0) > 0 and (output.EnergyShield or 0) >= (output.Life or 0) then
 			setIfUsed("conditionHaveEnergyShield", true, "the energy shield pool is the main one")
 		end
@@ -953,7 +964,17 @@ function AutoConfigClass:Run()
 		local life, unreserved = output.Life or 0, output.LifeUnreserved
 		if life > 1 and unreserved then
 			local lowLife = unreserved / life <= 0.5
-			setIfUsed("conditionLowLife", lowLife, lowLife and "half of life or more is reserved" or "life is not reserved to low life")
+			local petrified = false
+			for _, group in ipairs(self.build.skillsTab.socketGroupList or { }) do
+				if group.enabled ~= false then
+					for _, g in ipairs(group.gemList or { }) do
+						if g.enabled ~= false and g.gemData and g.gemData.name == "Petrified Blood" then petrified = true end
+					end
+				end
+			end
+			-- poewiki Petrified Blood: life recovery other than flasks cannot
+			-- recover life above low life, so after the first hits the build sits there
+			setIfUsed("conditionLowLife", lowLife or petrified, lowLife and "half of life or more is reserved" or petrified and "Petrified Blood: life is not recovered above low life" or "life is not reserved to low life")
 		end
 	end
 	self:Recalculate()

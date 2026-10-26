@@ -92,7 +92,18 @@ SkillProfilesClass.list = {
 	{ pattern = "^Glacial Cascade", combine = { { part = "Initial Bursts", weight = 2 }, { part = "Final Burst", weight = 1 } }, note = "2 initial bursts and the final burst hitting a boss" },
 	{ pattern = "^Venom Gyre", combine = { { part = "Outgoing Projectile", weight = 1 }, { part = "Returning Projectile", weight = 1 } }, note = "projectiles hitting a boss going out and coming back" },
 	{ pattern = "^Static Strike", combine = { { part = "Melee hit", weight = 1 }, { part = "Beams", weight = 1 } }, note = "the melee hit and the beams on a boss" },
-	{ pattern = "^Lightning Strike", combine = { { part = "Melee hit", weight = 1 }, { part = "Projectiles", weight = 1 } }, note = "the melee hit and its projectiles hitting a boss" },
+	-- (poewiki: projectiles created by a strike that hits an enemy don't hit that
+	-- enemy, unless they come back: on a single boss only the melee hit lands,
+	-- the projectiles hit returning with Returning Projectiles)
+	{ pattern = "^Lightning Strike", combine = { { part = "Melee hit", weight = 1 }, { part = "Projectiles", weight = function(ctx)
+		if not ctx.boss then return 1 end
+		local build = ctx.gen and ctx.gen.build
+		local group = ctx.gen and ctx.gen.mainGroup
+		for _, g in ipairs(group and group.gemList or { }) do
+			if g.enabled ~= false and g.gemData and g.gemData.name == "Returning Projectiles" then return 1 end
+		end
+		return 0
+	end } }, note = "the melee hit (a boss isn't hit by the strike's own projectiles unless they return); projectiles on other enemies while mapping" },
 	{ pattern = "^Bladestorm", combine = { { part = "Attack", weight = 1 }, { part = "Bladestorm", weight = 1 } }, note = "the attack and one storm on a boss" },
 	{ pattern = "^Ice Crash", combine = { { part = "First Hit", weight = 1 / 3 }, { part = "Second Hit", weight = 1 / 3 }, { part = "Third Hit", weight = 1 / 3 } }, note = "the three hits in turn (their average)" },
 	-- Spark: projectiles wander; "Maximum Hits" is a boss in a corner. About a
@@ -147,8 +158,11 @@ SkillProfilesClass.list = {
 	{ pattern = "^Shattering Steel", combine = { { part = "Projectile", weight = 1 }, { part = "Cone AoE", weight = 1 } }, note = "the projectiles and the cone at close range" },
 	{ pattern = "^Smite", combine = { { part = "Melee Hit", weight = 1 }, { part = "Area Hit", weight = 1 } }, note = "the strike and its lightning on a boss" },
 	{ pattern = "^Volcanic Fissure", combine = { { part = "Ground Fissure", weight = 1 }, { part = "Magma Balls", weight = 1 } }, note = "the fissure and its magma balls on a boss" },
-	{ pattern = "^Wild Strike", combine = { { part = "Fire hit", weight = 1 / 3 }, { part = "Fire explosion", weight = 1 / 3 }, { part = "Lightning hit", weight = 1 / 3 },
-		{ part = "Lightning bolt", weight = 1 / 3 }, { part = "Cold hit", weight = 1 / 3 }, { part = "Icy wave", weight = 1 / 3 } }, note = "each element in turn, with its secondary hit" },
+	-- (poewiki: an enemy hit by the melee part can't be hit by the secondary
+	-- effect - on a single boss only the strikes land; the explosion, bolt or
+	-- wave hit the rest of a pack)
+	{ pattern = "^Wild Strike", combine = { { part = "Fire hit", weight = 1 / 3 }, { part = "Fire explosion", weight = bossOr(0, 1 / 3) }, { part = "Lightning hit", weight = 1 / 3 },
+		{ part = "Lightning bolt", weight = bossOr(0, 1 / 3) }, { part = "Cold hit", weight = 1 / 3 }, { part = "Icy wave", weight = bossOr(0, 1 / 3) } }, note = "each element in turn; its secondary hit only on the rest of a pack (an enemy struck isn't hit by it)" },
 	{ pattern = "^Tornado of Elemental Turbulence", combine = { { part = "Fire", weight = 1 / 3 }, { part = "Lightning", weight = 1 / 3 }, { part = "Cold", weight = 1 / 3 } }, note = "the three elements in turn" },
 	-- conditions the skill is used under
 	{ pattern = "^Cyclone", config = { channellingCycloneCheck = true }, note = "channelled" },

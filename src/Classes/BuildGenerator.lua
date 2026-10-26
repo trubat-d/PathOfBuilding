@@ -343,12 +343,14 @@ function BuildGeneratorClass:UpdateCombinedParts()
 	local current = first.skillPartCalcs or first.skillPart or 1
 	local total, shown = 0, nil
 	for _, entry in ipairs(rule) do
+		if entry.weight == 0 and entry.part ~= current then goto nextPart end
 		first.skillPart, first.skillPartCalcs = entry.part, entry.part
 		self.build.skillsTab:ProcessSocketGroup(self.mainGroup)
 		local output = self.calcFunc({ })
 		local hit = output.TotalDPS or 0
 		total = total + entry.weight * hit
 		if entry.part == current then shown = hit end
+		::nextPart::
 	end
 	first.skillPart, first.skillPartCalcs = current, current
 	self.build.skillsTab:ProcessSocketGroup(self.mainGroup)
