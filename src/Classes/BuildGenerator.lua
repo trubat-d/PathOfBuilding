@@ -7802,6 +7802,18 @@ function BuildGeneratorClass:Run()
 		costLine = string.format("Estimated cost of the build: %s (uniques, anoints, tattoos and gems at %s; rares estimated from their mods, influences and implicits)%s",
 			prices.FormatPrice(buildTotal), phaseLabel, noPrice > 0 and string.format(", plus %d part%s with no price", noPrice, noPrice == 1 and "" or "s") or "")
 	end
+	local assumptions = {
+		"Investment level: " .. opts.investment.label,
+		"Main skill in a 6-link body armour, utility setups in the helmet, gloves, boots and weapon sockets; gems at their normal maximum level with 20% quality",
+		"Abyss jewels are not used; cluster jewels are Large ones with 8 passives",
+		"Configuration set automatically for: " .. ((opts.configScenario and opts.configScenario.label) or "Pinnacle boss") .. ", see the changes below",
+		"Rares use " .. ((opts.quality and opts.quality.label) or "tier 2-3, average rolls") .. (opts.crafts ~= false and ", with up to one crafting bench mod" or ""),
+	}
+	-- the generation's log in the build's notes: what was chosen and why
+	-- travels with the build (an export, a shared link)
+	if opts.writeNotes ~= false then
+		pcall(function() self:WriteNotes(assumptions, costLine) end)
+	end
 	return {
 		log = self.log,
 		final = final,
@@ -7809,12 +7821,39 @@ function BuildGeneratorClass:Run()
 		configChanges = self.configChanges or { },
 		costLine = costLine,
 		knowledge = self.knowRecords,
-		assumptions = {
-			"Investment level: " .. opts.investment.label,
-			"Main skill in a 6-link body armour, utility setups in the helmet, gloves, boots and weapon sockets; gems at their normal maximum level with 20% quality",
-			"Abyss jewels are not used; cluster jewels are Large ones with 8 passives",
-			"Configuration set automatically for: " .. ((opts.configScenario and opts.configScenario.label) or "Pinnacle boss") .. ", see the changes below",
-			"Rares use " .. ((opts.quality and opts.quality.label) or "tier 2-3, average rolls") .. (opts.crafts ~= false and ", with up to one crafting bench mod" or ""),
-		},
+		assumptions = assumptions,
 	}
+end
+
+-- The build's notes: the generation log, its assumptions, the configuration
+-- it switched on and the cost (kept under any notes the build had)
+function BuildGeneratorClass:WriteNotes(assumptions, costLine)
+	local notesTab = self.build.notesTab
+	local edit = notesTab and notesTab.controls and notesTab.controls.edit
+	if not edit then return end
+	local lines = { "Generated build (" .. (self.className or "?") .. " " .. (self.ascendName or "") .. ", " .. (self.mainGem and self.mainGem.name or "?") .. ")", "" }
+	t_insert(lines, "Assumptions:")
+	for _, a in ipairs(assumptions or { }) do t_insert(lines, "- " .. a) end
+	local input = self.build.configTab and self.build.configTab.input or { }
+	local config = { }
+	for k, v in pairs(input) do
+		if v ~= false and v ~= 0 and v ~= "" and (k:match("^condition") or k:match("^multiplier") or k:match("^buff") or k:match("^use%a+Charges$") or k:match("^override") or k:match("^enemy")) then
+			t_insert(config, k .. " = " .. tostring(v))
+		end
+	end
+	t_sort(config)
+	if #config > 0 then
+		t_insert(lines, "")
+		t_insert(lines, "Configuration switched on (AutoConfig: what the build itself keeps up, the fight it is scored for):")
+		for _, c in ipairs(config) do t_insert(lines, "- " .. c) end
+	end
+	t_insert(lines, "")
+	t_insert(lines, "What the generator did, in order:")
+	for _, l in ipairs(self.log or { }) do t_insert(lines, "- " .. l) end
+	if costLine then t_insert(lines, "") t_insert(lines, costLine) end
+	local old = edit.buf or ""
+	-- (a previous generation's notes replaced, the player's own kept)
+	old = old:gsub("^Generated build %b().-\n%-%-%-%-\n", "")
+	edit:SetText(table.concat(lines, "\n") .. "\n----\n" .. old)
+	self.build.notesTab.modified = true
 end
