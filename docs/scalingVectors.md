@@ -149,3 +149,15 @@ source did.
   baseline is now made only when a trial wins, and a trial stops after the
   tree when the rares can't make it a gain. PoB's environment reuse
   (accelerate flags) was no faster for node trials and not exact: not used.
+
+#### Self damage (Boneshatter)
+PoB counts the trauma stacks the attack rate keeps up - 120 on a fast
+Boneshatter - and each hit then deals its user damage per stack: 12,316 a hit
+against 5,313 life, yet the build scored 34M DPS. The self damage of a skill
+(SelfHitDamage: trauma, Scold's Bridle, Heartbound Loop...) is now a life
+cost per use in the sustain check, and AutoConfig holds trauma at what the
+recovery pays for (self damage per second at most the life recovery, one hit
+at most 40% of the pool). The top players' builds leech enough to keep theirs
+(19.29 / 65M); with it the generator builds for the recovery: mid-tier 18.69 /
+15.6M at 80 div, 19.17 / 26.9M at 292 div, level with the best player's 19.16
+(same scoring, 297 div).
