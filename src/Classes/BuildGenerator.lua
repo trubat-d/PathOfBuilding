@@ -1785,7 +1785,7 @@ function BuildGeneratorClass:ChooseBloodline()
 	end
 	-- (and kept out of the full allocations while there are no flasks)
 	local savedForbidden = self.forbiddenNodes
-	if not hasFlasks then
+	if not hasFlasks or self.forbidFlaskDisabling then
 		self.forbiddenNodes = { }
 		for k, v in pairs(savedForbidden or { }) do self.forbiddenNodes[k] = v end
 		for id, node in pairs(spec.nodes) do
@@ -1990,11 +1990,23 @@ end
 function BuildGeneratorClass:BloodlineRecheck()
 	local spec = self.build.spec
 	if self.options.bloodlines == false or not spec.tree.alternate_ascendancies then return 0 end
+	local function flasksDisabled()
+		for _, node in pairs(spec.allocNodes) do
+			if node.ascendancyName and table.concat(node.sd or { }, " "):find("Flasks are Disabled", 1, true) then return true end
+		end
+		return false
+	end
 	local before = self:FullScore()
 	local snap = self:Snapshot()
 	local savedBloodline = self.bloodlineId
 	local savedLog = #self.log
-	local ok, err = pcall(function() self:ChooseBloodline() end)
+	local wasDisabled = flasksDisabled()
+	local ok, err = pcall(function()
+		self:ChooseBloodline()
+		-- (utility flasks back on: made again, those kept while they were
+		-- disabled were chosen for nothing)
+		if wasDisabled and not flasksDisabled() then self:MakeFlasks() end
+	end)
 	if not ok then ConPrintf("Bloodline recheck failed: %s", tostring(err)) end
 	self:AutoConfigure()
 	local after = ok and self:FullScore() or before
@@ -2013,6 +2025,52 @@ function BuildGeneratorClass:BloodlineRecheck()
 		end
 		self:AutoConfigure()
 		after = before
+	end
+	-- (a bloodline whose path disables utility flasks - Toad's Price, on the
+	-- way to the Nameless Bloodline's third ring - against the best one that
+	-- doesn't, with the utility flasks made again: the ring against the
+	-- flasks and another ascendancy notable. A Penance Brand Elementalist
+	-- gained +0.35 from Bringer of Ruin and its flasks over the third ring;
+	-- ChooseBloodline alone compared them with no flasks to get back)
+	if flasksDisabled() then
+		local current = self:FullScore()
+		local snap2 = self:Snapshot()
+		local savedBloodline2 = self.bloodlineId
+		local savedLog2 = #self.log
+		self.forbidFlaskDisabling = true
+		local ok2, err2 = pcall(function()
+			self:ChooseBloodline()
+			-- (no slot, no third ring)
+			local env2 = self.build.calcsTab.mainEnv
+			local r3 = self.itemsTab.slots["Ring 3"]
+			if r3 and (r3.selItemId or 0) ~= 0 and env2 and not env2.modDB:Flag(nil, "AdditionalRingSlot") then
+				r3:SetSelItemId(0)
+				self.itemsTab:PopulateSlots()
+				self:Recalculate()
+			end
+			self:MakeFlasks()
+			self:AutoConfigure()
+			self:RefineTree(8)
+		end)
+		self.forbidFlaskDisabling = nil
+		if not ok2 then ConPrintf("Bloodline recheck (flasks) failed: %s", tostring(err2)) end
+		self:AutoConfigure()
+		local withFlasks = ok2 and self:FullScore() or current
+		if ok2 and withFlasks > current + 0.005 then
+			for i = #self.log, savedLog2 + 1, -1 do if not self.log[i]:match("^Bloodline") and not self.log[i]:match("^Flasks") then t_remove(self.log, i) end end
+			self:Note(string.format("Utility flasks kept over a bloodline path that disables them (Toad's Price, third ring): score %+.3f", withFlasks - current))
+			after = after + (withFlasks - current)
+		else
+			for i = #self.log, savedLog2 + 1, -1 do t_remove(self.log, i) end
+			self:Restore(snap2)
+			if spec.SelectSecondaryAscendClass and self.bloodlineId ~= savedBloodline2 then
+				local undo = spec:CreateUndoState()
+				spec:SelectSecondaryAscendClass(savedBloodline2 or 0)
+				spec:RestoreUndoState(undo)
+				self.bloodlineId = savedBloodline2
+			end
+			self:AutoConfigure()
+		end
 	end
 	-- (no slot, no third ring)
 	local env = self.build.calcsTab.mainEnv
