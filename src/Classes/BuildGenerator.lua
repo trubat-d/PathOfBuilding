@@ -1886,6 +1886,81 @@ end
 -- third ring comes through Toad's Price, utility flasks disabled (a mid-tier
 -- Righteous Fire took it for the ring and ended 0.8 below). Kept if better;
 -- a third ring left without its slot is taken out.
+-- The jewellery bases chosen again for the finished build: the bases are
+-- chosen with the first gear, when resistance implicits (Two-Stone Rings) are
+-- worth the most; with the rares made, another base's implicit can be worth
+-- more. Each rare amulet / ring / belt is tried with every base of its type,
+-- its mods kept (their pools are the same), kept on the best base.
+function BuildGeneratorClass:JewelleryBaseMove()
+	local kept = { }
+	for _, slotName in ipairs({ "Amulet", "Ring 1", "Ring 2", "Ring 3", "Belt" }) do
+		local slot = self.itemsTab.slots[slotName]
+		local item = slot and slot.selItemId ~= 0 and self.itemsTab.items[slot.selItemId]
+		if item and item.rarity == "RARE" and item.base and item.raw and not (self.lockedSlots and self.lockedSlots[slotName])
+			and (not slot.IsShown or slot:IsShown()) then
+			local baseType = item.base.type
+			local lines = { }
+			for line in item.raw:gmatch("[^\n]+") do t_insert(lines, line) end
+			-- (the raw's base line and its implicits, swapped)
+			local baseIndex, implicitIndex, implicitCount
+			for i, l in ipairs(lines) do
+				if l == item.baseName and not baseIndex then baseIndex = i end
+				local n = l:match("^Implicits: (%d+)$")
+				if n and not implicitIndex then implicitIndex, implicitCount = i, tonumber(n) end
+			end
+			if baseIndex and implicitIndex then
+				self:Recalculate()
+				local current = self:Score()
+				local best, bestScore
+				for _, baseName in ipairs(self:BasesOfType(function(base) return base.type == baseType end)) do
+					if baseName ~= item.baseName then
+						local newLines = { }
+						for i, l in ipairs(lines) do
+							if i == baseIndex then
+								t_insert(newLines, baseName)
+							elseif i == implicitIndex then
+								local implicits = { }
+								for imp in ((data.itemBases[baseName] and data.itemBases[baseName].implicit) or ""):gmatch("[^\n]+") do t_insert(implicits, "{range:0.5}" .. imp) end
+								t_insert(newLines, "Implicits: " .. #implicits)
+								for _, imp in ipairs(implicits) do t_insert(newLines, imp) end
+							elseif not (i > implicitIndex and i <= implicitIndex + implicitCount) then
+								t_insert(newLines, l)
+							end
+						end
+						local ok, candidate = pcall(function()
+							local c = new("Item"):Item(table.concat(newLines, "\n"))
+							c:NormaliseQuality()
+							c:BuildModList()
+							return c
+						end)
+						if ok and candidate and candidate.base then
+							local score = self:Score({ repSlotName = slotName, repItem = candidate })
+							if score > current + 0.003 and (not bestScore or score > bestScore) then best, bestScore = candidate, score end
+						end
+						self:Tick()
+					end
+				end
+				if best then
+					local before = self:FullScore()
+					local snap = self:Snapshot()
+					self:Equip(best, slotName)
+					self.itemsTab:PopulateSlots()
+					self:Recalculate()
+					local after = self:FullScore()
+					if after > before + 0.003 then
+						t_insert(kept, string.format("%s: %s instead of %s (%+.3f)", slotName, best.baseName, item.baseName, after - before))
+					else
+						self:Restore(snap)
+						self:Recalculate()
+					end
+				end
+			end
+		end
+	end
+	if #kept > 0 then self:Note("Jewellery bases chosen again for the finished build: " .. table.concat(kept, ", ")) end
+	return #kept
+end
+
 -- The flasks chosen again for the finished build: they are chosen at stage
 -- 10, for the build as it was then (a Gold Flask kept for its suffix, worth
 -- nothing once the gear changed, while a Sulphur or Quicksilver Flask would
@@ -7819,6 +7894,10 @@ function BuildGeneratorClass:Run()
 	if opts.flaskRecheck ~= false then
 		local ok, err = pcall(function() self:FlaskRecheck() end)
 		if not ok then ConPrintf("Flask recheck failed: %s", tostring(err)) end
+	end
+	if opts.jewelleryBases ~= false then
+		local ok, err = pcall(function() self:JewelleryBaseMove() end)
+		if not ok then ConPrintf("Jewellery bases failed: %s", tostring(err)) end
 	end
 	if opts.finalSupports ~= false then
 		self:Move(2, 6, "Choosing the supports again")
