@@ -5278,7 +5278,9 @@ function BuildGeneratorClass:SpendBudgetMove()
 	t_sort(options, function(a, b) return a.gain / a.extra > b.gain / b.extra end)
 	local kept, gainTotal = { }, 0
 	for _, o in ipairs(options) do
-		if o.gain > 0.02 and total + o.extra <= budget then
+		-- (small gains count too: the divines are there to be spent - a
+		-- mid-tier Penance Brand kept 31 of its 80 divines for gains of 0.01)
+		if o.gain > 0.005 and total + o.extra <= budget then
 			local current = self:FullScore()
 			local snap = self:Snapshot()
 			local item = self:Equip(o.item, o.slot)
@@ -5286,7 +5288,7 @@ function BuildGeneratorClass:SpendBudgetMove()
 			self.rarePriceById[item.id] = prices:RarePrice(item, nextLevel)
 			self:Recalculate()
 			local after = self:FullScore()
-			if after > current + 0.01 then
+			if after > current + 0.003 then
 				total = total + o.extra
 				gainTotal = gainTotal + after - current
 				t_insert(kept, string.format("%s (+%s, %+.3f)", o.slot, prices.FormatPrice(o.extra), after - current))
