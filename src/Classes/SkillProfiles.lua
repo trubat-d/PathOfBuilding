@@ -70,7 +70,22 @@ SkillProfilesClass.list = {
 	{ pattern = "^Molten Strike", combine = { { part = "Melee Hit", weight = 1 }, { part = "Average Balls Hitting", weight = 1 } }, note = "the melee hit and its magma balls that land on a boss (PoB's average)" },
 	{ pattern = "^Kinetic Blast", combine = { { part = "Projectile", weight = 1 }, { part = "Explosions", weight = 2 } }, note = "the projectile and 2 of its 3 explosions hitting a boss" },
 	{ pattern = "^Earthquake", combine = { { part = "Initial impact", weight = 1 }, { part = "Aftershock", weight = 1 } }, note = "each impact and its aftershock" },
-	{ pattern = "^Earthshatter", combine = { { part = "Initial impact", weight = 1 }, { part = "Spike", weight = 1 } }, note = "each impact and its spikes shattering on a boss" },
+	-- Earthshatter's spikes shatter only when a warcry or a different slam is
+	-- used near them (poewiki), not by Earthshatter itself: counted when the
+	-- build has a warcry or another slam skill
+	{ pattern = "^Earthshatter", combine = { { part = "Initial impact", weight = 1 }, { part = "Spike", weight = function(ctx)
+		local build = ctx.gen and ctx.gen.build
+		for _, group in ipairs(build and build.skillsTab.socketGroupList or { }) do
+			if group.enabled ~= false then
+				for _, g in ipairs(group.gemList or { }) do
+					local gd = g.enabled ~= false and g.gemData
+					local types = gd and gd.grantedEffect and gd.grantedEffect.skillTypes
+					if types and not gd.grantedEffect.support and gd.name ~= "Earthshatter" and (types[SkillType.Warcry] or types[SkillType.Slam]) then return 1 end
+				end
+			end
+		end
+		return 0
+	end } }, note = "each impact, and its spikes when a warcry or another slam shatters them" },
 	{ pattern = "^Sunder", combine = { { part = "First Wave Area", weight = 1 }, { part = "Final Wave Area", weight = 1 } }, note = "the first and the final wave hitting a boss" },
 	{ pattern = "^Glacial Cascade", combine = { { part = "Initial Bursts", weight = 2 }, { part = "Final Burst", weight = 1 } }, note = "2 initial bursts and the final burst hitting a boss" },
 	{ pattern = "^Venom Gyre", combine = { { part = "Outgoing Projectile", weight = 1 }, { part = "Returning Projectile", weight = 1 } }, note = "projectiles hitting a boss going out and coming back" },
