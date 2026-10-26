@@ -762,6 +762,16 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 	else
 		tank = m_log(m_max(ehp, 1))
 	end
+	-- (killing fast is a defence too: a boss dead in 10 seconds throws fewer
+	-- of its hits than one fought for 60. The risk scales with the time the
+	-- fight lasts, life of the boss over the DPS, down to the phases and
+	-- invulnerable time no damage shortens. Counted in the defences, after
+	-- the max hit layers that no speed of kill changes)
+	if output and self.killTimeDefence ~= false then
+		local bossLife = self.bossLife or (self.bossTier == "uber" and 3e8 or 1e8)
+		local fight = m_max(self.minFightTime or 8, bossLife / m_max(dps, 1))
+		tank = tank + (self.killTimeWeight or 0.25) * m_log(60 / fight)
+	end
 	local score = self.focus.dps * m_log(m_max(dps, 1)) + self.focus.ehp * tank - penalty + self:ExtraTerms(output) + self:GoalTerms(output)
 	-- avoiding, blocking and suppressing hits (see DamageTakenShare): its own
 	-- weight, as top players value it (max block or 100% suppression is worth
