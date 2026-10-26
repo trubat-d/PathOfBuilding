@@ -3691,6 +3691,89 @@ function BuildGeneratorClass:ChooseRadiusJewels()
 	end
 end
 
+-- A cluster jewel's passives taken back when the points do more elsewhere:
+-- its notables are all allocated when it is socketed, but the third notable
+-- (or a small passive on the way) of a Large one is often worth less than a
+-- passive of the tree. The cheapest leaf of the jewel's passives (not a socket
+-- holding a jewel) is taken back, the point spent again by the tree, and
+-- kept if the build is better; repeated while it pays.
+function BuildGeneratorClass:PruneClusterNodes(socketNodeId)
+	local spec = self.build.spec
+	local removed = { }
+	local total = 0
+	local failed = { }
+	for _ = 1, 8 do
+		self:Recalculate()
+		local current = self:Score()
+		-- branches that can go: a leaf with the small passives that lead only
+		-- to it (a notable at the end of its arm, and the arm)
+		local inGraph = { }
+		for _, sg in pairs(spec.subGraphs or { }) do
+			if sg.parentSocket and sg.parentSocket.id == socketNodeId then
+				for _, n in ipairs(sg.nodes) do inGraph[n.id] = true end
+			end
+		end
+		local candidates = { }
+		for id in pairs(inGraph) do
+			local node = spec.nodes[id]
+			if node and node.alloc and node.type ~= "Mastery" and not (node.type == "Socket" and (spec.jewels[node.id] or 0) ~= 0)
+				and node.depends and #node.depends <= 1 and not failed[id] then
+				local chain, set = { node }, { [node] = true }
+				local at = node
+				while true do
+					local nextNode
+					for _, other in ipairs(at.linked or { }) do
+						if other.alloc and inGraph[other.id] and not set[other] and other.type == "Normal" and other.depends and #other.depends == #chain + 1 then
+							local onlyChain = true
+							for _, d in ipairs(other.depends) do if d ~= other and not set[d] then onlyChain = false end end
+							if onlyChain then nextNode = other end
+						end
+					end
+					if not nextNode then break end
+					t_insert(chain, nextNode)
+					set[nextNode] = true
+					at = nextNode
+				end
+				local loss = current - self:Score({ removeNodes = set })
+				t_insert(candidates, { node = node, chain = chain, set = set, loss = loss, perPoint = loss / #chain })
+			end
+		end
+		table.sort(candidates, function(x, y)
+			if x.perPoint ~= y.perPoint then return x.perPoint < y.perPoint end
+			return x.node.id < y.node.id
+		end)
+		local done = false
+		for i = 1, m_min(3, #candidates) do
+			local c = candidates[i]
+			local before = self:FullScore()
+			local undo = spec:CreateUndoState()
+			for _, n in ipairs(c.chain) do if n.alloc then spec:DeallocNode(n) end end
+			spec:BuildAllDependsAndPaths()
+			self:Recalculate()
+			self:AllocateTree(true)
+			local after = self:FullScore()
+			if self.options.debugTiming then ConPrintf("[clusters] prune %s (+%d, quick loss %.4f): %.3f -> %.3f", c.node.dn or "?", #c.chain - 1, c.loss, before, after) end
+			if after > before + 0.002 then
+				total = total + after - before
+				t_insert(removed, (c.node.type == "Notable" and c.node.dn or "a small passive") .. (#c.chain > 1 and string.format(" (with %d on the way)", #c.chain - 1) or ""))
+				done = true
+				break
+			else
+				spec:RestoreUndoState(undo)
+				spec:BuildClusterJewelGraphs()
+				self.itemsTab:PopulateSlots()
+				self:Recalculate()
+				failed[c.node.id] = true
+			end
+		end
+		if not done then break end
+	end
+	if #removed > 0 then
+		self:Note(string.format("Cluster jewel passives left unallocated, their points spent in the tree: %s, score %+.3f", table.concat(removed, ", "), total))
+	end
+	return total
+end
+
 -- Large Cluster Jewels in the outer sockets (from Budget investment)
 function BuildGeneratorClass:ChooseClusterJewels(maxJewels)
 	local investment = self.options.investment or { }
@@ -3739,6 +3822,7 @@ function BuildGeneratorClass:ChooseClusterJewels(maxJewels)
 			return false
 		end
 		self:Note(string.format("%s (%d passive points; a crafted / bought rare, price varies)", result.label, points))
+		if self.options.pruneClusters ~= false then pcall(function() self:PruneClusterNodes(result.socket.node.id) end) end
 		return true
 	end
 	-- (the outer sockets take Large or Medium ones: a Medium one is 5 points
@@ -3760,14 +3844,29 @@ function BuildGeneratorClass:ChooseClusterJewels(maxJewels)
 	-- Medium or Small ones in the sockets the Large ones add (whichever is
 	-- better for the points: a Small one is 2 points for its notable)
 	if self.options.innerClusters == false then return end
+	-- (a socket holding one of the rare jewels a Large one was tried with is
+	-- tried too: a Medium cluster can be worth more there than the jewel)
 	local tried = { }
 	for _ = 1, 4 do
-		local socket
+		local socket, rareId
 		for _, s in ipairs(gen:Sockets(12, true)) do
 			if not tried[s.node.id] then socket = s break end
 		end
+		if not socket and self.options.clusterInnerReplace ~= false then
+			for _, s in ipairs(gen:Sockets(12, true, function(item) return item and not item.clusterJewel and item.rarity == "RARE" end)) do
+				if not tried[s.node.id] then socket = s break end
+			end
+		end
 		if not socket then break end
 		tried[socket.node.id] = true
+		local slot = self.itemsTab.slots["Jewel " .. socket.node.id]
+		local withRare
+		if slot and slot.selItemId ~= 0 then
+			rareId = slot.selItemId
+			withRare = self:FullScore()
+			slot:SetSelItemId(0)
+			self:Recalculate()
+		end
 		local base = self:FullScore()
 		local best
 		for _, jewelName in ipairs({ "Medium Cluster Jewel", "Small Cluster Jewel" }) do
@@ -3775,9 +3874,19 @@ function BuildGeneratorClass:ChooseClusterJewels(maxJewels)
 			local result = gen:Best(base, { jewel = jewelName, socket = socket })
 			if result and (not best or result.score > best.score + 1e-9) then best = result end
 		end
-		if best and best.gain > 0.01 then
-			local kept = place(best, base)
-			if self.options.debugTiming then ConPrintf("[clusters] %s: estimated %+.3f, %s (%.3f -> %.3f)", best.label, best.gain, kept and "kept" or "dropped", base, self:FullScore()) end
+		-- (against the rare jewel it replaces)
+		local bar = withRare or base
+		local kept = false
+		if self.options.debugTiming then ConPrintf("[clusters] inner socket %d%s: best %s %.3f against %.3f", socket.node.id, rareId and " (holding a rare jewel)" or "", best and best.label or "none", best and best.score or 0, bar) end
+		if best and best.score > bar + 0.01 then
+			kept = place(best, bar)
+			if kept and rareId and self.itemsTab.items[rareId] then self.itemsTab:DeleteItem(self.itemsTab.items[rareId], true) end
+			if self.options.debugTiming then ConPrintf("[clusters] %s: estimated %+.3f, %s (%.3f -> %.3f)", best.label, best.score - bar, kept and "kept" or "dropped", bar, self:FullScore()) end
+		end
+		if not kept and rareId and slot then
+			slot:SetSelItemId(rareId)
+			self.itemsTab:PopulateSlots()
+			self:Recalculate()
 		end
 	end
 end

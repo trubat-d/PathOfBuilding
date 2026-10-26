@@ -61,15 +61,24 @@ end
 
 -- Outer sockets that take a Large Cluster Jewel, empty, within reach
 -- (inner = true: the sockets a socketed Large jewel adds, for Medium / Small ones)
-function ClusterJewelGeneratorClass:Sockets(maxPath, inner)
+-- (replaceable: a function of the socketed item - sockets holding such an
+-- item are listed instead of the empty ones)
+function ClusterJewelGeneratorClass:Sockets(maxPath, inner, replaceable)
 	local list = { }
 	local itemsTab = self.build.itemsTab
 	for _, node in ipairs(nodesById(self.spec.nodes)) do local id = node.id
 		local ej = node.expansionJewel
 		local fits = ej and (inner and ej.size == 1 and ej.parent ~= nil and (node.alloc or node.path)
 			or not inner and ej.size == 2 and not ej.parent)
+		local held = self.spec.jewels[id] or 0
+		local open
+		if replaceable then
+			open = held ~= 0 and node.alloc and replaceable(itemsTab.items[held])
+		else
+			open = held == 0
+		end
 		if node.type == "Socket" and fits
-			and itemsTab.slots["Jewel " .. id] and (self.spec.jewels[id] or 0) == 0 then
+			and itemsTab.slots["Jewel " .. id] and open then
 			local cost = node.alloc and 0 or (node.path and #node.path or 99)
 			if cost <= (maxPath or 5) then
 				t_insert(list, { node = node, cost = cost })
