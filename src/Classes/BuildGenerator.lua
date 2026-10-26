@@ -8791,6 +8791,31 @@ function BuildGeneratorClass:Run()
 			self:Recalculate()
 		end
 	end
+	-- (nor in a slot a passive takes away: Dance with Death's "Can't use
+	-- Helmets", Bringer of Rain... - PoB ignores the item, its price stayed)
+	do
+		local disabled = { }
+		for _, node in pairs(self.build.spec.allocNodes) do
+			for _, line in ipairs(node.sd or { }) do
+				local l = line:lower()
+				if l:match("^can't use helmets?$") then disabled["Helmet"] = true end
+				if l:match("^can't use amulets$") then disabled["Amulet"] = true end
+				if l:match("^can't use belts$") then disabled["Belt"] = true end
+				if l:match("^can't use chest armour$") then disabled["Body Armour"] = true end
+			end
+		end
+		local changed = false
+		for slotName in pairs(disabled) do
+			local slot = self.itemsTab.slots[slotName]
+			if slot and (slot.selItemId or 0) ~= 0 then
+				-- (its gems move with the group's slot cleared: they no longer have sockets there)
+				slot:SetSelItemId(0)
+				changed = true
+				self:Note(string.format("%s left empty: a passive says it can't be used", slotName))
+			end
+		end
+		if changed then self.itemsTab:PopulateSlots() self:Recalculate() end
+	end
 	self:RemoveUnusedItems()
 	-- (last check: every gem setup fits its item's sockets)
 	if self:FitSockets() then self:Note("Gem setups packed again to fit the items' sockets") end
