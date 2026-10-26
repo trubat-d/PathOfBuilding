@@ -145,6 +145,20 @@ SkillProfilesClass.list = {
 		if chance < 15 then return 0 end
 		return m_min(1, chance / 100)
 	end } }, note = "the hit, and its pulse when the strike stuns (rare on a pinnacle boss)" },
+	-- Firestorm (poewiki): the first impact, then a bolt every 0.15 s for the
+	-- duration, landing at random in the storm's area; 3 storms at most (a
+	-- faster cast rate shortens each). PoB shows one bolt per cast: the bolts
+	-- of a cast that land on a boss (its hitbox about 1 metre) are counted
+	{ pattern = "^Firestorm$", combine = { { part = "First Impact", weight = 1 }, { part = "Subsequent Impacts", weight = function(ctx)
+		local o = ctx.output or { }
+		local duration, speed = o.Duration or 1.4, o.Speed or 0
+		local life = speed > 0 and m_min(duration, 3 / speed) or duration
+		local bolts = m_floor(life / 0.15)
+		local radius = o.AreaOfEffectRadius or 13
+		local area = o.AreaOfEffectRadiusSecondary or 25 * radius / 13
+		local share = m_min(1, ((radius + 10) / m_max(1, area)) ^ 2)
+		return bolts * share
+	end } }, note = "the first impact and the storm's bolts that land on a boss" },
 	{ pattern = "^Fireball", combine = { { part = "Projectile", weight = 1 }, { part = "Explosion", weight = 1 } }, note = "the projectile and its explosion on a boss" },
 	{ pattern = "^Conflagration", combine = { { part = "Projectile", weight = 1 }, { part = "Explosion", weight = 1 } }, note = "the projectile and its explosion on a boss" },
 	{ pattern = "^Somatic Shell", combine = { { part = "Projectile", weight = 1 }, { part = "Explosion", weight = 1 } }, note = "the projectile and its explosion on a boss" },
