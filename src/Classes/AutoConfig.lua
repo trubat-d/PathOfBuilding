@@ -135,6 +135,21 @@ function AutoConfigClass.EnemyAilmentThreshold(env)
 	return threshold * (isBoss and 7.68 or 1) * lifeMult * env.enemyDB:More(nil, "Life") * ailmentMult * env.enemyDB:More(nil, "AilmentThreshold")
 end
 
+-- The chance a hit of the main skill stuns: on a pinnacle boss 200 x hit /
+-- threshold (the boss's ailment threshold as its life scale, the build's
+-- reduced stun threshold), none below 15% (poewiki Stun); a map pack is
+-- stunned by most hits
+function AutoConfigClass.StunChance(output, env, boss)
+	if not boss then return 0.6 end
+	local threshold = AutoConfigClass.EnemyAilmentThreshold(env)
+	local hit = output.AverageHit or (output.MainHand and output.MainHand.AverageHit) or 0
+	local mod = (output.MainHand and output.MainHand.EnemyStunThresholdMod) or output.EnemyStunThresholdMod or 1
+	if not threshold or threshold <= 0 or hit <= 0 then return 0 end
+	local chance = 200 * hit / (threshold * m_max(0.1, mod))
+	if chance < 15 then return 0 end
+	return m_min(1, chance / 100)
+end
+
 -- Cruelty's effect from the main skill's average hit and the enemy's
 -- ailment threshold (as CalcOffence works it out for non-damaging ailments)
 function AutoConfigClass.CrueltyEffect(output, env, gem)
@@ -385,7 +400,10 @@ function AutoConfigClass:BuildText()
 	return lines, gems
 end
 
-function AutoConfigClass:GeneratesCharge(kind, lines, gems, flags)
+-- (charge skills and supports whose condition a pinnacle boss doesn't meet:
+-- kills, or stuns a boss shrugs off - poewiki)
+local onKillChargeSkills = { ["Blood Rage"] = true, ["Assassin's Mark"] = true }
+function AutoConfigClass:GeneratesCharge(kind, lines, gems, flags, boss, output)
 	local word = kind:lower()
 	for _, line in ipairs(lines) do
 		-- "gain a frenzy charge on hit", "grant an endurance, frenzy or power charge"...
@@ -395,11 +413,15 @@ function AutoConfigClass:GeneratesCharge(kind, lines, gems, flags)
 		end
 	end
 	for _, name in ipairs(gems) do
-		-- (a charge support's condition must be met: "on Melee Stun" needs a melee skill)
+		-- (a charge support's condition must be met: "on Melee Stun" needs a melee
+		-- skill, and on a boss strikes that stun it)
 		local conditionMet = not (name:find("Melee", 1, true) and flags and not flags.melee)
+		if conditionMet and boss and name:find("Stun", 1, true) and output then
+			conditionMet = AutoConfigClass.StunChance(output, self.build.calcsTab.mainEnv, boss) > 0
+		end
 		if name:find(kind .. " Charge", 1, true) and conditionMet then return true end
 		for _, skill in ipairs(chargeSkills[kind]) do
-			if name == skill then return true end
+			if name == skill and not (boss and onKillChargeSkills[name]) then return true end
 		end
 	end
 	return false
@@ -422,7 +444,7 @@ function AutoConfigClass:ChargeUptime(kind, lines, flags, output, boss)
 	for _, line in ipairs(lines) do
 		if line:find(word, 1, true) and line:find("charge", 1, true) and (line:find("gain") or line:find("grant") or line:find("generat"))
 			and not line:find("lose") and not line:find("maximum") and not line:find("enemies", 1, true) then
-			local chance = (tonumber(line:match("(%d+)%% chance")) or 100) / 100
+			local chance = (tonumber(line:match("([%d%.]+)%% chance")) or 100) / 100
 			local every = tonumber(line:match("every ([%d%.]+) seconds?")) or (line:find("every second", 1, true) or line:find("each second", 1, true)) and 1
 			local r
 			if line:find("on kill", 1, true) or line:find("when you kill", 1, true) or line:find("melee kill", 1, true) then
@@ -446,8 +468,8 @@ function AutoConfigClass:ChargeUptime(kind, lines, flags, output, boss)
 			elseif line:find("after spending a total of", 1, true) then
 				local mana = tonumber(line:match("total of (%d+) mana"))
 				r = mana and (output.ManaPerSecondCost or 0) / mana or 0
-			elseif line:find("when you stun", 1, true) then
-				r = hitRate * 0.3 * chance
+			elseif line:find("when you stun", 1, true) or line:find("on melee stun", 1, true) then
+				r = hitRate * AutoConfigClass.StunChance(output, self.build.calcsTab.mainEnv, boss) * chance
 			else
 				-- (a trigger not recognised: counted as before, as reliable)
 				r = 10
@@ -489,7 +511,7 @@ function AutoConfigClass:Run()
 			-- only switched on: charge sources can be indirect, so never switched off
 			-- (from gems, or lines that keep them up: on hit, on crit, every N seconds...
 			-- a chance on kill or on block alone keeps few or none against a boss)
-			local fromGems = self:GeneratesCharge(kind, { }, gems, flags)
+			local fromGems = self:GeneratesCharge(kind, { }, gems, flags, boss, output)
 			-- ("gain a frenzy charge on reaching maximum power charges", Tulfall:
 			-- gained every time the other charges cycle to their maximum)
 			local onReaching
@@ -497,7 +519,21 @@ function AutoConfigClass:Run()
 				local other = line:match("gain an? " .. kind:lower() .. " charge on reaching maximum (%a+) charges")
 				if other and other ~= kind:lower() then onReaching = other end
 			end
-			local uptime = not fromGems and not onReaching and self:ChargeUptime(kind, lines, flags, output, boss)
+			-- (Assassin's Mark on a boss: no kills, only its quality's chance on
+			-- hit - 5% at 20% quality, poewiki)
+			local chargeLines = lines
+			if boss and kind == "Power" then
+				for _, group in ipairs(self.build.skillsTab.socketGroupList) do
+					for _, g in ipairs(group.enabled ~= false and group.gemList or { }) do
+						if g.enabled ~= false and g.gemData and g.gemData.name == "Assassin's Mark" and (g.quality or 0) > 0 then
+							chargeLines = { }
+							for _, l in ipairs(lines) do t_insert(chargeLines, l) end
+							t_insert(chargeLines, string.format("%g%% chance to gain a power charge on hit", (g.quality or 0) * 0.25))
+						end
+					end
+				end
+			end
+			local uptime = not fromGems and not onReaching and self:ChargeUptime(kind, chargeLines, flags, output, boss)
 			if fromGems then
 				self:Set("use" .. kind .. "Charges", true, "the build generates them")
 			elseif onReaching then
@@ -539,7 +575,7 @@ function AutoConfigClass:Run()
 			local source
 			for _, line in ipairs(lines) do
 				if line:find("fortify", 1, true) and line:find("hit", 1, true) and not line:find("fortifying hits", 1, true) and not line:find("cannot", 1, true) then
-					local chance = (tonumber(line:match("(%d+)%% chance")) or 100) / 100
+					local chance = (tonumber(line:match("([%d%.]+)%% chance")) or 100) / 100
 					if line:find("which stun", 1, true) then chance = chance * 0.3 end
 					local rate = speedOf(output) * chance
 					if rate > perSecond then perSecond, source = rate, line end
