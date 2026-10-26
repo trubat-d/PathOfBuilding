@@ -562,6 +562,26 @@ function AutoConfigClass:Run()
 		if env.player.modDB:Flag(nil, "ChaosInoculation") then
 			setIfUsed("conditionFullLife", true, "Chaos Inoculation: life is always full")
 		end
+		-- Trauma (Boneshatter): PoB counts the stacks the attack rate keeps up
+		-- (120 on a fast Boneshatter), but every hit then deals its user damage
+		-- per stack (12,316 a hit against 5,313 life): players hold what their
+		-- recovery pays for. The stacks are set to that: the self damage per
+		-- second no more than the life recovery, one hit no more than 40% of
+		-- the pool (passes after this one refine it with the new leech).
+		if (output.SustainableTrauma or 0) > 0 and (output.SelfHitDamage or 0) > 0 then
+			local input = self.build.configTab.input
+			local current = math.max(1, tonumber(input.traumaStacks) or output.SustainableTrauma)
+			local perStack = output.SelfHitDamage / current
+			self.scorer = self.scorer or new("BuildScorer"):BuildScorer(self.build, { chargesPerSecond = boss and 0 or 4 })
+			local recovery = self.scorer:SustainableRate(output, "Life")
+			local speed = output.Speed or 0
+			local pool = (output.LifeUnreserved or output.Life or 0) + (output.EnergyShield or 0)
+			local byRecovery = speed > 0 and recovery / (perStack * speed) or math.huge
+			local byPool = 0.4 * pool / perStack
+			local stacks = math.max(1, math.floor(math.min(output.SustainableTrauma, byRecovery, byPool)))
+			self:Set("traumaStacks", stacks, string.format("trauma held at %d of the %d the attack rate keeps up: each stack costs %.0f life a hit, recovery %.0f a second",
+				stacks, math.floor(output.SustainableTrauma), perStack, recovery))
+		end
 		if (output.EnergyShield or 0) > 0 and (output.EnergyShield or 0) >= (output.Life or 0) then
 			setIfUsed("conditionHaveEnergyShield", true, "the energy shield pool is the main one")
 		end

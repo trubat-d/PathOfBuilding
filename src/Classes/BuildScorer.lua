@@ -288,6 +288,18 @@ function BuildScorerClass:SkillSustain(output)
 	local env = self.build.calcsTab and self.build.calcsTab.mainEnv
 	local flags = env and env.player.mainSkill and env.player.mainSkill.skillFlags or { }
 	local extra = GetGeneratorRules().ExtraCosts(output, flags.attack, flags.spell)
+	-- the damage the skill deals to its user (Boneshatter's trauma, Scold's
+	-- Bridle, Heartbound Loop...: PoB's SelfHitDamage, per use) is a life
+	-- cost too; one use taking the whole pool can't be used at all. Without
+	-- it a Boneshatter at 120 trauma (12,316 to itself per hit, 5,313 life)
+	-- scored its 34M DPS.
+	local selfHit = output.SelfHitDamage or 0
+	if selfHit > 0 then
+		local uses = output.Speed or 0
+		extra = { Mana = extra.Mana, Life = (extra.Life or 0) + selfHit * uses }
+		local pool = (output.LifeUnreserved or output.Life or 0) + (output.EnergyShield or 0)
+		if pool > 0 and selfHit >= pool then return 0, "Life" end
+	end
 	for _, resource in ipairs({ "Mana", "Life" }) do
 		local perSecond = output[resource .. "PerSecondCost"] or 0
 		-- totems and brands are placed again only when they expire, not at the
