@@ -238,13 +238,45 @@ function ClusterJewelGeneratorClass:Best(baseScore, opts)
 			if a.value ~= b.value then return a.value > b.value end
 			return a.name < b.name
 		end)
-		local chosen, prefixes, suffixes, value = { }, 0, 0, smallValue * smallCount
-		for _, o in ipairs(options) do
-			if #chosen >= kind.notables then break end
-			if o.value > 0 and ((o.type == "Prefix" and prefixes < 2) or (o.type == "Suffix" and suffixes < 2)) then
-				t_insert(chosen, o.name)
-				value = value + o.value
+		-- (greedy from a start: the best notables one by one, or a pair that
+		-- is worth more together than apart - one grants a state the other
+		-- pays off in, which a notable measured alone never shows)
+		local function fill(start, startValue)
+			local chosen, prefixes, suffixes, value = { }, 0, 0, smallValue * smallCount + (startValue or 0)
+			local taken = { }
+			for _, o in ipairs(start or { }) do
+				t_insert(chosen, o.name) taken[o.name] = true
 				if o.type == "Prefix" then prefixes = prefixes + 1 else suffixes = suffixes + 1 end
+			end
+			for _, o in ipairs(options) do
+				if #chosen >= kind.notables then break end
+				if not taken[o.name] and o.value > 0 and ((o.type == "Prefix" and prefixes < 2) or (o.type == "Suffix" and suffixes < 2)) then
+					t_insert(chosen, o.name)
+					value = value + o.value
+					if o.type == "Prefix" then prefixes = prefixes + 1 else suffixes = suffixes + 1 end
+				end
+			end
+			return chosen, value
+		end
+		local chosen, value = fill(nil)
+		if kind.notables >= 2 then
+			local top = { }
+			for i = 1, math.min(10, #options) do t_insert(top, options[i]) end
+			for i = 1, #top do
+				for j = i + 1, #top do
+					local a, b = top[i], top[j]
+					do
+						local na, nb = self.tree.clusterNodeMap[a.name], self.tree.clusterNodeMap[b.name]
+						local lines = { }
+						for _, l in ipairs(na.sd) do t_insert(lines, l) end
+						for _, l in ipairs(nb.sd) do t_insert(lines, l) end
+						local pairValue = self:LinesValue("pair:" .. a.name .. "|" .. b.name, lines)
+						if pairValue - a.value - b.value > 0.01 then
+							local c, v = fill({ a, b }, pairValue)
+							if v > value then chosen, value = c, v end
+						end
+					end
+				end
 			end
 		end
 		if #chosen > 0 then
