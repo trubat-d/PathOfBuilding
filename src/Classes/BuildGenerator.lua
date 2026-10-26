@@ -1998,20 +1998,25 @@ function BuildGeneratorClass:AmuletAttributeMove()
 		end
 	end
 	if #candidates == 0 then return end
+	-- (the rares are made again for the current base too: the comparison is
+	-- base against base, not new rares against old)
 	local before = self:FullScore()
-	local best, bestScore, bestSnap
 	local origSnap = self:Snapshot()
-	for i = 1, m_min(3, #candidates) do
-		local baseName = candidates[i]
-		local lines, out = { }, { }
-		for line in item.raw:gmatch("[^\n]+") do t_insert(lines, line) end
-		local baseIndex, implicitIndex, implicitCount
-		for j, l in ipairs(lines) do
-			if l == item.baseName and not baseIndex then baseIndex = j end
-			local n = l:match("^Implicits: (%d+)$")
-			if n and not implicitIndex then implicitIndex, implicitCount = j, tonumber(n) end
-		end
-		if baseIndex and implicitIndex then
+	local savedLog = #self.log
+	local results = { }
+	local function try(baseName)
+		self:Restore(origSnap)
+		self:Recalculate()
+		if baseName then
+			local lines, out = { }, { }
+			for line in item.raw:gmatch("[^\n]+") do t_insert(lines, line) end
+			local baseIndex, implicitIndex, implicitCount
+			for j, l in ipairs(lines) do
+				if l == item.baseName and not baseIndex then baseIndex = j end
+				local n = l:match("^Implicits: (%d+)$")
+				if n and not implicitIndex then implicitIndex, implicitCount = j, tonumber(n) end
+			end
+			if not (baseIndex and implicitIndex) then return end
 			for j, l in ipairs(lines) do
 				if j == baseIndex then
 					t_insert(out, baseName)
@@ -2030,25 +2035,31 @@ function BuildGeneratorClass:AmuletAttributeMove()
 				c:BuildModList()
 				return c
 			end)
-			if ok and candidate and candidate.base then
-				self:Restore(origSnap)
-				self:Equip(candidate, "Amulet")
-				self.itemsTab:PopulateSlots()
-				self:Recalculate()
-				self:FinalRares()
-				self:AutoConfigure()
-				local score = self:FullScore()
-				if score > before + 0.01 and (not bestScore or score > bestScore) then
-					best, bestScore, bestSnap = baseName, score, self:Snapshot()
-				end
-			end
+			if not (ok and candidate and candidate.base) then return end
+			self:Equip(candidate, "Amulet")
+			self.itemsTab:PopulateSlots()
+			self:Recalculate()
 		end
+		self:FinalRares()
+		self:AutoConfigure()
+		t_insert(results, { base = baseName or item.baseName, original = not baseName, score = self:FullScore(), snap = self:Snapshot() })
 		self:Tick()
 	end
-	if best then
-		self:Restore(bestSnap)
+	try(nil)
+	for i = 1, m_min(3, #candidates) do try(candidates[i]) end
+	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+	table.sort(results, function(a, b) return a.score > b.score end)
+	local best, original = results[1], nil
+	for _, r in ipairs(results) do if r.original then original = r end end
+	if best and best.score > before + 0.003 then
+		self:Restore(best.snap)
 		self:Recalculate()
-		self:Note(string.format("Amulet base %s for its attributes, the rares made again around it: score %+.3f", best, bestScore - before))
+		if best.original then
+			self:Note(string.format("Rares made again for the finished build: score %+.3f", best.score - before))
+		else
+			self:Note(string.format("Amulet base %s for its attributes, the rares made again around it: score %+.3f (%+.3f over the %s with its rares made again)",
+				best.base, best.score - before, best.score - (original and original.score or before), item.baseName))
+		end
 	else
 		self:Restore(origSnap)
 		self:Recalculate()

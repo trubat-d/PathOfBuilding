@@ -4,7 +4,8 @@
 -- MODE=start: queues it and exits once the quick builds started (as if the
 -- app were closed); MODE=resume: the queue is loaded from its file and the
 -- generation goes on; default: queued and run to the end.
--- (builds are quick ones throughout, for speed)
+-- (builds are quick ones throughout, for speed; SCANONLY=1: the scan alone,
+-- written to BuildIdeasScans.json under "test|scan")
 dofile("HeadlessWrapper.lua")
 while main.uniqueDB.loading do runCallback("OnFrame") end
 dofile("../bench/fake_threads.lua")
@@ -35,7 +36,9 @@ else
 	local investment
 	for _, level in ipairs(new("PriceSource"):PriceSource().levels) do if level.id == "MID" then investment = level end end
 	local pg = new("ParallelGenerator"):ParallelGenerator()
+	local scanOnly = os.getenv("SCANONLY") and true or nil
 	batch = queue:Add({
+		scanOnly = scanOnly, scanMemoryKey = scanOnly and "test|scan" or nil, scanMemoryVersion = 1,
 		title = skillName .. " " .. ascName, buildName = "Generated test " .. skillName, skillLabel = skillName, gemId = gemId,
 		standardId = "STANDARD", tries = 1, scanBuilds = 2, forceQuick = true,
 		learningContext = { kind = "spell", investment = "MID" },
@@ -59,6 +62,7 @@ while batch and (batch.status == "waiting" or batch.status == "running") do
 	if os.time() - t0 > 3000 then print("timeout") break end
 end
 print("STATUS", batch and batch.status, batch and batch.error or "", batch and batch.file or "")
+if batch and batch.scanOnly then local f = io.open(main.userPath .. "BuildIdeasScans.json") print("SCANFILE", f and f:read("*a"):sub(1, 600)) if f then f:close() end end
 if batch then print(queue:Describe(batch)) end
 for _, s in ipairs(batch and batch.specs or { }) do print("SPEC", s.archetypeId, s.state, s.score or "", s.error or "") end
 queue.panel:Draw({ x = 0, y = 0, width = 1920, height = 1080 })

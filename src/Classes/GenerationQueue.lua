@@ -101,7 +101,8 @@ end
 
 local savedKeys = { "id", "title", "buildName", "skillLabel", "gemId", "baseJob", "tries", "scanBuilds", "learningContext",
 	"selectedId", "standardId", "remembered", "combos", "hybrid", "status", "phase", "specs", "scan", "quickScores", "full",
-	"bestScore", "error", "file", "fileBuildName", "partialFile", "startedWall", "finishedWall", "elapsedBefore", "forceQuick", "best", "combined" }
+	"bestScore", "error", "file", "fileBuildName", "partialFile", "startedWall", "finishedWall", "elapsedBefore", "forceQuick", "best", "combined",
+	"scanOnly", "scanMemoryKey", "scanMemoryVersion", "popupState", "planEstimates", "scanResult" }
 
 function GenerationQueueClass:Save()
 	local dkjson = require "dkjson"
@@ -308,6 +309,7 @@ function GenerationQueueClass:RunPending(batch, indexes)
 				spec.error, spec.partialFile = nil, nil
 				spec.file = saved and path or nil
 				spec.score, spec.dps, spec.ehp = summary.score, summary.dps, summary.ehp
+				spec.minHit, spec.keystones = summary.minHit, summary.keystones
 				spec.plan, spec.combos = summary.plan, summary.combos
 				-- (the build as data, for the combination of the best tries)
 				if summary.state and batch.phase == "full" then
@@ -351,7 +353,12 @@ function GenerationQueueClass:PhaseDone(batch)
 		local r = done[1]
 		if not r then return self:Fail(batch, self:FirstError(batch) or "the first quick build failed") end
 		batch.combos = r.combos
-		batch.scan = { [batch.standardId] = { score = r.score, built = true } }
+		batch.scan = { [batch.standardId] = { score = r.score, dps = r.dps, ehp = r.ehp, minHit = r.minHit, keystones = r.keystones, built = true } }
+		-- (the planner's estimates, for a scan the player picks from)
+		batch.planEstimates = { }
+		for _, p in ipairs(r.plan or { }) do
+			if not p.error then t_insert(batch.planEstimates, { archetypeId = p.archetypeId, score = p.score, dps = p.dps, minHit = p.minHit, commitments = p.commitments, plan = p.plan }) end
+		end
 		-- the most promising archetypes get a quick build of their own
 		local plan = r.plan or { }
 		table.sort(plan, function(a, b) return (a.score or -math.huge) > (b.score or -math.huge) end)
@@ -370,7 +377,7 @@ function GenerationQueueClass:PhaseDone(batch)
 				t_insert(quick, { archetypeId = a.id, quick = true })
 			end
 		end
-		if #quick == 0 then return self:RankAndBuild(batch) end
+		if #quick == 0 then return batch.scanOnly and self:FinishScan(batch) or self:RankAndBuild(batch) end
 		return self:SetPhase(batch, "quick", quick)
 	elseif batch.phase == "full" and not batch.combined and main.generatorCombine ~= false then
 		-- the best build crossed with the next best ones (other tries and close
@@ -393,8 +400,9 @@ function GenerationQueueClass:PhaseDone(batch)
 	elseif batch.phase == "quick" then
 		batch.scan = batch.scan or { }
 		for _, s in ipairs(done) do
-			if s.score then batch.scan[s.archetypeId] = { score = s.score, built = true } end
+			if s.score then batch.scan[s.archetypeId] = { score = s.score, dps = s.dps, ehp = s.ehp, minHit = s.minHit, keystones = s.keystones, built = true } end
 		end
+		if batch.scanOnly then return self:FinishScan(batch) end
 		return self:RankAndBuild(batch)
 	else
 		return self:Finish(batch)
@@ -461,6 +469,57 @@ function GenerationQueueClass:RankAndBuild(batch)
 	end
 	if #ids == 0 then ids = { batch.standardId } end
 	return self:SetPhase(batch, "full", self:FullSpecs(batch, ids))
+end
+
+-- A scan made in the background (the Generate window's "Scan archetypes"
+-- with Background ticked): its results written where the window keeps its
+-- scans (BuildIdeasScans.json, under the window's own key), so "Show" opens
+-- the window on them - pick an archetype and generate the full build
+function GenerationQueueClass:FinishScan(batch)
+	local results = { }
+	for _, p in ipairs(batch.planEstimates or { }) do
+		local notes = { }
+		if p.commitments and #p.commitments > 0 then t_insert(notes, "Commits to: " .. table.concat(p.commitments, ", ")) end
+		if p.plan and p.plan ~= "" then t_insert(notes, "Best investment: " .. p.plan) end
+		results[p.archetypeId] = { score = p.score, dps = p.dps, minHit = p.minHit, notes = notes, estimated = true }
+	end
+	local best
+	for id, r in pairs(batch.scan or { }) do
+		if type(r) == "table" and r.built then
+			local notes = { }
+			if r.keystones and #r.keystones > 0 then t_insert(notes, "Keystones: " .. table.concat(r.keystones, ", ")) end
+			results[id] = { score = r.score, dps = r.dps, ehp = r.ehp, minHit = r.minHit, notes = notes, built = true }
+			if r.score and (not best or r.score > best.score) then best = { archetypeId = id, score = r.score } end
+		end
+	end
+	if batch.scanMemoryKey and main.userPath then
+		local path = main.userPath .. "BuildIdeasScans.json"
+		local dkjson = require("dkjson")
+		local memory = { }
+		local text = readFile(path)
+		if text then
+			local ok, decoded = pcall(dkjson.decode, text)
+			if ok and type(decoded) == "table" then memory = decoded end
+		end
+		local combos = { }
+		for i, c in ipairs(batch.combos or { }) do
+			if i > 6 then break end
+			combos[i] = { ids = c.ids, predicted = c.predicted, why = c.why }
+		end
+		memory[batch.scanMemoryKey] = { time = os.time(), version = batch.scanMemoryVersion or 1, skill = batch.skillLabel, results = results, combos = combos }
+		writeFile(path, dkjson.encode(memory))
+	end
+	batch.scanResult = results
+	batch.best = best
+	batch.status = "scanned"
+	batch.finishedWall = os.time()
+	self:Save()
+	self:Pump()
+end
+
+-- The Generate window opened on a background scan (as it was set up)
+function GenerationQueueClass:ShowScan(batch)
+	new("BuildIdeasPopup"):BuildIdeasPopup():OpenGenerator(batch.popupState)
 end
 
 -- The best build with the others as loadouts, saved in the builds folder
@@ -639,6 +698,9 @@ function GenerationQueueClass:Describe(batch)
 	elseif batch.status == "done" then
 		return "^x33FF77" .. batch.title, string.format("^7Done: %s, score %.2f%s", self:Label(batch, batch.best and batch.best.archetypeId), batch.best and batch.best.score or 0,
 			batch.fileBuildName and " (saved in your builds folder, Generated)" or "")
+	elseif batch.status == "scanned" then
+		return "^x33FF77" .. batch.title, string.format("^7Scan done: best %s, %.2f. Show opens the window to pick one and generate it",
+			self:Label(batch, batch.best and batch.best.archetypeId), batch.best and batch.best.score or 0)
 	elseif batch.status == "stopped" then
 		return "^xC0C0C0" .. batch.title, string.format("^xC0C0C0Stopped (%s, %d/%d builds done): Resume goes on from there", phaseLabels[batch.phase] or "not started", done, total)
 	else
@@ -671,7 +733,7 @@ function GenerationQueueClass:BuildPanel()
 	controls.summary = new("LabelControl"):LabelControl({"TOPLEFT",nil,"TOPLEFT"}, {8, 6, 0, 14}, function()
 		local running, done = 0, 0
 		for _, b in ipairs(queue.batches) do
-			if b.status == "running" or b.status == "waiting" then running = running + 1 elseif b.status == "done" then done = done + 1 end
+			if b.status == "running" or b.status == "waiting" then running = running + 1 elseif b.status == "done" or b.status == "scanned" then done = done + 1 end
 		end
 		return string.format("^7Generations: %d running / waiting, %d done", running, done)
 	end)
@@ -690,11 +752,15 @@ function GenerationQueueClass:BuildPanel()
 			local b = batch()
 			return b and fit((select(3, queue:Describe(b))) or "", 12, width - 16) or ""
 		end)
-		controls["open_" .. i] = new("ButtonControl"):ButtonControl({"TOPRIGHT",nil,"TOPRIGHT"}, {-128, y, 56, 18}, "Open", function()
+		controls["open_" .. i] = new("ButtonControl"):ButtonControl({"TOPRIGHT",nil,"TOPRIGHT"}, {-128, y, 56, 18}, function()
 			local b = batch()
-			if b then queue:Open(b) end
+			return b and b.status == "scanned" and "Show" or "Open"
+		end, function()
+			local b = batch()
+			if not b then return end
+			if b.status == "scanned" then queue:ShowScan(b) else queue:Open(b) end
 		end)
-		controls["open_" .. i].shown = function() local b = batch() return b and (b.status == "done" or (b.status ~= "running" and b.partialFile ~= nil)) end
+		controls["open_" .. i].shown = function() local b = batch() return b and (b.status == "done" or b.status == "scanned" or (b.status ~= "running" and b.partialFile ~= nil)) end
 		controls["resume_" .. i] = new("ButtonControl"):ButtonControl({"TOPRIGHT",nil,"TOPRIGHT"}, {-66, y, 58, 18}, "Resume", function()
 			local b = batch()
 			if b then queue:Resume(b) end

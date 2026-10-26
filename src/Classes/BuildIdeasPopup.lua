@@ -115,6 +115,8 @@ local function scanMemoryKey(options)
 		tostring(options.allowAnoints), tostring(options.allowTattoos), tostring(options.timeless), tostring(options.synergies),
 		tostring(options.leaguePhase) }, "|")
 end
+-- (for tests: the key a scan is kept under)
+BuildIdeasPopupClass.ScanMemoryKey = scanMemoryKey
 
 -- The player's own mix of goals (the generator's "Aim for: Custom mix..."),
 -- kept between sessions in the settings folder
@@ -655,7 +657,7 @@ end
 -- Build generator
 ------------------------------------------------------------------------------
 
-function BuildIdeasPopupClass:OpenGenerator()
+function BuildIdeasPopupClass:OpenGenerator(preset)
 	local controls = { }
 	local selectedFocus
 	local popup
@@ -794,7 +796,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 	controls.background = new("CheckBoxControl"):CheckBoxControl({"TOPLEFT",nil,"TOPLEFT"}, {1010, 134, 18}, "Background:", function(on)
 		main.generatorBackground = on
 		if on then main.generatorThreads = true controls.threads.state = true end
-	end, "Generate in the background: the window closes and the builds are made in background threads\n(several cores) while you keep using the app. A panel at the bottom right lists the generations;\na finished one is saved in your builds folder (Generated) and opens from there. Needs background threads.", main.generatorBackground == true)
+	end, "Generate in the background: the window closes and the builds are made in background threads\n(several cores) while you keep using the app. A panel at the bottom right lists the generations;\na finished one is saved in your builds folder (Generated) and opens from there. Needs background threads.\n\"Scan archetypes\" runs in the background too: when it is done, \"Show\" in the panel opens this window\non its results, to pick an archetype and generate it.", main.generatorBackground == true)
 	controls.background.enabled = idle
 
 	-- Archetypes: the ways this skill can scale; "Scan" builds each one quickly to compare them
@@ -898,6 +900,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 	end
 	controls.scan = new("ButtonControl"):ButtonControl({"TOPLEFT",nil,"TOPLEFT"}, {750, 134, 154, 20}, "Scan archetypes", function()
 		-- (the button always scans again; the automatic mode reuses a recent scan)
+		-- (in the background: the panel's "Show" opens this window on the results)
+		if controls.background.state and state.queueBackground and state.queueBackground(true) then return end
 		state.startScan(true)
 	end)
 	controls.scan.enabled = idle
@@ -1185,7 +1189,7 @@ function BuildIdeasPopupClass:OpenGenerator()
 			return
 		end
 		local current = main.modes["BUILD"]
-		if main.mode == "BUILD" and current and current.unsaved and not state.confirmDiscard then
+		if main.mode == "BUILD" and current and current.unsaved and not state.confirmDiscard and not state.memoryOnly then
 			state.confirmDiscard = true
 			state.status = colorCodes.WARNING .. "Your open build has unsaved changes. Click Scan again to discard them."
 			return
@@ -1389,6 +1393,14 @@ function BuildIdeasPopupClass:OpenGenerator()
 					return
 				end
 			end
+			-- (opened from a background scan: its results only, never a new scan
+			-- over the open build)
+			if state.memoryOnly then
+				state.memoryOnly = nil
+				state.running = false
+				state.status = colorCodes.WARNING .. "The background scan's results weren't found (settings changed?): Scan archetypes scans again."
+				return
+			end
 			nextOne()
 		end
 		main.onFrameFuncs["BuildMetaWait"] = function()
@@ -1400,7 +1412,17 @@ function BuildIdeasPopupClass:OpenGenerator()
 	-- the same phases as here - scan, quick builds of the promising
 	-- archetypes, the best fully built with their tries - all in background
 	-- threads. false when background threads aren't available
-	state.queueBackground = function()
+	-- (the window's settings, to open it again as it was: Classes/GenerationQueue ShowScan)
+	state.captureSettings = function()
+		local skill = controls.skill.list[controls.skill.selIndex]
+		local asc = controls.ascend.list[controls.ascend.selIndex]
+		return { gemId = skill.gemId, ascendClassId = asc.ascendClassId, classId = asc.classId, level = controls.level.buf,
+			phase = controls.phase.selIndex, focus = controls.focus.selIndex, investment = controls.investment.selIndex, ehpFloor = controls.ehpFloor.buf,
+			scenario = controls.scenario.selIndex, config = controls.config.selIndex, tries = controls.tries.selIndex,
+			anoints = controls.anoints.state, tattoos = controls.tattoos.state, timeless = controls.timeless.state, synergies = controls.synergies.state,
+			hybrids = controls.hybrids.state, totalBudget = controls.totalBudget.buf }
+	end
+	state.queueBackground = function(scanOnly)
 		main.generationQueue = main.generationQueue or new("GenerationQueue"):GenerationQueue()
 		local queue = main.generationQueue
 		if not queue:Available() then
@@ -1419,9 +1441,9 @@ function BuildIdeasPopupClass:OpenGenerator()
 			end
 		end
 		standard = standard or list[1]
-		local selected = entry and not entry.auto and entry.archetype or nil
+		local selected = not scanOnly and entry and not entry.auto and entry.archetype or nil
 		local remembered
-		if not selected then
+		if not selected and not scanOnly then
 			local memory = loadScanMemory()[scanMemoryKey(baseOptions)]
 			if memory and memory.version == SCAN_MEMORY_VERSION and type(memory.results) == "table" and os.time() - (memory.time or 0) < SCAN_MEMORY_DAYS * 86400 then
 				remembered = memory.results
@@ -1452,7 +1474,15 @@ function BuildIdeasPopupClass:OpenGenerator()
 			tries = tonumber(controls.tries.list[controls.tries.selIndex]) or 1,
 			learningContext = state.learningContext(),
 			scanBuilds = math.max(3, 2 * pgStatic.MaxWorkers()),
+			popupState = state.captureSettings(),
 		}
+		if scanOnly then
+			-- (the scan alone; its results go where this window keeps its scans)
+			batch.title = "Scan: " .. batch.title
+			batch.scanOnly = true
+			batch.scanMemoryKey = scanMemoryKey(baseOptions)
+			batch.scanMemoryVersion = SCAN_MEMORY_VERSION
+		end
 		-- poe.ninja's statistics first (as the scan does), then queued
 		local key = "GenerationQueueMeta" .. tostring(batch)
 		local queued = false
@@ -2053,6 +2083,29 @@ function BuildIdeasPopupClass:OpenGenerator()
 		main:ClosePopup()
 	end)
 	popup = main:OpenPopup(1040, 496, "Generate Build", controls, nil, nil, "close")
+	-- (for tests)
+	self.state, self.makeOptions = state, makeOptions
+	-- (opened from a background scan: its settings, then its results)
+	if preset then
+		local function pick(control, test)
+			for i, e in ipairs(control.list) do if test(e) then control.selIndex = i return true end end
+		end
+		pick(controls.skill, function(e) return e.gemId == preset.gemId end)
+		pick(controls.ascend, function(e) return e.ascendClassId == preset.ascendClassId and (not preset.classId or e.classId == preset.classId) end)
+		if preset.level then controls.level:SetText(preset.level) end
+		for _, name in ipairs({ "phase", "focus", "investment", "scenario", "config", "tries" }) do
+			if preset[name] and controls[name].list[preset[name]] then controls[name].selIndex = preset[name] end
+		end
+		if preset.ehpFloor then controls.ehpFloor:SetText(preset.ehpFloor) end
+		if preset.totalBudget then controls.totalBudget:SetText(preset.totalBudget) end
+		for _, name in ipairs({ "anoints", "tattoos", "timeless", "synergies", "hybrids" }) do
+			if preset[name] ~= nil then controls[name].state = preset[name] end
+		end
+		controls.archetype.list = archetypeList()
+		controls.archetype.selIndex = 1
+		state.memoryOnly = true
+		state.startScan(false)
+	end
 
 	-- While a generation or scan runs, the window folds into a panel on the
 	-- right of the screen: the build stays visible on its passive tree (no
