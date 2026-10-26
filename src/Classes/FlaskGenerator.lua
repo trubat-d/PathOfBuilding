@@ -64,13 +64,34 @@ end
 
 -- Utility flask bases the character can use, plus the best mana flask for
 -- builds that pay their skills with mana (the scorer counts what it restores)
+-- Expedition flasks (the Iron Flask's ward) cost far more than the other
+-- bases, early above all: only for a build made around ward (a ward pool of
+-- its own, from its gear or passives), not for the bit of EHP 200 ward adds
+local function isExpedition(base)
+	return base and base.tags and base.tags.expedition_flask
+end
+function FlaskGeneratorClass:WardBuild()
+	local output = self.build.calcsTab.mainOutput or { }
+	local ward = output.Ward or 0
+	-- (ward the flasks give doesn't make a ward build)
+	for _, slotName in ipairs(self.flaskSlots or { }) do
+		local slot = self.build.itemsTab.slots[slotName]
+		local item = slot and self.build.itemsTab.items[slot.selItemId]
+		if item and isExpedition(item.base) then ward = ward - 400 end
+	end
+	return ward >= 500
+end
+FlaskGeneratorClass.isExpedition = isExpedition
+
 function FlaskGeneratorClass:GetBases(levelOnly)
 	local list = { }
 	local level = self.build.characterLevel
 	local output = self.build.calcsTab.mainOutput or { }
 	local bestMana, bestManaLevel
+	local wardBuild = self:WardBuild()
 	for name, base in pairs(data.itemBases) do
 		local usable = not base.hidden and not (levelOnly and base.req and (base.req.level or 0) > level)
+			and (wardBuild or not isExpedition(base))
 		if usable and isUtilityBase(base) then
 			t_insert(list, name)
 		elseif usable and base.type == "Flask" and base.flask and base.flask.mana and not base.flask.life then
@@ -105,6 +126,7 @@ function FlaskGeneratorClass:Generate(ctx)
 	local calcFunc = ctx.calcFunc
 	local baseOverride = ctx.override or { }
 
+	local wardBuild = self:WardBuild()
 	-- Slots to fill: everything except life / mana / hybrid flasks
 	local fillSlots = { }
 	local existing = { }
@@ -119,7 +141,7 @@ function FlaskGeneratorClass:Generate(ctx)
 			t_insert(fillSlots, slotName)
 			repItems[slotName] = false
 			-- Flasks the build already uses stay available (e.g. unique flasks)
-			if current then
+			if current and (wardBuild or not isExpedition(current.base)) then
 				t_insert(existing, current)
 			end
 		end
