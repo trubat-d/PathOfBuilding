@@ -372,7 +372,20 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 	local function fill(seed)
 		local chosen = { }
 		local usedGroups = { }
-		local counts = { Prefix = 0, Suffix = 0, crafted = 0 }
+		local counts = { Prefix = 0, Suffix = 0, crafted = 0, influence = 0 }
+		-- (influence mods: one per influence the item has - what a Conqueror's
+		-- Exalted Orb or an Awakener's Orb merge gives; an item with three
+		-- Warlord mods is a lottery, not a craft. opts.maxInfluenceMods overrides)
+		local maxInfluence = opts.maxInfluenceMods or #(influences or { })
+		local function isInfluence(candidate)
+			if candidate.influenceMod == nil then
+				candidate.influenceMod = false
+				for _, t in ipairs(candidate.mod and candidate.mod.modTags or { }) do
+					if t == "influence_mod" then candidate.influenceMod = true end
+				end
+			end
+			return candidate.influenceMod
+		end
 		-- (opts.multiCraft: "Can have up to 3 Crafted Modifiers", itself a
 		-- crafted suffix, lets a second and third bench craft in)
 		local maxCrafts = opts.multiCraft and 3 or 1
@@ -386,6 +399,7 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			usedGroups[seed.group] = true
 			counts[seed.type] = counts[seed.type] + 1
 			if seed.crafted then counts.crafted = counts.crafted + 1 end
+			if isInfluence(seed) then counts.influence = counts.influence + 1 end
 			local output, power = evaluate()
 			currentPower, currentDeficit = power, deficit(output, ctx.baseOutput, opts)
 		end
@@ -409,7 +423,8 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 				local metaRoom = not needMeta or (counts.Suffix + (candidate.type == "Suffix" and 1 or 0) + 1 <= limits.Suffix
 					and counts.Prefix + counts.Suffix + 2 <= total)
 				if not usedGroups[candidate.group] and counts[candidate.type] < limits[candidate.type] and not (candidate.crafted and counts.crafted >= maxCrafts)
-					and metaRoom and not (opts.maxAffixes and not candidate.crafted and natural >= opts.maxAffixes) then
+					and metaRoom and not (opts.maxAffixes and not candidate.crafted and natural >= opts.maxAffixes)
+					and not (isInfluence(candidate) and counts.influence >= maxInfluence) then
 					t_insert(order, candidate)
 				end
 			end
@@ -457,6 +472,7 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			usedGroups[best.group] = true
 			counts[best.type] = counts[best.type] + 1
 			if best.crafted then counts.crafted = counts.crafted + 1 end
+			if isInfluence(best) then counts.influence = counts.influence + 1 end
 			currentPower, currentDeficit = bestPower, bestDeficit
 		end
 		-- take the mods off again: the caller builds the real item
