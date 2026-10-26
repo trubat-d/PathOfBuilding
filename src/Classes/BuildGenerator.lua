@@ -2666,13 +2666,16 @@ end
 --   * tree: weak branches pruned as a whole (by value per point, with a
 --     random pick among the weakest), then the freed points re-spent where
 --     they gain the most (multi-node swaps one-point greedy can't make);
---   * gear: one or two rare slots made again for the build as it is;
---   * links: two supports of the main link taken out and chosen again.
+--   * links: two supports of the main link taken out and chosen again;
+--   * gear (options.repairKinds only): one or two rare slots made again.
 -- Starting from a good build, each round is cheap; it is how the search gets
 -- out of the path the greedy steps took.
 function BuildGeneratorClass:RepairSearch(rounds)
 	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
-	local kinds = { "tree", "gear", "tree", "links", "tree", "gear" }
+	-- (no gear rounds: over 244 traced rounds they kept 1 of 91 for +0.003,
+	-- the rares having just been made for the finished build; links kept 8 of
+	-- 31 for +0.42, the tree 16 of 122 for +0.69)
+	local kinds = self.options.repairKinds or { "tree", "links", "tree", "tree", "links", "tree" }
 	local kept, gainTotal = { }, 0
 	for round = 1, rounds or 8 do
 		self:Inner((round - 1) / (rounds or 8))
