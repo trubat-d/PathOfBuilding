@@ -653,6 +653,29 @@ function BuildScorerClass:GetPenalties(output)
 			t_insert(penalties, { label = string.format("Damage reduction capped at %d%% (Imbalanced Guard): map hits reduced %d%% instead of %d%%", cap, with, without), value = p })
 		end
 	end
+	-- Lone Messenger (keystone): "You can only have one Herald" - PoB doesn't
+	-- read it and counts every herald the build runs
+	do
+		local lone = false
+		for _, node in pairs(self.build.spec.allocNodes or { }) do
+			if node.dn == "Lone Messenger" then lone = true end
+		end
+		if lone then
+			local heralds = 0
+			for _, group in ipairs(self.build.skillsTab.socketGroupList or { }) do
+				if group.enabled ~= false then
+					for _, g in ipairs(group.gemList or { }) do
+						if g.enabled ~= false and g.gemData and g.gemData.tags and g.gemData.tags.herald and not g.gemData.grantedEffect.support then heralds = heralds + 1 end
+					end
+				end
+			end
+			if heralds > 1 then
+				local p = 1 + 0.5 * (heralds - 2)
+				total = total + p
+				t_insert(penalties, { label = string.format("Lone Messenger allows one herald, the build runs %d", heralds), value = p })
+			end
+		end
+	end
 	for _, pool in ipairs({ "Mana", "Life" }) do
 		local unreserved = output[pool .. "Unreserved"]
 		if unreserved and unreserved < 0 and not self.ignoreReservation then
