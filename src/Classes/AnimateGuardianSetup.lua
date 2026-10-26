@@ -193,8 +193,8 @@ function AnimateGuardianSetupClass:Run()
 	local maxLevel = self:MaxLevel()
 	-- (the build's main element: the guardian's hits can expose enemies to it)
 	local output = self.build.calcsTab.mainOutput or { }
-	local element, bestHit = "Fire", 0
-	for _, t in ipairs({ "Fire", "Cold", "Lightning" }) do
+	local element, bestHit = nil, 0
+	for _, t in ipairs({ "Fire", "Cold", "Lightning", "Physical", "Chaos" }) do
 		local v = (output[t .. "HitAverage"] or 0) + (output[t .. "Max"] or 0) + (output[t .. "Dot"] or 0)
 			+ (output.MainHand and ((output.MainHand[t .. "HitAverage"] or 0) + (output.MainHand[t .. "Max"] or 0)) or 0)
 		if v > bestHit then element, bestHit = t, v end
@@ -204,9 +204,15 @@ function AnimateGuardianSetupClass:Run()
 		if not taken[slot] then
 			local extra = ""
 			if slot == "Gloves" then
-				-- (what it hits is debuffed for the player too: Culling Strike, a Warlord
-				-- gloves suffix; Eater's "Inflict <element> Exposure on Hit" implicit)
-				extra = string.format("; best: Warlord gloves with Culling Strike, and an Eater implicit \"Inflict %s Exposure on Hit\" (the enemies it hits take more %s damage)", element, element:lower())
+				-- (options, not rules: what it hits can be debuffed for the player -
+				-- Culling Strike, a Warlord gloves suffix; Eater's "Inflict <element>
+				-- Exposure on Hit" only when the build deals mostly that element; a
+				-- unique pair can be better for a given build)
+				local options = { "Culling Strike (Warlord gloves suffix)" }
+				if element == "Fire" or element == "Cold" or element == "Lightning" then
+					t_insert(options, string.format("an Eater implicit \"Inflict %s Exposure on Hit\" (your %s damage is the build's main one)", element, element:lower()))
+				end
+				extra = "; options if you craft them: " .. table.concat(options, ", ") .. " - or unique gloves that suit the build"
 			end
 			t_insert(names, string.format("%s: %s with maximum life and elemental resistances%s, for its survival%s",
 				slot, slot == "Weapon" and "a rare melee weapon or shield" or slot == "Gloves" and "rare gloves" or slot == "Boots" and "rare boots" or ("a rare " .. slot:lower()), levelNote, extra))
