@@ -335,6 +335,40 @@ function AutoConfigClass:Recalculate()
 	build.calcsTab:BuildOutput()
 end
 
+-- The element Wave of Conviction's own hit deals the most of (its exposure),
+-- or nil when it isn't in the build or deals none
+function AutoConfigClass:WaveOfConvictionElement()
+	local build = self.build
+	local mainIndex = build.mainSocketGroup
+	for index, group in ipairs(build.skillsTab.socketGroupList) do
+		if group.enabled ~= false and index ~= mainIndex then
+			local active = 0
+			for _, g in ipairs(group.gemList or { }) do
+				if g.enabled ~= false and g.gemData and not g.gemData.grantedEffect.support then
+					active = active + 1
+					if g.gemData.name == "Wave of Conviction" then
+						local saved, savedCalcs = group.mainActiveSkill, group.mainActiveSkillCalcs
+						build.mainSocketGroup = index
+						group.mainActiveSkill, group.mainActiveSkillCalcs = active, active
+						self:Recalculate()
+						local output = build.calcsTab.mainOutput or { }
+						local bestType, bestHit
+						for _, t in ipairs({ "Fire", "Cold", "Lightning" }) do
+							local hit = output[t .. "HitAverage"] or 0
+							if hit > 0 and (not bestHit or hit > bestHit) then bestType, bestHit = t, hit end
+						end
+						build.mainSocketGroup = mainIndex
+						group.mainActiveSkill, group.mainActiveSkillCalcs = saved, savedCalcs
+						self:Recalculate()
+						return bestType
+					end
+				end
+			end
+		end
+	end
+	return nil
+end
+
 -- Is an option relevant to this build (does a modifier use its condition)?
 function AutoConfigClass:IsUsed(option)
 	local env = self.build.calcsTab.mainEnv
@@ -498,6 +532,7 @@ function AutoConfigClass:Run()
 	self.changeIndex = { }
 	local boss = self.scenario.boss and true or false
 	self:Set("enemyIsBoss", boss and "Pinnacle" or "None", boss and "pinnacle boss scenario" or "map clearing scenario")
+	self.wocType = nil
 	for pass = 1, 4 do
 		self:Recalculate()
 		local output = self.build.calcsTab.mainOutput
@@ -797,8 +832,14 @@ function AutoConfigClass:Run()
 			local maxGale = 10 + modDB:Sum("BASE", nil, "MaximumGaleForce")
 			self:Set("multiplierGaleForce", maxGale, "Gale Force builds up while using skills")
 		end
-		if modDB:Flag(nil, "Condition:CanGainFanaticism") and flags.spell then
-			self:Set("buffFanaticism", true, "gained by casting the main skill")
+		-- (poewiki Instruments of Zeal: a Fanatic charge each second you've
+		-- attacked - a new attack used yourself, not a trigger, a proxy or a
+		-- channel kept going - and Fanaticism at the maximum; its bonuses are for
+		-- spells cast yourself: a spell build that never attacks gets none)
+		if modDB:Flag(nil, "Condition:CanGainFanaticism") then
+			local attacks = flags.attack and not flags.trap and not flags.mine and not flags.totem and not flags.triggered
+				and not (skill and skill.skillTypes and skill.skillTypes[SkillType.Channel])
+			self:Set("buffFanaticism", attacks and true or false, attacks and "fanatic charges from the main skill's attacks" or "no attacks used every second: no fanatic charges")
 		end
 		if anyLine({ "gain tailwind", "you have tailwind", "grants tailwind" }) then
 			self:Set("buffTailwind", true, "the build gains Tailwind")
@@ -901,8 +942,12 @@ function AutoConfigClass:Run()
 		local hasGem = { }
 		for _, name in ipairs(gems) do hasGem[name] = true end
 		if hasGem["Wave of Conviction"] then
-			local bestType, bestHit
-			for _, t in ipairs({ "Fire", "Cold", "Lightning" }) do
+			-- (poewiki: the exposure matches the element the wave's own hit dealt
+			-- the most of after mitigation: Wave of Conviction's numbers, its group
+			-- shown as the main one for a moment, once a run)
+			if self.wocType == nil then self.wocType = self:WaveOfConvictionElement() or false end
+			local bestType, bestHit = self.wocType or nil, nil
+			for _, t in ipairs(bestType and { } or { "Fire", "Cold", "Lightning" }) do
 				local hit = skillValue(output, t .. "HitAverage") or 0
 				if hit > 0 and (not bestHit or hit > bestHit) then bestType, bestHit = t, hit end
 			end
