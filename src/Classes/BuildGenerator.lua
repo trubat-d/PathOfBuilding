@@ -270,7 +270,7 @@ function BuildGeneratorClass:NewCharges(override)
 	local input = self.build.configTab.input
 	local list
 	for kind in pairs(kinds) do
-		if not input["use" .. kind .. "Charges"] and self.options.chargeSync ~= false then list = list or { } t_insert(list, kind) end
+		if not input["use" .. kind .. "Charges"] and self.options.chargeSync ~= false and not (self.chargesDenied and self.chargesDenied[kind]) then list = list or { } t_insert(list, kind) end
 	end
 	return list
 end
@@ -304,7 +304,7 @@ function BuildGeneratorClass:SyncCharges()
 	local changed = false
 	self.syncedCharges = self.syncedCharges or { }
 	for kind in pairs(kinds) do
-		if not input["use" .. kind .. "Charges"] then input["use" .. kind .. "Charges"] = true self.syncedCharges[kind] = true changed = true end
+		if not input["use" .. kind .. "Charges"] and not (self.chargesDenied and self.chargesDenied[kind]) then input["use" .. kind .. "Charges"] = true self.syncedCharges[kind] = true changed = true end
 	end
 	-- (switched on here and no longer generated: off again)
 	for kind in pairs(self.syncedCharges) do
@@ -6774,9 +6774,37 @@ function BuildGeneratorClass:ChooseTattoos()
 	end
 end
 
+-- (from a blank configuration, as the fair evaluation does it - bench/
+-- eval_build.lua's "normalized": a state switched on by an earlier step and
+-- left behind - charges from an item since replaced, Consecrated Ground from
+-- a passive respecced, Phasing from a pair of uniques tried - otherwise stays
+-- on, and the build is made for numbers it doesn't have: a mid-tier Righteous
+-- Fire scored 17.0 with its own configuration and 10.5 from a blank one, its
+-- burn no longer paid by Consecrated Ground's regeneration)
+local function isStateVar(k)
+	return k:match("^condition") or k:match("^multiplier") or k:match("^buff") or k:match("^override") or k:match("^use%a+Charges$")
+end
 function BuildGeneratorClass:AutoConfigure(note)
+	if self.options.configFromBlank ~= false then
+		local input = self.build.configTab.input
+		for k in pairs(input) do
+			if isStateVar(k) then input[k] = nil end
+		end
+		self.syncedCharges = { }
+		self.supportChargeVars = { }
+		self.build.configTab:BuildModList()
+	end
 	local ac = new("AutoConfig"):AutoConfig(self.build, self.options.configScenario)
 	ac:Run()
+	-- (charges the items seem to generate that AutoConfig didn't confirm - a
+	-- chance on kill against a boss... - stay off until it runs again:
+	-- SyncCharges, between two runs, switches on only new ones)
+	self.chargesDenied = { }
+	local kinds = { }
+	for _, slot in pairs(self.itemsTab.slots) do itemCharges(self.itemsTab.items[slot.selItemId], kinds) end
+	for kind in pairs(kinds) do
+		if not self.build.configTab.input["use" .. kind .. "Charges"] then self.chargesDenied[kind] = true end
+	end
 	-- one line per option across all runs, with its final value
 	self.configChangeByVar = self.configChangeByVar or { }
 	self.configOrder = self.configOrder or { }
