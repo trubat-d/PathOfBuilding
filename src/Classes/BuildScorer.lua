@@ -416,6 +416,14 @@ function BuildScorerClass:ElementalOverloadDPS(output, dps)
 	return dps * (1 + 0.4 * uptime) / 1.4
 end
 
+-- Totems of the main skill hitting together (1 when it isn't a totem skill)
+function BuildScorerClass:TotemCount(output)
+	local env = self.build.calcsTab and self.build.calcsTab.mainEnv
+	local mainSkill = env and env.player and env.player.mainSkill
+	if not (mainSkill and mainSkill.skillFlags and mainSkill.skillFlags.totem) then return 1 end
+	return m_max(1, output.TotemsSummoned or output.ActiveTotemLimit or 1)
+end
+
 function BuildScorerClass:GetDPS(output)
 	local dps
 	if output.FullDPS and output.FullDPS > 0 then
@@ -429,6 +437,18 @@ function BuildScorerClass:GetDPS(output)
 	-- skills whose parts add up on one target (SkillProfiles combine)
 	if self.hitScale and output.TotalDPS then
 		dps = dps + (self.hitScale - 1) * output.TotalDPS
+	end
+	-- totems: PoB's figures are one totem's (its own Calcs count totems only for
+	-- bleed stacks); every totem summoned hits the boss. Their hits, poisons,
+	-- impales and stacking damage over time add up; ignite, bleed and a
+	-- non-stacking damage over time are the strongest one only
+	local totems = self:TotemCount(output)
+	if totems > 1 then
+		local env = self.build.calcsTab and self.build.calcsTab.mainEnv
+		local mainSkill = env and env.player and env.player.mainSkill
+		local stackingDot = mainSkill and mainSkill.skillFlags and mainSkill.skillFlags.DotCanStack and (output.TotalDot or 0) or 0
+		local per = (output.TotalDPS or 0) * (self.hitScale or 1) + (output.TotalPoisonDPS or 0) + (output.ImpaleDPS or 0) + stackingDot
+		dps = dps + (totems - 1) * per
 	end
 	if self.overlap then
 		dps = self.overlap:AdjustDPS(output, dps)

@@ -337,7 +337,8 @@ function BuildGeneratorClass:UpdateCombinedParts()
 	local ctx = { output = self.build.calcsTab.mainOutput or { }, boss = not configScenario or configScenario.boss and true or false, gen = self }
 	local rule = gem and first and self.options.skillProfiles ~= false and self.skillProfiles.Combine(gem, ctx)
 	if not rule then
-		self.scorer.hitScale = nil
+		local hits = gem and first and self.options.skillProfiles ~= false and self.skillProfiles.Hits(gem, ctx)
+		self.scorer.hitScale = hits and hits > 0 and hits ~= 1 and hits or nil
 		return
 	end
 	local current = first.skillPartCalcs or first.skillPart or 1

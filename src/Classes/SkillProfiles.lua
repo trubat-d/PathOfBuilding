@@ -178,6 +178,17 @@ SkillProfilesClass.list = {
 	{ pattern = "^Wild Strike", combine = { { part = "Fire hit", weight = 1 / 3 }, { part = "Fire explosion", weight = bossOr(0, 1 / 3) }, { part = "Lightning hit", weight = 1 / 3 },
 		{ part = "Lightning bolt", weight = bossOr(0, 1 / 3) }, { part = "Cold hit", weight = 1 / 3 }, { part = "Icy wave", weight = bossOr(0, 1 / 3) } }, note = "each element in turn; its secondary hit only on the rest of a pack (an enemy struck isn't hit by it)" },
 	{ pattern = "^Tornado of Elemental Turbulence", combine = { { part = "Fire", weight = 1 / 3 }, { part = "Lightning", weight = 1 / 3 }, { part = "Cold", weight = 1 / 3 } }, note = "the three elements in turn" },
+	-- arrows of one attack landing on a boss (PoB counts one arrow an attack;
+	-- poewiki: 2-5 hits on an average-sized boss, 5-8 with Saturation's slower
+	-- and more numerous arrows; Artillery's line of arrows crosses it)
+	{ pattern = "^Rain of Arrows$", hits = bossOr(3, 1), note = "about 3 of an attack's arrows hitting a boss" },
+	{ pattern = "^Rain of Arrows of Saturation", hits = bossOr(6, 1), note = "about 6 of an attack's arrows hitting a boss" },
+	{ pattern = "^Rain of Arrows of Artillery", hits = bossOr(2, 1), note = "about 2 of the line's arrows hitting a boss" },
+	-- (poewiki Bladefall: five volleys, each one wave's width further; enemies
+	-- are hit more than once where they overlap - a boss's hitbox spans about two)
+	{ pattern = "^Bladefall$", hits = bossOr(2, 1), note = "about 2 of the 5 volleys hitting a boss" },
+	-- (Artillery Ballista: its arrows land in a line, a boss under about two)
+	{ pattern = "^Artillery Ballista$", hits = bossOr(2, 1), note = "about 2 of a volley's arrows hitting a boss" },
 	-- conditions the skill is used under
 	{ pattern = "^Cyclone", config = { channellingCycloneCheck = true }, note = "channelled" },
 }
@@ -189,6 +200,15 @@ function SkillProfilesClass.Find(name)
 		if name:match(profile.pattern) then return profile end
 	end
 	return nil
+end
+
+-- Hits of one use landing on the same target, beyond the one PoB counts
+-- (Rain of Arrows): a number, or nil
+function SkillProfilesClass.Hits(gem, ctx)
+	local profile = gem and SkillProfilesClass.Find(gem.name)
+	if not profile or not profile.hits then return nil end
+	local hits = type(profile.hits) == "function" and profile.hits(ctx) or profile.hits
+	return hits, profile.note
 end
 
 -- Index of a part by name in a granted effect (nil if the gem has no such part)
