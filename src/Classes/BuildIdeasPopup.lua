@@ -1414,6 +1414,21 @@ function BuildIdeasPopupClass:OpenGenerator()
 				state.quickScores[r.archetype.id] = r.quick
 			end
 		end
+		-- (and the builds made around an anchor unique, IdeaMiner.Anchors: their
+		-- quick build can't show it - the crit and keystones the unique needs
+		-- come with the full build's commitments - so up to two are always
+		-- built fully: mid-tier Cyclone of Tumult 18.59 -> 18.91 around Voidforge)
+		do
+			local inList, anchors = { }, 0
+			for _, a in ipairs(candidates) do inList[a] = true end
+			for _, r in ipairs(ranked) do
+				if anchors < 2 and r.archetype.forced and not inList[r.archetype] then
+					t_insert(candidates, r.archetype)
+					state.quickScores[r.archetype.id] = r.quick
+					anchors = anchors + 1
+				end
+			end
+		end
 		-- (and the best two together, when they can be combined: a hybrid)
 		if ranked[1] and ranked[2] and controls.hybrids.state then
 			local hybrid = archetypeLib.Hybrid(ranked[1].archetype, ranked[2].archetype)
