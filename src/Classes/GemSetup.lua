@@ -583,6 +583,8 @@ function GemSetupClass:ChooseBest(kind, options, allowNeutral)
 	for _, option in ipairs(options) do
 		local valid = true
 		for _, gid in ipairs(option.gems) do if not gid then valid = false end end
+		-- (supports that can't support the skill: PoB's rules, see supportsApply)
+		if valid and not supportsApply(option.gems) then valid = false end
 		if valid and self:SlotFor(#option.gems) then
 			local gems = { }
 			for _, gid in ipairs(option.gems) do t_insert(gems, gemEntry(gid)) end
