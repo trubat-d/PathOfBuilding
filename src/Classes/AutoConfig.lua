@@ -836,8 +836,32 @@ function AutoConfigClass:Run()
 		end
 
 		-- leech and life
+		-- (poewiki Leech: every life leech instance is discarded the moment
+		-- unreserved life is full, so "while Leeching" holds only while life
+		-- stays below full - overleech (Petrified Blood, "not removed when
+		-- unreserved life is filled"), a life drain the build pays all the time
+		-- (Righteous Fire, Blood Rage...), or mana leech while the skill spends
+		-- mana. A build leeching with full life most of the time isn't leeching)
 		local leech = (output.LifeLeechRate or 0) + (output.ManaLeechRate or 0) + (output.EnergyShieldLeechRate or 0)
-		setIfUsed("conditionLeeching", leech > 0, leech > 0 and "the build leeches" or "the build does not leech")
+		local leechReason
+		if leech > 0 then
+			local mod = env.player.modDB
+			local overleech = mod:Flag(nil, "CanLeechLifeOnFullLife")
+			for _, group in ipairs(self.build.skillsTab.socketGroupList) do
+				if group.enabled ~= false then
+					for _, g in ipairs(group.gemList or { }) do
+						if g.enabled ~= false and g.gemData and g.gemData.name == "Petrified Blood" then overleech = true end
+					end
+				end
+			end
+			local degen = (output.LifeRegenRecovery or 0) - (output.NetLifeRegen or output.LifeRegenRecovery or 0)
+			local manaLeech = (output.ManaLeechRate or 0) > 0 and (output.ManaPerSecondCost or 0) > 0
+			if overleech then leechReason = "life leech kept at full life (overleech)"
+			elseif degen > 0 and (output.LifeLeechRate or 0) > 0 then leechReason = "life drained all the time: never full"
+			elseif manaLeech then leechReason = "mana leech while the skill spends mana"
+			else leech = 0 leechReason = "leech ends at full life (poewiki): no overleech or life drain" end
+		end
+		setIfUsed("conditionLeeching", leech > 0, leechReason or "the build does not leech")
 		local life, unreserved = output.Life or 0, output.LifeUnreserved
 		if life > 1 and unreserved then
 			local lowLife = unreserved / life <= 0.5
