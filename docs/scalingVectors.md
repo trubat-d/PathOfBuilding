@@ -179,3 +179,31 @@ it: the generator never finds such a design one step at a time.
   takes Overwhelm.
 Mid-tier Cyclone of Tumult: 18.59 / 17.5M (claw) -> 18.91 / 23.8M built
 around Voidforge, 75% crit x5.5 (Flicker Strike: 18.27, below its 18.39).
+
+#### The configuration a build is made with is the one it is judged with
+A mid-tier Righteous Fire scored 17.0 with the configuration the generator
+left it and 10.5 from a blank one (the fair evaluation): its burn was paid by
+Consecrated Ground's regeneration, switched on by AutoConfig while a passive
+gave it and put back by a snapshot after the passive was gone. Endurance
+charges (AutoConfig switched charges on, never off) and Phasing (left from a
+pair of uniques tried) the same. AutoConfigure now starts from a blank set of
+conditions, buffs, multipliers, overrides and charges every time, as the
+evaluation does: the generator's score and the fair one agree (16.64 / 16.64,
+16.42 / 16.42), and charges an item seems to give that AutoConfig doesn't
+confirm stay off until it runs again. (Also: PoB's tree undo state dropped
+the bloodline - secondaryAscendClassId read from a field never set.)
+
+#### What a player would build, not what the boss numbers like most
+- Eldritch implicits: the base lines; the "while a Unique Enemy / Pinnacle
+  Atlas Boss is in your Presence" versions only when asked (Boss implicits):
+  a build mostly clears maps.
+- Expedition flasks (Iron Flask's ward) only for a build with a ward pool of
+  its own: expensive, and 200 ward is not a reason.
+- A rare keeps its base's implicit (a Void Sceptre's elemental damage), and
+  its lines read prefixes, suffixes, crafted.
+- A cluster jewel's arm (the third notable, a small passive) is left
+  unallocated when the tree spends the point better; a Large one's sockets
+  are tried with Medium clusters, not only the build's rare jewel.
+- The generation log, its assumptions, the configuration switched on and the
+  Animate Guardian's items are written in the build's notes, so a shared
+  link (pobb.in) shows what was assumed.
