@@ -81,3 +81,23 @@ What hid them from the generator (all fixed):
 - **Values that grow with the build**: chill (and Bitter Frost) scale with the
   hit size, so the keystone was worthless early, and timeless jewels conquered
   it before it paid; jewels made for the half-built tree.
+
+#### Reaching the top players (Winter Orb, pure mode)
+Scored the same way (eval_build: same scorer, uber boss, a player's states held
+by hand cleared and AutoConfig run): the top three players 18.12 / 20.9M DPS,
+18.05 / 15.0M, 15.90 / 12.8M; our power + crit builds, made without any player
+data at the players' median cost, 18.34 / 13.3M (level 92) and 18.40 / 12.0M
+(level 100). What it took, past the layers above:
+- **Every channel priced against the others**: a jewel socket against the
+  passives it costs (clusters judged with rare jewels in the sockets they
+  add); a resistance from a passive against an affix tier or a jewel mod
+  (RequirementsToGearMove); a unique jewel against the rare it displaces.
+- **The configuration following every test**: charges an item generates, a
+  piece that keeps charges at maximum (budget fitting threw out Ralakesh's
+  Impatience, worth +0.02 alone and 1.1 in the build).
+- **Gear made again after the last tree changes**: the rares made for an
+  earlier tree held back the finished build by ~0.4.
+- **Rollbacks that restore everything**: a trial that remade the rares and was
+  undone left slots empty.
+- **Kill speed as a defence**: the defence term counts the fight's length
+  (boss life / DPS, at least 8 s).
