@@ -498,10 +498,14 @@ function AutoConfigClass:Run()
 			self.scorer = self.scorer or new("BuildScorer"):BuildScorer(self.build, { chargesPerSecond = boss and 0 or 4 })
 			local okShare, share = pcall(function() return self.scorer:DamageTakenShare(output) end)
 			share = okShare and share or 1
-			local notHit = (1 - share) ^ 4
+			-- (three hits a second: a boss alone throws about one, but a map's
+			-- packs many more, and these states are for playing the whole
+			-- game - Wind Dancer is off while clearing even at 70% avoidance)
+			local hits = 3
+			local notHit = (1 - share) ^ (4 * hits)
 			setIfUsed("conditionBeenHitRecently", notHit < 0.5, string.format("%.0f%% of hits avoided: %.0f%% chance to go 4 seconds without being hit", (1 - share) * 100, notHit * 100))
-			-- (attacks: about half of them, two in 4 seconds)
-			local notHitByAttack = (1 - share) ^ 2
+			-- (attacks: about half of them)
+			local notHitByAttack = (1 - share) ^ (4 * hits / 2)
 			setIfUsed("conditionBeenHitByAttackRecently", notHitByAttack < 0.5, string.format("%.0f%% of hits avoided: %.0f%% chance to go 4 seconds without being hit by an attack", (1 - share) * 100, notHitByAttack * 100))
 		end
 		setIfUsed("conditionKilledRecently", not boss, boss and "not while fighting a boss" or "clearing maps")
