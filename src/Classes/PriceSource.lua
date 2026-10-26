@@ -102,7 +102,12 @@ end
 
 -- Can a unique be counted on at an investment level (scarce ones from High)?
 function PriceSourceClass.Available(level, title)
-	if not level or not title then return true end
+	if not title then return true end
+	-- (the player's excluded uniques and the mid-tier option's chase uniques:
+	-- the jewel finders ask here, not through the item filter)
+	local rules = GetGeneratorRules and GetGeneratorRules()
+	if rules and rules.userExcluded and rules.userExcluded[title] then return false end
+	if not level then return true end
 	if level.scarce == false and PriceSourceClass.scarceUniques[title] then return false end
 	-- (early in a league they aren't found at any budget)
 	if main and main.priceSource and main.priceSource:PhaseScarce() and PriceSourceClass.scarceUniques[title] then return false end

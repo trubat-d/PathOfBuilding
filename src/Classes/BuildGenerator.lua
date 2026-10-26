@@ -3460,7 +3460,9 @@ function BuildGeneratorClass:ChooseMetaJewels(onlyKinds)
 		tick = function() self:Tick() end,
 	})
 	local prices = GetPriceSource()
-	local kinds = { "forbidden" }
+	local kinds = { }
+	-- (the pair: not when either is excluded, by the player or the mid-tier option)
+	if prices.Available(investment, "Forbidden Flame") and prices.Available(investment, "Forbidden Flesh") then t_insert(kinds, "forbidden") end
 	-- (Watcher's Eye and Split Personality are scarce: from High investment)
 	if prices.Available(investment, "Watcher's Eye") then t_insert(kinds, "watcher") end
 	-- Split Personality (limited to 2): stronger the further its socket
@@ -4518,19 +4520,42 @@ function BuildGeneratorClass:SecondaryDamageMove()
 		-- 2. the best few with their own three supports (the whole build's
 		-- score: both skills count); no archetype supports forced on it
 		self.mainGroup, self.mainLinkLimit, self.options.archetype, self.triggerFixed = group, 3, nil, nil
-		for i = 1, m_min(4, #ranked) do
-			self.mainGem = data.gems[ranked[i].gemId]
+		-- (the best bare ones ranked again by what they add that the build
+		-- can pay for: a channelled skill the mana can't keep up falls back)
+		for i = 1, m_min(8, #ranked) do
 			try(ranked[i].gemId)
-			self:ChooseSupports(3)
+			ranked[i].value = baseDps + (ranked[i].dps - baseDps) * sustainOf()
+		end
+		for i = m_min(8, #ranked) + 1, #ranked do ranked[i].value = 0 end
+		t_sort(ranked, function(a, b) return a.value > b.value end)
+		local lifetap = new("GemSetup"):GemSetup(self).GemId("Lifetap")
+		local function consider(gemId, label)
 			self:Recalculate()
 			local dps = self.scorer:GetDPS(self.build.calcsTab.mainOutput)
 			local sustain = sustainOf()
 			local value = baseDps + (dps - baseDps) * sustain
-			if self.options.debugTiming then ConPrintf("[secondary] %s with supports: %+.1f%%, its cost paid %.0f%%", self.mainGem.name, (dps / baseDps - 1) * 100, sustain * 100) end
+			if self.options.debugTiming then ConPrintf("[secondary] %s%s: %+.1f%%, its cost paid %.0f%%", data.gems[gemId].name, label, (dps / baseDps - 1) * 100, sustain * 100) end
 			if sustain >= 0.8 and (not best or value > best.value) then
 				local gems = { }
 				for _, g in ipairs(group.gemList) do t_insert(gems, g) end
-				best = { gemId = ranked[i].gemId, dps = dps, gems = gems, value = value, sustain = sustain }
+				best = { gemId = gemId, dps = dps, gems = gems, value = value, sustain = sustain }
+			end
+			return sustain
+		end
+		for i = 1, m_min(4, #ranked) do
+			self.mainGem = data.gems[ranked[i].gemId]
+			try(ranked[i].gemId)
+			self:ChooseSupports(3)
+			local sustain = consider(ranked[i].gemId, " with supports")
+			-- (its cost paid in life: Lifetap in place of the last support, as
+			-- Pohx links it with Fire Trap)
+			if sustain < 0.95 and lifetap and not new("GemSetup"):GemSetup(self):LifeIsOne() then
+				local last = group.gemList[#group.gemList]
+				local entry = { level = self:GemLevel(data.gems[lifetap]), quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = lifetap }
+				if #group.gemList >= 4 then group.gemList[#group.gemList] = entry else t_insert(group.gemList, entry) end
+				skillsTab:ProcessSocketGroup(group)
+				consider(ranked[i].gemId, " with Lifetap")
+				if #group.gemList >= 4 and last then group.gemList[#group.gemList] = last end
 			end
 		end
 		if best then best.baseDps = baseDps end
@@ -4960,12 +4985,13 @@ function BuildGeneratorClass:SupremeOstentationMove()
 		return a.value > b.value
 	end)
 	-- (the trial below remakes the tree and the rares; the same remaking alone
-	-- is the baseline, kept when it helps, so the jewel is judged on what it
-	-- adds and not on the remaking: compared with the bare build, Supreme
-	-- Ostentation took the credit for it and replaced timeless jewels with
-	-- better notables)
-	do
-		local snap0 = self:Snapshot()
+	-- is the baseline the jewel is judged against, so the jewel gets no credit
+	-- for the remaking: compared with the bare build, Supreme Ostentation took
+	-- it and replaced timeless jewels with better notables. Made only when a
+	-- trial beats the build: most don't, and it costs a third of the move)
+	local minGain = self.options.ostentationMinGain or 0.1
+	local function adaptedBaseline(fromSnap)
+		self:Restore(fromSnap)
 		local savedLog0 = #self.log
 		local ok0 = pcall(function()
 			self:RefineTree(self.options.ostentationRefine or 16)
@@ -4973,14 +4999,11 @@ function BuildGeneratorClass:SupremeOstentationMove()
 			self:OptimizeTree()
 		end)
 		for j = #self.log, savedLog0 + 1, -1 do t_remove(self.log, j) end
-		local adapted = ok0 and self:FullScore() or before
-		if self.options.debugTiming then ConPrintf("[ostentation] remaking alone: %.3f -> %.3f", before, adapted) end
-		if ok0 and adapted > before + 0.002 then
-			before = adapted
-		else
-			self:Restore(snap0)
-		end
+		local adapted = ok0 and self:FullScore() or -math.huge
+		if self.options.debugTiming then ConPrintf("[ostentation] remaking alone: %.3f", adapted) end
+		return adapted
 	end
+	local original = self:Snapshot()
 	-- (each socket tried as a package; the first that improves the build is kept.
 	-- The second only when the first came close: in the traces on five Endgame
 	-- builds, a second socket never won, and never after a first that ended
@@ -5013,15 +5036,35 @@ function BuildGeneratorClass:SupremeOstentationMove()
 			self:RefineTree(self.options.ostentationRefine or 16)
 			if self.options.ostentationSolver then self:TreeSolverMove() end
 			dbg("refine")
+			-- (stopped when the rares and the targets can't bring it up to a
+			-- gain: they added 0.03-0.17 after the tree in the traces)
+			if self:FullScore() < before + minGain - (self.options.ostentationRecover or 0.25) then error("ostentation: too far below after the tree", 0) end
 			if self.options.finalRares ~= false then self:FinalRares() end
 			dbg("rares")
 			-- (targets re-chosen: paths no longer need to pass through attributes)
 			self:OptimizeTree()
 			dbg("optimize")
 		end)
-		if not ok then ConPrintf("Supreme Ostentation trial failed: %s", tostring(err)) end
+		local stopped = not ok and tostring(err):match("^ostentation: ")
+		if not ok and not stopped then ConPrintf("Supreme Ostentation trial failed: %s", tostring(err)) end
 		for j = #self.log, savedLog + 1, -1 do t_remove(self.log, j) end
-		local after = ok and self:FullScore() or before
+		local after = ok and self:FullScore() or before - 1
+		-- (a winner judged against the same remaking without the jewel)
+		if ok and after > before + minGain then
+			local trial = self:Snapshot()
+			local trialLog = { }
+			for j = savedLog + 1, #self.log do trialLog[#trialLog + 1] = self.log[j] end
+			local adapted = adaptedBaseline(original)
+			if adapted > before then
+				if after <= adapted + minGain then
+					-- (the remaking alone is the gain: kept without the jewel)
+					self:Note(string.format("Passive tree and rares remade for the finished build: score %+.3f", adapted - before))
+					return adapted - before
+				end
+			end
+			self:Restore(trial)
+			before = m_max(before, adapted)
+		end
 		firstAfter = firstAfter or after
 		if self.options.debugTiming then ConPrintf("[ostentation] socket %d (historic %s, keystones %d, near %s): %.3f -> %.3f", socket.node.id, tostring(historicSocket), socket.keystones, socket.nearKeystone and socket.nearKeystone.dn or "-", before, after) end
 		-- (a clear gain only: the jewel takes a socket and a seed hunt, and a
