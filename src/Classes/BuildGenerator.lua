@@ -1942,6 +1942,24 @@ function BuildGeneratorClass:ChooseBases()
 	end
 	-- weapons: white bases first, then the top two get rares
 	self:Recalculate()
+	-- (a caster's weapon of each type: the base whose implicit helps most - a
+	-- Void Sceptre's elemental damage, not the highest level dagger's crit
+	-- chance for a burn that can't crit)
+	local effect = self.mainGem and self.mainGem.grantedEffect
+	if effect and not effect.weaponTypes and not self.triggerSource then
+		for _, option in ipairs(self.weaponOptions or { }) do
+			local weaponType = data.itemBases[option.weapon1] and data.itemBases[option.weapon1].type
+			local best, bestS
+			for _, baseName in ipairs(self:BasesOfType(function(base) return base.type == weaponType and base.weapon end)) do
+				local score = self:Score({ repSlotName = "Weapon 1", repItem = makeBase(baseName) })
+				if not bestS or score > bestS + 1e-9 then best, bestS = baseName, score end
+			end
+			if best and best ~= option.weapon1 then
+				if option.dual then option.weapon2 = best end
+				option.weapon1 = best
+			end
+		end
+	end
 	local scored = { }
 	for _, option in ipairs(self.weaponOptions or { }) do
 		self:EquipWeapons(option)
