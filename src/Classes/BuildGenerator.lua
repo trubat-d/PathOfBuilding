@@ -2042,18 +2042,27 @@ function BuildGeneratorClass:AmuletAttributeMove()
 		end
 		self:FinalRares()
 		self:AutoConfigure()
-		t_insert(results, { base = baseName or item.baseName, original = not baseName, score = self:FullScore(), snap = self:Snapshot() })
+		local score = self:FullScore()
+		t_insert(results, { base = baseName or item.baseName, name = baseName, original = not baseName, score = score })
 		self:Tick()
+		return score
 	end
 	try(nil)
 	for i = 1, m_min(3, #candidates) do try(candidates[i]) end
-	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
 	table.sort(results, function(a, b) return a.score > b.score end)
 	local best, original = results[1], nil
 	for _, r in ipairs(results) do if r.original then original = r end end
+	-- (the winner made again: a snapshot doesn't survive the rares made in
+	-- place by the tries after it)
 	if best and best.score > before + 0.003 then
-		self:Restore(best.snap)
-		self:Recalculate()
+		local again = try(best.name)
+		for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+		if not again or again < before + 0.003 then
+			self:Restore(origSnap)
+			self:Recalculate()
+			return
+		end
+		best.score = again
 		if best.original then
 			self:Note(string.format("Rares made again for the finished build: score %+.3f", best.score - before))
 		else
@@ -2061,6 +2070,7 @@ function BuildGeneratorClass:AmuletAttributeMove()
 				best.base, best.score - before, best.score - (original and original.score or before), item.baseName))
 		end
 	else
+		for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
 		self:Restore(origSnap)
 		self:Recalculate()
 	end
