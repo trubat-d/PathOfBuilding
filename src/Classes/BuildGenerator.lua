@@ -2066,6 +2066,90 @@ function BuildGeneratorClass:AmuletAttributeMove()
 	end
 end
 
+-- Abyssal sockets filled: every empty one on the equipped gear (a Stygian
+-- Vise, Darkness Enthroned...) gets the best rare abyss jewel of the four
+-- bases (Murderous, Searching, Hypnotic, Ghastly Eye), measured against the
+-- empty socket. The generator left them empty: a Stygian Vise counted as a
+-- belt without its jewel
+local abyssBases = { "Murderous Eye Jewel", "Searching Eye Jewel", "Hypnotic Eye Jewel", "Ghastly Eye Jewel" }
+function BuildGeneratorClass:FillAbyssSockets()
+	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+	local generator = finder.rareGenerator
+	if not generator then return 0 end
+	self.itemsTab:PopulateSlots()
+	local filled = { }
+	for _, slot in ipairs(self.itemsTab.orderedSlots) do
+		if slot.slotName:match("Abyssal Socket") and (slot.selItemId or 0) == 0 and (not slot.IsShown or slot:IsShown()) then
+			self:Recalculate()
+			local measure = function(output) return self.scorer:ScoreOutput(output, self.ratio) end
+			local baseOutput = self.calcFunc({ })
+			local ctx = { calcFunc = self.calcFunc, baseOutput = baseOutput, basePower = measure(baseOutput), measure = measure,
+				tick = function() self:Tick() end, opts = { quality = self.options.quality, levelOnly = true, keepResists = false, keepAttributes = false, keepLife = false } }
+			local best
+			for _, baseName in ipairs(abyssBases) do
+				if data.itemBases[baseName] then
+					local blank = new("Item"):Item("Rarity: NORMAL\n" .. baseName)
+					blank:BuildModList()
+					local ok, result = pcall(function() return generator:GenerateForSlotWith(slot.slotName, blank, ctx, nil) end)
+					if ok and result and (not best or result.power > best.power) then best = result end
+				end
+			end
+			if best and best.power > ctx.basePower then
+				self:Equip(best.item, slot.slotName)
+				self.itemsTab:PopulateSlots()
+				self:Recalculate()
+				local mods = { }
+				for _, l in ipairs(best.item.explicitModLines or { }) do t_insert(mods, l.line) end
+				t_insert(filled, string.format("%s: %s (%s)", slot.slotName, best.item.baseName, table.concat(mods, ", ")))
+			end
+		end
+	end
+	if #filled > 0 then self:Note("Abyss jewels: " .. table.concat(filled, "; ")) end
+	return #filled
+end
+
+-- A Stygian Vise (an abyssal socket) against the belt worn: its rare made
+-- for the slot plus its abyss jewel, kept if the build is better (Ynda's
+-- Stand on a crit Cyclone: a rare Stygian Vise with an abyss jewel +0.13)
+function BuildGeneratorClass:AbyssBeltMove()
+	if not data.itemBases["Stygian Vise"] or (self.lockedSlots and self.lockedSlots.Belt) then return 0 end
+	local slot = self.itemsTab.slots["Belt"]
+	local current = slot and self.itemsTab.items[slot.selItemId]
+	if current and current.baseName == "Stygian Vise" then return 0 end
+	local before = self:FullScore()
+	local snap = self:Snapshot()
+	local savedLog = #self.log
+	local ok, err = pcall(function()
+		local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
+		local generator = finder.rareGenerator
+		slot:SetSelItemId(0)
+		self.itemsTab:PopulateSlots()
+		self:Recalculate()
+		local measure = function(output) return self.scorer:ScoreOutput(output, self.ratio) end
+		local baseOutput = self.calcFunc({ })
+		local ctx = { calcFunc = self.calcFunc, baseOutput = baseOutput, basePower = measure(baseOutput), measure = measure,
+			tick = function() self:Tick() end, opts = self:RareOptions(false) }
+		local result = generator:GenerateForSlotWith("Belt", makeBase("Stygian Vise"), ctx, nil)
+		if not result then error("no Stygian Vise made") end
+		self:Equip(result.item, "Belt")
+		self.itemsTab:PopulateSlots()
+		self:Recalculate()
+		self:FillAbyssSockets()
+		self:AutoConfigure()
+	end)
+	local after = ok and self:FullScore() or before
+	if ok and after > before + 0.01 then
+		for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+		self:Note(string.format("Belt: a rare Stygian Vise with an abyss jewel instead of %s: score %+.3f", current and (current.title or current.baseName) or "the empty slot", after - before))
+		return after - before
+	end
+	if not ok then ConPrintf("Abyss belt move failed: %s", tostring(err)) end
+	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+	self:Restore(snap)
+	self:Recalculate()
+	return 0
+end
+
 -- The flasks chosen again for the finished build: they are chosen at stage
 -- 10, for the build as it was then (a Gold Flask kept for its suffix, worth
 -- nothing once the gear changed, while a Sulphur or Quicksilver Flask would
@@ -8119,6 +8203,9 @@ function BuildGeneratorClass:Run()
 	end
 	if opts.jewelleryBases ~= false then
 		local ok, err = pcall(function() self:JewelleryBaseMove() end)
+		if ok and self.options.abyssJewels ~= false then
+			ok, err = pcall(function() self:FillAbyssSockets() self:AbyssBeltMove() end)
+		end
 		if not ok then ConPrintf("Jewellery bases failed: %s", tostring(err)) end
 	end
 	if opts.finalSupports ~= false then

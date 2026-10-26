@@ -280,7 +280,8 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 	local prefixLimit = subject.prefixes.limit or half
 	local suffixLimit = subject.suffixes.limit or half
 	-- jewels roll from their own mod pool (2 prefixes + 2 suffixes on rares)
-	local modTable = current.type == "Jewel" and data.itemMods.Jewel or nil
+	-- (abyss jewels from theirs: life, resistances, added damage...)
+	local modTable = current.type == "Jewel" and (current.base and current.base.subType == "Abyss" and data.itemMods.JewelAbyss or data.itemMods.Jewel) or nil
 	local candidates = self:GetCandidates(subject, quality, opts.levelOnly, modTable)
 	if current.type ~= "Jewel" and opts.crafts ~= false then
 		for _, craft in ipairs(self:GetCraftCandidates(subject, quality)) do t_insert(candidates, craft) end
