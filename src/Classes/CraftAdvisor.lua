@@ -10,6 +10,7 @@
 local pairs = pairs
 local ipairs = ipairs
 local t_insert = table.insert
+local m_min = math.min
 
 ---@class CraftAdvisor
 local CraftAdvisorClass = newClass("CraftAdvisor")
@@ -167,6 +168,90 @@ local function modOf(entry)
 	return entry and entry.modId and (data.itemMods.Explicit[entry.modId] or (data.itemMods.Item and data.itemMods.Item[entry.modId]))
 end
 
+------------------------------------------------------------------------------
+-- The Recombinator (Kingsmarch; Esm's calculator, recomb.rngissue.org): two
+-- items of the same class make one; for each side (prefixes, suffixes) the
+-- number of mods kept depends on how many the two items have together on that
+-- side, then that many are picked at random among them (at most one of the
+-- same mod). With only wanted mods on the inputs, every pick is a wanted one:
+-- the odds are those of keeping as many as there are different wanted mods.
+-- A mod on both items counts twice in the pool but can be kept once
+-- ("doubling"): a single mod on both items is always kept.
+------------------------------------------------------------------------------
+-- kept[n + 1][j + 1]: chance to keep j mods of a side with n mods in the pool
+local recombKept = { { 1, 0, 0, 0 }, { .41, .59, 0, 0 }, { 0, 2 / 3, 1 / 3, 0 }, { 0, .38, .52, .1 }, { 0, .1, .59, .31 }, { 0, 0, .43, .57 }, { 0, 0, .28, .72 } }
+-- Chance to keep all of `distinct` wanted mods when the pool has n of them (with doubles)
+local function keepAll(n, distinct)
+	if distinct == 0 then return n == 0 and 1 or (recombKept[n + 1] and recombKept[n + 1][1] or 0) end
+	local row = recombKept[m_min(n, 6) + 1]
+	if not row then return 0 end
+	local maxCount = m_min(3, distinct)
+	-- (chances past the most it can keep fold into the most)
+	local p = 0
+	for j = maxCount, 3 do p = p + (row[j + 1] or 0) end
+	return distinct == maxCount and p or 0
+end
+CraftAdvisorClass.RecombKeepAll = keepAll
+
+-- The best way to split wanted mods between two input items: each wanted mod on
+-- item A, item B or both, at most 3 prefixes / 3 suffixes an item, neither
+-- item already the finished one. Returns { a = { mods }, b = { mods }, chance } or nil
+function CraftAdvisorClass.RecombPlan(prefixes, suffixes)
+	local mods = { }
+	for _, m in ipairs(prefixes) do t_insert(mods, { m = m, prefix = true }) end
+	for _, m in ipairs(suffixes) do t_insert(mods, { m = m, prefix = false }) end
+	local n = #mods
+	if n < 2 or n > 6 then return nil end
+	local best
+	local where = { }
+	local function evaluate()
+		local aP, aS, bP, bS, nP, nS = 0, 0, 0, 0, 0, 0
+		local aCount, bCount = 0, 0
+		for i, x in ipairs(mods) do
+			local w = where[i]
+			local inA, inB = w ~= 2, w ~= 1
+			if x.prefix then
+				if inA then aP = aP + 1 end
+				if inB then bP = bP + 1 end
+			else
+				if inA then aS = aS + 1 end
+				if inB then bS = bS + 1 end
+			end
+			if inA then aCount = aCount + 1 end
+			if inB then bCount = bCount + 1 end
+		end
+		if aP > 3 or aS > 3 or bP > 3 or bS > 3 then return end
+		-- (each input clearly easier than the item: at most n - 2 of its mods,
+		-- and 2 at least so that small items still split)
+		local limit = math.max(2, n - 2)
+		if aCount > limit or bCount > limit then return end
+		nP, nS = aP + bP, aS + bS
+		local chance
+		if nP == 1 and nS == 1 then
+			-- (one prefix and one suffix in all: each kept alone or both, a third each)
+			chance = 1 / 3
+		else
+			chance = keepAll(nP, #prefixes) * keepAll(nS, #suffixes)
+		end
+		-- (the same chance with fewer mods to make on the inputs is better)
+		local cost = aCount + bCount
+		if not best or chance > best.chance + 1e-9 or (math.abs(chance - best.chance) <= 1e-9 and cost < best.cost) then
+			local a, b = { }, { }
+			for i, x in ipairs(mods) do
+				if where[i] ~= 2 then t_insert(a, x.m) end
+				if where[i] ~= 1 then t_insert(b, x.m) end
+			end
+			best = { a = a, b = b, chance = chance, cost = cost }
+		end
+	end
+	local function rec(i)
+		if i > n then return evaluate() end
+		for w = 1, 3 do where[i] = w rec(i + 1) end
+	end
+	rec(1)
+	return best
+end
+
 -- Steps to make the item: { "1. ...", "2. ..." } and a one-line summary
 function CraftAdvisorClass:Plan(item)
 	local class = itemClass(item)
@@ -268,6 +353,16 @@ function CraftAdvisorClass:Plan(item)
 		end
 	elseif #itemInfluences > 0 then
 		step("Influence: %s (its mods aren't needed - a cheaper non-influenced base works too)", table.concat(itemInfluences, "/"))
+	end
+	-- (hard ones: the Recombinator, from two easier items)
+	if #plain >= 4 then
+		local ps, ss = { }, { }
+		for _, m in ipairs(plain) do t_insert(m.type == "Prefix" and ps or ss, m.text) end
+		local plan = self.RecombPlan(ps, ss)
+		if plan and plan.chance >= 0.05 then
+			step("Or the Recombinator (Kingsmarch): item A with only %s, item B with only %s (same base, no bench crafts on them); recombined, %.0f%% chance to keep exactly the wanted mods (about %d tries on average; either base 50%%: use two of the same base). Each input is far easier than the whole item: make them with the steps above; a mod on both inputs counts twice but is kept once, which raises the odds",
+				table.concat(plan.a, ", "), table.concat(plan.b, ", "), plan.chance * 100, math.ceil(1 / plan.chance))
+		end
 	end
 	-- 6. bench, finish
 	if #crafted > 0 then
