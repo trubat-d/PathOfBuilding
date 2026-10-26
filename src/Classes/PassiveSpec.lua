@@ -187,7 +187,7 @@ function PassiveSpecClass:Load(xml, dbFileName)
 				end
 			end
 		end
-		self:ImportFromNodeList(nil, tonumber(xml.attrib.classId), tonumber(xml.attrib.ascendClassId), tonumber(xml.attrib.secondaryAscendClassId or 0), hashList, self.hashOverrides, masteryEffects)
+		self:ImportFromNodeList(nil, tonumber(xml.attrib.classId), tonumber(xml.attrib.ascendClassId), tonumber(xml.attrib.secondaryAscendClassId or 0) or 0, hashList, self.hashOverrides, masteryEffects)
 	elseif url then
 		self:DecodeURL(url)
 	end
@@ -2374,7 +2374,7 @@ function PassiveSpecClass:CreateUndoState()
 	return {
 		classId = self.curClassId,
 		ascendClassId = self.curAscendClassId,
-		secondaryAscendClassId = self.secondaryAscendClassId,
+		secondaryAscendClassId = self.curSecondaryAscendClassId,
 		hashList = allocNodeIdList,
 		hashOverrides = hashOverridesCopy,
 		masteryEffects = selections,
