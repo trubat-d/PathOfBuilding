@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610262054" />
+	<Version number="2.67.2-ia.202610262058" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -133,7 +133,7 @@
 	<File name="Classes/BuildListControl.lua" part="program" sha1="f60f0d7f6aecbe851db896913cd1aa707c7fb304" />
 	<File name="Classes/BuildMetaSource.lua" part="program" sha1="49121c15f4d2ff04bfb09556a88c9d480e4d30eb" />
 	<File name="Classes/BuildReview.lua" part="program" sha1="43ae7d5ee40faf05b9d96dd65f66c8e9b2256a98" />
-	<File name="Classes/BuildScorer.lua" part="program" sha1="d95ae4a5d4c9375daf6cf22e6c4a5f52e961b220" />
+	<File name="Classes/BuildScorer.lua" part="program" sha1="c070981bef61ecb680a0a90e44c35e42bd610631" />
 	<File name="Classes/ButtonControl.lua" part="program" sha1="dd46384fc87d495e7ef5a11803cfc70360ac8bf1" />
 	<File name="Classes/CalcBreakdownControl.lua" part="program" sha1="40ec12ec9a37b1a73aad44f1d6d473377821efbf" />
 	<File name="Classes/CalcSectionControl.lua" part="program" sha1="ace88981a36381c6ccecbdb76ee1b9b04d1afeaf" />
@@ -159,7 +159,7 @@
 	<File name="Classes/FlaskGenerator.lua" part="program" sha1="6a93366c5d17c6f3a13a8559ec0eb35379b45c41" />
 	<File name="Classes/FolderListControl.lua" part="program" sha1="2fec0874200a71563536324cfb1ea8f75984e53d" />
 	<File name="Classes/GemSelectControl.lua" part="program" sha1="8954e020052121d13122873b578b87e0bb7c60fc" />
-	<File name="Classes/GemSetup.lua" part="program" sha1="79b9ec18322971a456552cbd9196a9fb68eeab74" />
+	<File name="Classes/GemSetup.lua" part="program" sha1="94dbf912b618832fb6526e0affbc9e35bbcdc19c" />
 	<File name="Classes/GemTooltip.lua" part="program" sha1="11a6d37e2e2cb86f4b1a130968db7fd4154da6c2" />
 	<File name="Classes/GenerationQueue.lua" part="program" sha1="60f2fd136a3c8d8c12fa792ca8c269209f5eae71" />
 	<File name="Classes/HitOverlap.lua" part="program" sha1="c8902c12bf6c8be7dbe67ac49376c1270a3f49e1" />
@@ -208,7 +208,7 @@
 	<File name="Classes/SharedItemListControl.lua" part="program" sha1="3a347adb4941dd1a528603c4d42c1d55391383f9" />
 	<File name="Classes/SharedItemSetListControl.lua" part="program" sha1="3b29c71e57f89cc4fc20b9e363d8005bd5c0d77d" />
 	<File name="Classes/SkillListControl.lua" part="program" sha1="6d9dfc64bb870315cdde11a9055bbc954b2395b8" />
-	<File name="Classes/SkillProfiles.lua" part="program" sha1="a85d00c695a2293af2666c46abfb686a1556f091" />
+	<File name="Classes/SkillProfiles.lua" part="program" sha1="e5f3b765ba4d3a1340bf16e3f57690b342babede" />
 	<File name="Classes/SkillSetListControl.lua" part="program" sha1="36e0fef7ce81df44fd01fe8e5c41147c0b4e811a" />
 	<File name="Classes/SkillsTab.lua" part="program" sha1="c80ebae86b21a8f2f483ffd42af298f5514d5522" />
 	<File name="Classes/SliderControl.lua" part="program" sha1="f0da4053b101d3a716e29940352f9d95071262c2" />
