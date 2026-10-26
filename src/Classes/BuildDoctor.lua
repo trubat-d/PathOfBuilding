@@ -414,6 +414,27 @@ function BuildDoctorClass:ReportLines(limit)
 	return lines
 end
 
+-- Keystones a crit commitment takes with it: a weapon attack whose weapon's
+-- base crit is below 8% gets Overwhelm ("Base Critical Strike Chance for
+-- Attacks with Weapons is 8%"): Voidforge's 5% with the dose's +4% stood for
+-- it, but no step took the keystone itself, and the commitment came apart
+-- (7.5% crit at the end; with Overwhelm 59% x4)
+local function critTakes(build)
+	local env = build.calcsTab and build.calcsTab.mainEnv
+	local skill = env and env.player.mainSkill
+	if not (skill and skill.skillFlags and skill.skillFlags.attack and skill.skillFlags.weapon1Attack) then return { } end
+	local slot = build.itemsTab.slots["Weapon 1"]
+	local weapon = slot and build.itemsTab.items[slot.selItemId]
+	local base = weapon and weapon.base and weapon.base.weapon
+	if not base or (base.CritChanceBase or 0) >= 8 then return { } end
+	for _, node in pairs(build.spec.nodes) do
+		-- (a Slayer notable in this tree: taken from the build's own ascendancy,
+		-- the trim gives back the weakest ascendancy notable for its points)
+		if node.dn == "Overwhelm" and (not node.ascendancyName or node.ascendancyName == build.spec.curAscendClassName) and not node.alloc and node.path then return { "Overwhelm" } end
+	end
+	return { }
+end
+
 -- Plans from the report: the layers with the most damage per point left
 -- that the greedy allocation can't reach one passive at a time
 function BuildDoctorClass:Plans()
@@ -442,7 +463,7 @@ function BuildDoctorClass:Plans()
 		t_sort(blockSupports)
 		for _, name in ipairs(blockSupports) do t_insert(drop, name) end
 		t_insert(plans, {
-			id = "crit", label = "commit to critical strikes", blocks = { "Elemental Overload", "Resolute Technique" },
+			id = "crit", label = "commit to critical strikes", blocks = { "Elemental Overload", "Resolute Technique" }, take = critTakes(self.build),
 			reason = string.format("crit factor x%.2f now, x%.2f when chance and multiplier are built together (%s)", s.critEffect or 1, crit.commitRatio,
 				#drop > 0 and (table.concat(drop, ", ") .. " dropped") or "no keystone in the way"),
 			lens = { func = function(o) return o.CritEffect or 1 end, base = 1, label = "Crit damage factor", weight = 0.5 },
@@ -565,7 +586,7 @@ function BuildDoctorClass:Plans()
 		for _, name in ipairs({ "Elemental Overload", "Resolute Technique" }) do if allocated(name) then t_insert(drop, name) end end
 		local blockSupports = { }
 		for name in pairs(self.critBlockers or { }) do t_insert(blockSupports, name) t_insert(drop, name) end
-		return { id = "crit", label = "commit to critical strikes", blocks = { "Elemental Overload", "Resolute Technique" }, drop = drop, blockSupports = blockSupports,
+		return { id = "crit", label = "commit to critical strikes", blocks = { "Elemental Overload", "Resolute Technique" }, take = critTakes(self.build), drop = drop, blockSupports = blockSupports,
 			lens = { func = function(o) return o.CritEffect or 1 end, base = 1, label = "Crit damage factor", weight = 0.5 },
 			rares = true, refine = 30, utility = true }
 	end)
@@ -640,7 +661,7 @@ function BuildDoctorClass:CommitmentPlans()
 	local blockSupports = { }
 	for name in pairs(self.critBlockers or { }) do t_insert(blockSupports, name) t_insert(critDrop, name) end
 	return {
-		crit = { id = "crit", label = "crit", blocks = { "Elemental Overload", "Resolute Technique" }, drop = critDrop, blockSupports = blockSupports,
+		crit = { id = "crit", label = "crit", blocks = { "Elemental Overload", "Resolute Technique" }, take = critTakes(self.build), drop = critDrop, blockSupports = blockSupports,
 			lens = { func = function(o) return o.CritEffect or 1 end, base = 1, label = "Crit damage factor", weight = 0.5 }, rares = true, refine = 30, utility = true },
 		power = { id = "power", label = "power charges", lens = { stat = "PowerChargesMax", base = 3, label = "Maximum power charges", weight = 0.4 }, rares = true, refine = 16 },
 		resistance = { id = "resistance", label = "enemy " .. element:lower() .. " resistance",
@@ -1020,7 +1041,7 @@ function BuildDoctorClass:Execute(plan)
 		gen.protectedNodes = gen.protectedNodes or { }
 		for _, name in ipairs(plan.take or { }) do
 			for _, node in pairs(spec.nodes) do
-				if node.dn == name and node.type == "Keystone" and not node.ascendancyName and not node.alloc and node.path then
+				if node.dn == name and (node.type == "Keystone" or node.type == "Notable") and (not node.ascendancyName or node.ascendancyName == spec.curAscendClassName) and not node.alloc and node.path then
 					spec:AllocNode(node)
 					gen.protectedNodes[node.id] = true
 				end
