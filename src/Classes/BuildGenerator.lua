@@ -5870,6 +5870,11 @@ function BuildGeneratorClass:CheapVersion(entry)
 			local item = self:Equip(best.item, entry.slot)
 			self.rarePriceById = self.rarePriceById or { }
 			self.rarePriceById[item.id] = GetPriceSource():RarePrice(item, entry.cheapLevel or self.options.investment)
+			-- (made at the cheap level: not offered again as a cheaper version)
+			if entry.cheapLevel then
+				self.cheapRareIds = self.cheapRareIds or { }
+				self.cheapRareIds[item.id] = true
+			end
 		elseif entry.kind == "gear" and data.itemBases[entry.item.baseName] then
 			-- (no rare helps there: the plain base, so the slot isn't left empty)
 			self:Equip(makeBase(entry.item.baseName), entry.slot)
@@ -5929,6 +5934,7 @@ function BuildGeneratorClass:PartValues(minPrice, withRares, withUnknown)
 		if entry.estimate then
 			local cheapPrice = cheapLevel and cheapLevel.rarePrice * GetPriceSource():PhaseFactor("rare")
 			wanted = withRares and entry.kind == "gear" and cheapLevel and cheapPrice < entry.price
+				and not (self.cheapRareIds and self.cheapRareIds[entry.item.id])
 			if wanted then
 				entry.cheapLevel = cheapLevel
 				entry.label = entry.label .. " (" .. (investment.baseId or investment.id or "") .. " rare instead of " .. cheapLevel.id .. ")"
