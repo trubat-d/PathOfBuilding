@@ -161,3 +161,21 @@ at most 40% of the pool). The top players' builds leech enough to keep theirs
 (19.29 / 65M); with it the generator builds for the recovery: mid-tier 18.69 /
 15.6M at 80 div, 19.17 / 26.9M at 292 div, level with the best player's 19.16
 (same scoring, 297 div).
+
+#### Builds made around one unique, and commitments that stay kept
+The top Cyclone of Tumult players (150-420M DPS) build around Voidforge
+("Gain 700% of Weapon Physical Damage as Extra Damage of a random Element"):
+with Overwhelm (8% base crit for weapon attacks, a Slayer notable), Masterful
+Form and 65% crit x6.3. Every part swapped alone into our build scored below
+it: the generator never finds such a design one step at a time.
+- **Anchors** (IdeaMiner.Anchors): uniques with one line far above an affix
+  ("as Extra Damage" from 100%, "more Damage" from 40%) the skill can use
+  are ideas of their own, the unique forced from the start.
+- **A kept commitment stays kept**: a crit commitment blocks the keystones
+  that undo it (Elemental Overload, Resolute Technique), as passives and as
+  keystone tattoos - the first Voidforge build committed to crit, then took
+  Elemental Overload as a tattoo and ended at 7% crit.
+- **A commitment takes what it needs**: crit for a weapon below 8% base crit
+  takes Overwhelm.
+Mid-tier Cyclone of Tumult: 18.59 / 17.5M (claw) -> 18.91 / 23.8M built
+around Voidforge, 75% crit x5.5 (Flicker Strike: 18.27, below its 18.39).
