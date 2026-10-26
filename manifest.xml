@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610261959" />
+	<Version number="2.67.2-ia.202610262001" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -122,7 +122,7 @@
 	<File name="Assets/vestigialicon.png" part="program" sha1="ecb5dd4b9aed1cac0c1a677b18838ae9c62744d7" />
 	<File name="Assets/warlordicon.png" part="program" sha1="cca050c84884f5c0bb1380ece51d3c4b32be4900" />
 	<File name="Classes/AnimateGuardianSetup.lua" part="program" sha1="40777ebb38411b982f2fcf8448ef9e5be7162f24" />
-	<File name="Classes/AutoConfig.lua" part="program" sha1="57e2557606b8984f6065679bd7cfce076336a55f" />
+	<File name="Classes/AutoConfig.lua" part="program" sha1="2b5595624a0a92bcc0e69f02ccf4d56f97b1eead" />
 	<File name="Classes/BestItemFinder.lua" part="program" sha1="3af5aa67f70351eee5070cc47f46b94a859145f8" />
 	<File name="Classes/BestItemListControl.lua" part="program" sha1="75edb896520eedbfb9fa2f7ede7f109c3d4bc39b" />
 	<File name="Classes/BuildArchetypes.lua" part="program" sha1="290a9451d9bb0e709de2fd5ab5d8098aa021b080" />
