@@ -490,6 +490,20 @@ function AutoConfigClass:Run()
 		setIfUsed("conditionHitRecently", flags.hit and true or false, flags.hit and "main skill hits" or "main skill does not hit")
 		local crit = skillValue(output, "CritChance") or 0
 		setIfUsed("conditionCritRecently", crit >= 30, string.format("%.0f%% critical strike chance", crit))
+		-- (hit recently: a boss or a pack hits about once a second; the build
+		-- goes 4 seconds without being hit only if it avoids nearly all of them
+		-- - Wind Dancer's "less damage taken if you haven't been hit recently"
+		-- is then off most of the time, its downside on)
+		do
+			self.scorer = self.scorer or new("BuildScorer"):BuildScorer(self.build, { chargesPerSecond = boss and 0 or 4 })
+			local okShare, share = pcall(function() return self.scorer:DamageTakenShare(output) end)
+			share = okShare and share or 1
+			local notHit = (1 - share) ^ 4
+			setIfUsed("conditionBeenHitRecently", notHit < 0.5, string.format("%.0f%% of hits avoided: %.0f%% chance to go 4 seconds without being hit", (1 - share) * 100, notHit * 100))
+			-- (attacks: about half of them, two in 4 seconds)
+			local notHitByAttack = (1 - share) ^ 2
+			setIfUsed("conditionBeenHitByAttackRecently", notHitByAttack < 0.5, string.format("%.0f%% of hits avoided: %.0f%% chance to go 4 seconds without being hit by an attack", (1 - share) * 100, notHitByAttack * 100))
+		end
 		setIfUsed("conditionKilledRecently", not boss, boss and "not while fighting a boss" or "clearing maps")
 		setIfUsed("conditionHeadhunterBuffs", not boss, boss and "no rare monsters to steal from on a boss" or "rare monsters' modifiers stolen while clearing maps")
 		local impale = math.max(skillValue(output, "ImpaleChance") or 0, skillValue(output, "ImpaleChanceOnCrit") or 0)

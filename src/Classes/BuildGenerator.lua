@@ -3201,6 +3201,8 @@ function BuildGeneratorClass:RequirementsToGearMove(mode)
 			local req = ll:find("resistance") and not ll:find("enem") and not ll:find("penetrat")
 				or ll:find("to strength") or ll:find("to dexterity") or ll:find("to intelligence") or ll:find("to all attributes")
 				or ll:find("^%+%d+ to strength and") or ll:find("^%+%d+ to dexterity and")
+				-- (spell suppression: capped from gear too - boots, gloves, helmet, body)
+				or ll:find("chance to suppress spell damage")
 			if not req then return false end
 		end
 		return any
@@ -3250,7 +3252,7 @@ function BuildGeneratorClass:RequirementsToGearMove(mode)
 		local list = { }
 		for name, n in pairs(names) do t_insert(list, n > 1 and string.format("%s x%d", name, n) or name) end
 		t_sort(list)
-		self:Note(string.format("Requirements moved to gear: %d resistance / attribute passives given back (%s), rares and jewels made to cover them, the points spent on damage: score %+.3f", removed, table.concat(list, ", "), after - before))
+		self:Note(string.format("Requirements moved to gear: %d resistance / attribute / suppression passives given back (%s), rares and jewels made to cover them, the points spent on damage: score %+.3f", removed, table.concat(list, ", "), after - before))
 		return after - before
 	end
 	self:Restore(snap)
@@ -7839,7 +7841,15 @@ function BuildGeneratorClass:Run()
 	stage(11, "Looking for unique items, synergies and the top players' gear")
 	if opts.synergies ~= false then
 		self:Move(1, 3, "Looking for unique items and synergies")
-		self:ApplySynergies(opts.synergyRounds or 1)
+		-- (an extra: a failure in it - timeless jewel data in a background
+		-- thread - doesn't end the generation)
+		local snap = self:Snapshot()
+		local ok, err = pcall(function() self:ApplySynergies(opts.synergyRounds or 1) end)
+		if not ok then
+			ConPrintf("Synergies failed: %s", tostring(err))
+			self:Restore(snap)
+			self:Recalculate()
+		end
 	end
 	if opts.jointMoves ~= false then
 		self:Move(2, 3, "Trying packages from top players")
@@ -7982,6 +7992,13 @@ function BuildGeneratorClass:Run()
 	if opts.population then
 		local ok, err = pcall(function() self:PopulationSearch(opts.populationSize or 3, opts.populationGenerations or 2) end)
 		if not ok then ConPrintf("Population search failed: %s", tostring(err)) end
+	end
+	-- (resistance / attribute / suppression leaves again: the steps since -
+	-- the doctor, the repair rounds - can take some back to cap a resistance
+	-- the rares could carry)
+	if opts.requirementsToGear ~= false and opts.finalRequirements ~= false then
+		local ok, err = pcall(function() self:RequirementsToGearMove("only") end)
+		if not ok then ConPrintf("Final requirements move failed: %s", tostring(err)) end
 	end
 	-- utility gems that add nothing taken out
 	if opts.pruneGems ~= false then
