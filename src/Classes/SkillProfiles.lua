@@ -101,7 +101,22 @@ SkillProfilesClass.list = {
 	{ pattern = "^Storm Burst of Repulsion", part = "Max Duration Explode", note = "orbs exploding at full duration" },
 	{ pattern = "^Storm Burst", part = "Max Channelled Orbs", note = "the orbs a full channel keeps up" },
 	{ pattern = "^Storm Rain of", part = "Beam", note = "the beams between arrows" },
-	{ pattern = "^Boneshatter", combine = { { part = "Attack", weight = 1 }, { part = "Pulse", weight = 1 } }, note = "the hit and its pulse on a boss" },
+	-- Boneshatter's pulse only when the strike stuns (poewiki): on a map pack
+	-- most strikes stun; on a pinnacle boss the stun chance is 200 x hit /
+	-- threshold (none below 15%), the threshold taken as the boss's ailment
+	-- threshold (its life scale) and the build's reduced stun threshold
+	{ pattern = "^Boneshatter", combine = { { part = "Attack", weight = 1 }, { part = "Pulse", weight = function(ctx)
+		if not ctx.boss then return 1 end
+		local env = ctx.gen and ctx.gen.build.calcsTab.mainEnv
+		local threshold = env and new("AutoConfig"):AutoConfig(ctx.gen.build).EnemyAilmentThreshold(env)
+		local o = ctx.output or { }
+		local hit = (o.MainHand and o.MainHand.AverageHit) or o.AverageHit or 0
+		local mod = (o.MainHand and o.MainHand.EnemyStunThresholdMod) or o.EnemyStunThresholdMod or 1
+		if not threshold or threshold <= 0 or hit <= 0 then return 0 end
+		local chance = 200 * hit / (threshold * m_max(0.1, mod))
+		if chance < 15 then return 0 end
+		return m_min(1, chance / 100)
+	end } }, note = "the hit, and its pulse when the strike stuns (rare on a pinnacle boss)" },
 	{ pattern = "^Fireball", combine = { { part = "Projectile", weight = 1 }, { part = "Explosion", weight = 1 } }, note = "the projectile and its explosion on a boss" },
 	{ pattern = "^Conflagration", combine = { { part = "Projectile", weight = 1 }, { part = "Explosion", weight = 1 } }, note = "the projectile and its explosion on a boss" },
 	{ pattern = "^Somatic Shell", combine = { { part = "Projectile", weight = 1 }, { part = "Explosion", weight = 1 } }, note = "the projectile and its explosion on a boss" },

@@ -120,12 +120,10 @@ function AutoConfigClass.TrinityResonance(output)
 	return m_floor(lowest)
 end
 
--- Cruelty's effect from the main skill's average hit and the enemy's
--- ailment threshold (as CalcOffence works it out for non-damaging ailments)
-function AutoConfigClass.CrueltyEffect(output, env, gem)
-	if not (output and env and env.enemyDB) then return nil end
-	local hit = output.AverageHit or (output.MainHand and output.MainHand.AverageHit) or output.AverageDamage or (output.MainHand and output.MainHand.AverageDamage)
-	if not hit or hit <= 0 then return nil end
+-- The enemy's ailment threshold, as CalcOffence works it out for
+-- non-damaging ailments (level, boss type, map multipliers, its modifiers)
+function AutoConfigClass.EnemyAilmentThreshold(env)
+	if not (env and env.enemyDB) then return nil end
 	local isBoss = env.configInput and env.configInput.enemyIsBoss and env.configInput.enemyIsBoss ~= "None"
 	local level = env.enemyLevel or 84
 	local threshold = data.monsterAilmentThresholdTable[level] or 20000
@@ -134,8 +132,17 @@ function AutoConfigClass.CrueltyEffect(output, env, gem)
 		lifeMult = isBoss and data.mapLevelBossLifeMult and data.mapLevelBossLifeMult[level] or (data.mapLevelLifeMult and data.mapLevelLifeMult[level]) or 1
 		ailmentMult = isBoss and data.mapLevelBossAilmentMult and data.mapLevelBossAilmentMult[level] or 1
 	end
-	threshold = threshold * (isBoss and 7.68 or 1) * lifeMult * env.enemyDB:More(nil, "Life") * ailmentMult * env.enemyDB:More(nil, "AilmentThreshold")
-	if threshold <= 0 then return nil end
+	return threshold * (isBoss and 7.68 or 1) * lifeMult * env.enemyDB:More(nil, "Life") * ailmentMult * env.enemyDB:More(nil, "AilmentThreshold")
+end
+
+-- Cruelty's effect from the main skill's average hit and the enemy's
+-- ailment threshold (as CalcOffence works it out for non-damaging ailments)
+function AutoConfigClass.CrueltyEffect(output, env, gem)
+	if not (output and env and env.enemyDB) then return nil end
+	local hit = output.AverageHit or (output.MainHand and output.MainHand.AverageHit) or output.AverageDamage or (output.MainHand and output.MainHand.AverageDamage)
+	if not hit or hit <= 0 then return nil end
+	local threshold = AutoConfigClass.EnemyAilmentThreshold(env)
+	if not threshold or threshold <= 0 then return nil end
 	-- (gem level 20: 19% increased effect, quality 0.25% each)
 	local level20 = (gem.level or 20)
 	local inc = m_max(0, (level20 - 1)) / 100 + (gem.quality or 0) * 0.0025
