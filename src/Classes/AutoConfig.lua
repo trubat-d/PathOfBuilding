@@ -685,8 +685,12 @@ function AutoConfigClass:Run()
 			end
 		end
 		-- (game states the build's own setup guarantees)
-		if skill and skill.skillTypes and skill.skillTypes[SkillType.Channel] then
+		-- (not a channelled skill that moves: Cyclone channels while moving -
+		-- its "while stationary" passives and Stationary bonuses never apply)
+		if skill and skill.skillTypes and skill.skillTypes[SkillType.Channel] and not skill.skillTypes[SkillType.Movement] then
 			setIfUsed("conditionStationary", 1, "the main skill is channelled: the character stands still while using it")
+		elseif skill and skill.skillTypes and skill.skillTypes[SkillType.Channel] then
+			setIfUsed("conditionStationary", nil, "the main skill moves while channelled (Cyclone)")
 		end
 		if env.player.modDB:Flag(nil, "ChaosInoculation") then
 			setIfUsed("conditionFullLife", true, "Chaos Inoculation: life is always full")
