@@ -32,6 +32,29 @@ function SkillProfilesClass:SkillProfiles()
 	return self
 end
 
+-- Share of a prismatic skill's uses (Elemental Hit, Wild Strike) on one
+-- element: the elements it can choose in turn, Combat Focus jewels in the
+-- build ("Prismatic Skills cannot choose Cold") taking theirs out
+local function prismaticShare(ctx, element)
+	local build = ctx.gen and ctx.gen.build
+	local excluded, count = { }, 0
+	if build then
+		for _, slot in pairs(build.itemsTab.slots) do
+			local item = slot.selItemId and build.itemsTab.items[slot.selItemId]
+			if item and (slot.nodeId == nil or build.spec.allocNodes[slot.nodeId]) then
+				for _, modLine in ipairs(item.explicitModLines or { }) do
+					local e = (modLine.line or ""):lower():match("prismatic skills cannot choose (%a+)")
+					if e and not excluded[e] then excluded[e] = true count = count + 1 end
+				end
+			end
+		end
+	end
+	if count >= 3 then return 1 / 3 end
+	if excluded[element] then return 0 end
+	return 1 / (3 - count)
+end
+SkillProfilesClass.PrismaticShare = prismaticShare
+
 local function bossOr(boss, mapping) return function(ctx) if ctx.boss then return boss end return mapping end end
 
 SkillProfilesClass.list = {
@@ -61,7 +84,12 @@ SkillProfilesClass.list = {
 	{ pattern = "^Volatile Dead", part = "Corpse Explosion", note = "corpse explosions" },
 	{ pattern = "^Cremation", part = "Corpse Explosion", note = "corpse eruptions" },
 	-- elements to choose from: the best one
-	{ pattern = "^Elemental Hit", bestOf = { "Fire Attack", "Cold Attack", "Lightning Attack" }, note = "the element that deals the most damage" },
+	-- (poewiki: each attack picks an element at random, never the same twice in
+	-- a row - the three in turn, unless Combat Focus jewels ("Prismatic Skills
+	-- cannot choose ...") leave it fewer)
+	{ pattern = "^Elemental Hit$", combine = { { part = "Fire Attack", weight = function(ctx) return prismaticShare(ctx, "fire") end },
+		{ part = "Cold Attack", weight = function(ctx) return prismaticShare(ctx, "cold") end },
+		{ part = "Lightning Attack", weight = function(ctx) return prismaticShare(ctx, "lightning") end } }, note = "the three elements in turn (random, never twice in a row)" },
 	-- parts that all hit the same boss
 	-- (Zenith: every 5th attack throws many more, stronger balls; PoB's weighted
 	-- average mixes the 4 normal attacks and the 5th - showing one normal attack's
@@ -175,8 +203,10 @@ SkillProfilesClass.list = {
 	-- (poewiki: an enemy hit by the melee part can't be hit by the secondary
 	-- effect - on a single boss only the strikes land; the explosion, bolt or
 	-- wave hit the rest of a pack)
-	{ pattern = "^Wild Strike", combine = { { part = "Fire hit", weight = 1 / 3 }, { part = "Fire explosion", weight = bossOr(0, 1 / 3) }, { part = "Lightning hit", weight = 1 / 3 },
-		{ part = "Lightning bolt", weight = bossOr(0, 1 / 3) }, { part = "Cold hit", weight = 1 / 3 }, { part = "Icy wave", weight = bossOr(0, 1 / 3) } }, note = "each element in turn; its secondary hit only on the rest of a pack (an enemy struck isn't hit by it)" },
+	{ pattern = "^Wild Strike", combine = {
+		{ part = "Fire hit", weight = function(ctx) return prismaticShare(ctx, "fire") end }, { part = "Fire explosion", weight = function(ctx) return ctx.boss and 0 or prismaticShare(ctx, "fire") end },
+		{ part = "Lightning hit", weight = function(ctx) return prismaticShare(ctx, "lightning") end }, { part = "Lightning bolt", weight = function(ctx) return ctx.boss and 0 or prismaticShare(ctx, "lightning") end },
+		{ part = "Cold hit", weight = function(ctx) return prismaticShare(ctx, "cold") end }, { part = "Icy wave", weight = function(ctx) return ctx.boss and 0 or prismaticShare(ctx, "cold") end } }, note = "each element in turn; its secondary hit only on the rest of a pack (an enemy struck isn't hit by it)" },
 	{ pattern = "^Tornado of Elemental Turbulence", combine = { { part = "Fire", weight = 1 / 3 }, { part = "Lightning", weight = 1 / 3 }, { part = "Cold", weight = 1 / 3 } }, note = "the three elements in turn" },
 	-- arrows of one attack landing on a boss (PoB counts one arrow an attack;
 	-- poewiki: 2-5 hits on an average-sized boss, 5-8 with Saturation's slower
