@@ -677,8 +677,22 @@ function AutoConfigClass:Run()
 		-- states the build gives itself from its own lines (Elusive, Onslaught,
 		-- Unholy Might...: Classes/UniqueComboFinder), when something uses them
 		local comboFinder = new("UniqueComboFinder"):UniqueComboFinder({ build = self.build, itemsTab = self.build.itemsTab, options = { } })
+		-- (and off again when the line is gone: states switched on here are
+		-- remembered on the configuration tab; a mid-tier Righteous Fire kept
+		-- "on Consecrated Ground" after the passive giving it was respecced -
+		-- its regeneration held up the burn in the generator's numbers only)
+		local configTab = self.build.configTab
+		configTab.autoSelfBuffs = configTab.autoSelfBuffs or { }
+		local found = { }
 		for _, state in ipairs(comboFinder.SelfBuffs(lines, hitRate, boss)) do
 			setIfUsed(state.var, state.on, state.reason)
+			if state.on then found[state.var] = true configTab.autoSelfBuffs[state.var] = true end
+		end
+		for var in pairs(configTab.autoSelfBuffs) do
+			if not found[var] and configTab.input[var] then
+				self:Set(var, false, "no line keeps it up any more")
+				configTab.autoSelfBuffs[var] = nil
+			end
 		end
 
 		-- leech and life

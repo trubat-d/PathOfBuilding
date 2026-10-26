@@ -2893,7 +2893,7 @@ function BuildGeneratorClass:FinalRares()
 	local any = false
 	for _, slot in ipairs(self.itemsTab.orderedSlots) do
 		local item = self.itemsTab.items[slot.selItemId]
-		if item and not slot.nodeId and not item.base.flask and item.type ~= "Jewel" then
+		if item and not slot.nodeId and not item.base.flask and item.type ~= "Jewel" and (not slot.IsShown or slot:IsShown()) then
 			saved[slot.slotName] = slot.selItemId
 			if item.rarity == "RARE" and not (self.lockedSlots and self.lockedSlots[slot.slotName]) then
 				any = true
@@ -5050,7 +5050,7 @@ function BuildGeneratorClass:SpendBudgetMove()
 	for _, slot in ipairs(self.itemsTab.orderedSlots) do
 		local item = self.itemsTab.items[slot.selItemId]
 		if item and item.rarity == "RARE" and not slot.nodeId and item.type ~= "Jewel" and not (item.base and item.base.flask)
-			and not (self.lockedSlots and self.lockedSlots[slot.slotName]) then
+			and not (self.lockedSlots and self.lockedSlots[slot.slotName]) and (not slot.IsShown or slot:IsShown()) then
 			local snap = self:Snapshot()
 			local ok, result = pcall(function()
 				self.itemsTab.slots[slot.slotName]:SetSelItemId(0)
@@ -7682,6 +7682,15 @@ function BuildGeneratorClass:Run()
 	do
 		local ok, err = pcall(function() self:FillEmptySockets() end)
 		if not ok then ConPrintf("Filling jewel sockets failed: %s", tostring(err)) end
+	end
+	-- (no item in a slot the build doesn't have: a third ring without "+1 Ring Slot")
+	do
+		local ring3 = self.itemsTab.slots["Ring 3"]
+		if ring3 and (ring3.selItemId or 0) ~= 0 and ring3.IsShown and not ring3:IsShown() then
+			ring3:SetSelItemId(0)
+			self.itemsTab:PopulateSlots()
+			self:Recalculate()
+		end
 	end
 	self:RemoveUnusedItems()
 	-- (last check: every gem setup fits its item's sockets)
