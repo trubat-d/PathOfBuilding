@@ -523,10 +523,13 @@ end
 function GemSetupClass:ChooseAuras(maxBuffs)
 	local candidates = { }
 	-- (Petrified Blood: life other than flasks can't be recovered above low
-	-- life, poewiki - only for a build already there, half its life reserved;
+	-- life, poewiki - for a build already there, half its life reserved;
 	-- measured at full life it looked like free mitigation)
 	local out = self.build.calcsTab.mainOutput or { }
 	local lowLife = (out.Life or 0) > 1 and out.LifeUnreserved and out.LifeUnreserved / out.Life <= 0.5
+	-- (or one that stays above it: a life flask kept up - Pathfinder - or a
+	-- leech, which goes on past low life; there it shields the top half too)
+	lowLife = lowLife or (self.gen.scorer and self.gen.scorer:AboveLowLifeSource(out)) and true
 	for id, gem in pairs(data.gems) do
 		-- (attacks with an aura, like Smite, only give it while you use them)
 		-- (as are mines / traps with an aura: only while they are placed)

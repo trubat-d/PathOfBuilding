@@ -1254,6 +1254,30 @@ end
 
 -- Lists the active utility flasks of a calculation, with their uptime.
 -- Flasks forced on by Mageblood-like effects are permanent (uptime 1).
+-- What keeps a Petrified Blood build above low life (poewiki: life recovery
+-- other than flasks stops at low life; leech goes on past it - an overleech
+-- - and flask recovery fills life): a life flask kept up most of the fight
+-- (Pathfinder's Master Surgeon, charge recovery) or a life leech worth
+-- having. Returns a reason, or nil
+function BuildScorerClass:AboveLowLifeSource(output)
+	output = output or self.build.calcsTab.mainOutput or { }
+	local life = output.Life or 0
+	if life <= 1 then return nil end
+	local leech = output.LifeLeechGainRate or output.LifeLeechRate or 0
+	if leech >= life * 0.03 then return "life leech goes on above low life" end
+	local env = self.build.calcsTab.mainEnv
+	if env and env.flasks then
+		local modDB = env.player.modDB
+		for item in pairs(env.flasks) do
+			if item.base and item.base.flask and item.base.flask.life and item.flaskData and (item.flaskData.duration or 0) > 0 then
+				local uptime = self:FlaskUptime(item, modDB, output)
+				if uptime >= 0.8 then return string.format("a life flask up %.0f%% of the fight", uptime * 100) end
+			end
+		end
+	end
+	return nil
+end
+
 function BuildScorerClass:GetFlaskUptimes(override)
 	local calcs = self.build.calcsTab.calcs
 	local env = calcs.initEnv(self.build, "CALCULATOR", override)

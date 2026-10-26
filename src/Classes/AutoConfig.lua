@@ -1019,7 +1019,11 @@ function AutoConfigClass:Run()
 			end
 			-- poewiki Petrified Blood: life recovery other than flasks cannot
 			-- recover life above low life, so after the first hits the build sits there
-			setIfUsed("conditionLowLife", lowLife or petrified, lowLife and "half of life or more is reserved" or petrified and "Petrified Blood: life is not recovered above low life" or "life is not reserved to low life")
+			-- (unless a life flask kept up or a leech fills life above it)
+			local above = petrified and not lowLife and (self.scorer or new("BuildScorer"):BuildScorer(self.build, { })):AboveLowLifeSource(output)
+			if above then petrified = false end
+			setIfUsed("conditionLowLife", lowLife or petrified, lowLife and "half of life or more is reserved" or petrified and "Petrified Blood: life is not recovered above low life"
+				or above and ("Petrified Blood, kept above low life: " .. above) or "life is not reserved to low life")
 		end
 	end
 	self:Recalculate()
