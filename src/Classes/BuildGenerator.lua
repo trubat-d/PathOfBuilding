@@ -1776,6 +1776,15 @@ function BuildGeneratorClass:ChooseBloodline()
 		end
 		if ring3Probe then self:Recalculate() end
 	end
+	-- (and kept out of the full allocations while there are no flasks)
+	local savedForbidden = self.forbiddenNodes
+	if not hasFlasks then
+		self.forbiddenNodes = { }
+		for k, v in pairs(savedForbidden or { }) do self.forbiddenNodes[k] = v end
+		for id, node in pairs(spec.nodes) do
+			if node.ascendancyName and table.concat(node.sd or { }, " "):find("Flasks are Disabled", 1, true) then self.forbiddenNodes[id] = true end
+		end
+	end
 	local original = spec:CreateUndoState()
 	-- 1. quick estimate: value of each bloodline's two best notables on top of the build
 	local estimates = { }
@@ -1790,9 +1799,18 @@ function BuildGeneratorClass:ChooseBloodline()
 		local values = { }
 		for _, node in ipairs(nodesById(spec.nodes)) do
 			if node.ascendancyName == ascend.id and not node.alloc and node.path and (node.type == "Notable" or node.isMultipleChoiceOption) then
-				local pathSet = { }
-				for _, n in ipairs(node.path) do pathSet[n] = true end
-				t_insert(values, self:Score({ addNodes = pathSet }) - current)
+				-- (before the flasks are chosen, a path that disables them -
+				-- Toad's Price: "Utility Flasks are Disabled" - costs nothing it
+				-- can see: left to the recheck on the finished build)
+				local disablesFlasks = false
+				for _, n in ipairs(node.path) do
+					if table.concat(n.sd or { }, " "):find("Flasks are Disabled", 1, true) then disablesFlasks = true end
+				end
+				if not disablesFlasks or hasFlasks then
+					local pathSet = { }
+					for _, n in ipairs(node.path) do pathSet[n] = true end
+					t_insert(values, self:Score({ addNodes = pathSet }) - current)
+				end
 			end
 		end
 		t_sort(values, function(a, b) return a > b end)
@@ -1829,6 +1847,7 @@ function BuildGeneratorClass:ChooseBloodline()
 	-- keep the winner (PoB's tree undo state doesn't keep the bloodline)
 	allocateWith(bestId)
 	self.bloodlineId = bestId
+	self.forbiddenNodes = savedForbidden
 	self:Recalculate()
 	-- (the third ring kept only when the winner gives the slot; the rares made
 	-- later make it a ring of its own)
