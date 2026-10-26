@@ -374,7 +374,14 @@ end
 -- A normal (white) item of a base
 local function makeBase(baseName)
 	local base = data.itemBases[baseName]
-	local item = new("Item"):Item("Rarity: NORMAL\n" .. baseName)
+	-- (with the base's implicits: a white Void Sceptre is "40% increased
+	-- Elemental Damage", and bases are compared with them)
+	local lines = { "Rarity: NORMAL", baseName }
+	local implicits = { }
+	for line in ((base and base.implicit) or ""):gmatch("[^\n]+") do t_insert(implicits, "{range:0.5}" .. line) end
+	t_insert(lines, "Implicits: " .. #implicits)
+	for _, l in ipairs(implicits) do t_insert(lines, l) end
+	local item = new("Item"):Item(table.concat(lines, "\n"))
 	item:NormaliseQuality()
 	item:BuildModList()
 	return item
