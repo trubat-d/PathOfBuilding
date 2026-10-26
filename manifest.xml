@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610262320" />
+	<Version number="2.67.2-ia.202610262348" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -122,7 +122,7 @@
 	<File name="Assets/vestigialicon.png" part="program" sha1="ecb5dd4b9aed1cac0c1a677b18838ae9c62744d7" />
 	<File name="Assets/warlordicon.png" part="program" sha1="cca050c84884f5c0bb1380ece51d3c4b32be4900" />
 	<File name="Classes/AnimateGuardianSetup.lua" part="program" sha1="40777ebb38411b982f2fcf8448ef9e5be7162f24" />
-	<File name="Classes/AutoConfig.lua" part="program" sha1="998a4c7b0c15be824e493bd1090560412ba4bf96" />
+	<File name="Classes/AutoConfig.lua" part="program" sha1="4fef7551326f2a5352b225c02dede0ae6cb06829" />
 	<File name="Classes/BestItemFinder.lua" part="program" sha1="3af5aa67f70351eee5070cc47f46b94a859145f8" />
 	<File name="Classes/BestItemListControl.lua" part="program" sha1="75edb896520eedbfb9fa2f7ede7f109c3d4bc39b" />
 	<File name="Classes/BuildArchetypes.lua" part="program" sha1="290a9451d9bb0e709de2fd5ab5d8098aa021b080" />
@@ -455,7 +455,7 @@
 	<File name="Modules/GeneratorLearning.lua" part="program" sha1="f38d60dbd6e7d16df97d1bce15ef68bfe42cae3b" />
 	<File name="Modules/GeneratorModel.lua" part="program" sha1="e60b90a5dfcf6b7b5482fb88ef98513bcc7c8dd7" />
 	<File name="Modules/GeneratorModelTrainer.lua" part="program" sha1="3bb58f3180bdeec309519d51f5c9bba55e988e60" />
-	<File name="Modules/GeneratorRules.lua" part="program" sha1="bfda7545c70e3390d582178b4c1b9d4049d19f42" />
+	<File name="Modules/GeneratorRules.lua" part="program" sha1="f09d6c6a781e60dda6a83fcf362447c07c2201bc" />
 	<File name="Modules/GeneratorWorker.lua" part="program" sha1="055169082a594544a07443f6f1d6a84df2ef8bc4" />
 	<File name="Modules/ItemSlotHelper.lua" part="program" sha1="4b7d441f9ade5d57c413aa1f8f8067b654cfb927" />
 	<File name="Modules/ItemTools.lua" part="program" sha1="3fbd7aba963b6a67eb5c1d213112fc6a3e681952" />
