@@ -18,10 +18,25 @@
 -- quickly, so the player can compare them and pick one for the full build.
 --
 local t_insert = table.insert
+local m_min, m_max = math.min, math.max
 local t_sort = table.sort
 
 ---@class BuildArchetypes
 local BuildArchetypesClass = newClass("BuildArchetypes")
+
+-- (the crit damage factor of the main skill's hits: PoB keeps CritEffect per
+-- hand for attacks, not in the combined output - read there, or made from the
+-- combined crit chance and multiplier; read as output.CritEffect only, the
+-- crit lens did nothing for attack builds)
+local function critEffect(output)
+	if output.CritEffect then return output.CritEffect end
+	local hand = output.MainHand or output.OffHand
+	if hand and hand.CritEffect then return hand.CritEffect end
+	local chance = (output.CritChance or 0) / 100
+	local multi = output.CritMultiplier or 1
+	return 1 + m_min(1, chance) * m_max(0, multi - 1)
+end
+BuildArchetypesClass.CritEffect = critEffect
 
 function BuildArchetypesClass:BuildArchetypes()
 	return self
@@ -118,7 +133,11 @@ BuildArchetypesClass.list = {
 		-- (crit pays off only when chance and multiplier are both high: the
 		-- crit damage factor counts on its own while the build is made, so
 		-- neither is judged alone. Winter Orb: top players x7.9, ours x1)
-		lens = { stat = "CritEffect", base = 1, label = "Crit damage factor" },
+		lens = { stat = "CritEffect", func = critEffect, base = 1, label = "Crit damage factor" },
+		-- (chosen by the player: the finished build stays a crit build - its
+		-- hits at least doubled by crits, e.g. 50% chance x 300% multiplier;
+		-- a Cyclone asked for crit ended a 16% crit poison build without it)
+		floor = { stat = "CritEffect", func = critEffect, min = 2, label = "hits doubled by crits" },
 		-- (no forced crit supports: linked first, they pushed the main link's
 		-- more multipliers out - x10.6 on top Winter Orbs, x2.3 on ours; the
 		-- supports are chosen by the build's real score)
@@ -394,7 +413,7 @@ function BuildArchetypesClass.PlayersArchetype(gem)
 	end
 	local lens2
 	if sup["Power Charge On Critical"] or sup["Increased Critical Damage"] or sup["Increased Critical Strikes"] then
-		lens2 = { stat = "CritEffect", base = 1, label = "Crit damage factor", weight = 0.3 }
+		lens2 = { stat = "CritEffect", func = critEffect, base = 1, label = "Crit damage factor", weight = 0.3 }
 		if not lens then lens, lens2 = lens2, nil end
 	end
 	local parts = { }

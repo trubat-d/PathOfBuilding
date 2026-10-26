@@ -955,6 +955,8 @@ function BuildIdeasPopupClass:OpenGenerator()
 			yieldEvery = 80,
 		}
 		options.archetype = archetypeEntry and archetypeEntry.archetype
+		-- (an archetype picked in the list keeps its commitment to the end)
+		options.keepCommitment = options.archetype and options.archetype.id ~= "STANDARD" or nil
 		-- what the player's reviews taught (Classes/BuildReview)
 		local learnt, note = new("BuildReview"):BuildReview().ApplyLearned(options.focus)
 		if note then options.focus, options.learntNote = learnt, note end

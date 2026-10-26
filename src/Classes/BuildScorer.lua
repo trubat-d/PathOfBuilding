@@ -87,6 +87,11 @@ function BuildScorerClass:Recovery(output)
 	return life + es + blockES + leech * 0.8 + onKill + recharge
 end
 
+function BuildScorerClass:DissolutionActive()
+	local env = self.build.calcsTab and self.build.calcsTab.mainEnv
+	return env and env.player and env.player.modDB:Flag(nil, "DamageInsteadReservesLife") or false
+end
+
 -- Recovery per second as a share of the life + energy shield pool. Each pool
 -- only counts what it can hold (regenerating a 1 life pool under Chaos
 -- Inoculation is worth nothing), over at least a normal sized pool.
@@ -99,6 +104,11 @@ function BuildScorerClass:RecoveryRatio(output)
 	local esSide = (output.ComprehensiveNetEnergyShieldRegen or output.NetEnergyShieldRegen or output.EnergyShieldRegenRecovery or 0)
 		+ (output.EnergyShieldLeechGainRate or 0) * 0.8 + (output.EnergyShieldOnKill or 0) * self.killsPerSecond
 		+ (output.EnergyShieldRecharge or 0) * 0.25 + blockES
+	-- Dissolution of the Flesh (poewiki): life lost to damage is reserved
+	-- until no life damage for 2 seconds, and life recovery doesn't touch the
+	-- reservation - regen, leech and flasks give back nothing while hits keep
+	-- coming
+	if self:DissolutionActive() then lifeSide = 0 end
 	local recovered = m_min(lifeSide, 0.5 * lifePool) + m_min(esSide, 0.5 * esPool)
 	return recovered / m_max(lifePool + esPool, 3000)
 end
@@ -491,6 +501,18 @@ function BuildScorerClass:GetPenalties(output)
 			t_insert(penalties, { label = string.format("%d %s missing for gem/item requirements", short, attr), value = p })
 		end
 	end
+	-- (Dissolution of the Flesh without a big life pool: no recovery during a
+	-- fight - see RecoveryRatio - and every hit taken shrinks the pool until
+	-- 2 seconds pass unhit, rare while mapping; worth it only on very high
+	-- life, as players say)
+	if self:DissolutionActive() and not self.ignoreRequirements then
+		local life = output.Life or 0
+		if life < 9000 then
+			local p = 0.6 * m_log(9000 / m_max(life, 1000))
+			total = total + p
+			t_insert(penalties, { label = string.format("Dissolution of the Flesh on %d life (no recovery while hit, needs a very large pool)", life), value = p })
+		end
+	end
 	for _, pool in ipairs({ "Mana", "Life" }) do
 		local unreserved = output[pool .. "Unreserved"]
 		if unreserved and unreserved < 0 and not self.ignoreReservation then
@@ -845,6 +867,15 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 	if self.lens and output then
 		local value = self.lens.func and self.lens.func(output) or output[self.lens.stat] or 0
 		score = score + (self.lens.weight or 0.3) * m_log(m_max(1, value) / (self.lens.base or 100))
+	end
+	-- (the commitment of an archetype the player chose: below its floor the
+	-- build is not what was asked for - BuildGenerator keepCommitment)
+	if self.commitFloor and output then
+		local floor = self.commitFloor
+		local value = floor.func and floor.func(output) or output[floor.stat] or 0
+		if value < floor.min then
+			score = score - 3 * m_log(floor.min / m_max(value, floor.min * 0.05))
+		end
 	end
 	-- (several layers committed to at once: the build doctor's joint plans)
 	if self.lensExtra and output then

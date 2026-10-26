@@ -7592,6 +7592,12 @@ function BuildGeneratorClass:SetupScorer()
 		end
 		self:Note(string.format("Commitment: %s is valued on its own while the build is made (gear, passives, jewels follow it)", opts.archetype.lens.label or opts.archetype.lens.stat))
 	end
+	-- (an archetype the player chose: its floor - a crit build's crit - holds
+	-- to the end, in the final score too, not only while the build is made)
+	if opts.keepCommitment and opts.archetype and opts.archetype.floor then
+		self.scorer.commitFloor = opts.archetype.floor
+		self:Note(string.format("Kept to the end (archetype chosen): %s", opts.archetype.floor.label or opts.archetype.floor.stat))
+	end
 	-- supports the archetype can't use (Controlled Destruction for crit)
 	for _, name in ipairs(opts.archetype and opts.archetype.blockSupports or { }) do
 		self.blockedSupports = self.blockedSupports or { }

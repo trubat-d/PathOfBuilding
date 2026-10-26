@@ -202,6 +202,7 @@ return function(jobJson, userPath, scriptBase)
 		synergies = job.synergies, quick = job.quick, meta = job.meta, learnFromPlayers = job.learnFromPlayers, variant = job.variant,
 		excludedUniques = job.excludedUniques, forcedUniques = job.forcedUniques, totalBudget = job.totalBudget,
 		midTier = job.midTier, midTierMaxUnique = job.midTierMaxUnique, eldritchPresence = job.eldritchPresence,
+		keepCommitment = job.keepCommitment,
 		-- (knowledge read here, written by the main thread from the result)
 		knowledge = job.knowledge, knowledgeWrite = false, learntNote = job.learntNote, leaguePhase = job.leaguePhase,
 		yieldEvery = 1e9,

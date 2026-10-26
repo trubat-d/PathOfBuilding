@@ -249,6 +249,8 @@ function GenerationQueueClass:MakeJob(batch, spec)
 	local job = { }
 	for k, v in pairs(batch.baseJob or { }) do job[k] = v end
 	job.archetypeId = spec.archetypeId
+	-- (the archetype the player chose keeps its commitment to the end)
+	if batch.selectedId and spec.archetypeId == batch.selectedId and batch.selectedId ~= batch.standardId then job.keepCommitment = true end
 	job.quick = spec.quick or batch.forceQuick or nil
 	if spec.quick then job.synergies = false end
 	job.variant = spec.variant
