@@ -561,6 +561,15 @@ function AutoConfigClass:Run()
 				self:Set("override" .. kind .. "Charges", math.floor(maxCharges / 2), string.format("charges lost on reaching the maximum (%d): half of it on average", maxCharges))
 			end
 		end
+		-- (cooldowns bypassed by spending a charge - poewiki: Flicker Strike a
+		-- Frenzy Charge, Consecrated Path of Endurance an Endurance Charge;
+		-- PoB bypasses them by default: only with a source of those charges)
+		for var, kind in pairs({ FlickerStrikeBypassCD = "Frenzy", ConcPathBypassCD = "Endurance", ColdSnapBypassCD = "Power" }) do
+			if self.optionByVar[var] then
+				local has = self.build.configTab.input["use" .. kind .. "Charges"] and true or false
+				self:Set(var, has, has and ("cooldown bypassed with " .. kind:lower() .. " charges the build generates") or ("no " .. kind:lower() .. " charges to bypass the cooldown"))
+			end
+		end
 
 		-- what the main skill does
 		local function setIfUsed(var, value, reason)
