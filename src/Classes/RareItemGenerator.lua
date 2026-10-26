@@ -379,6 +379,23 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 		local maxInfluence = opts.maxInfluenceMods or #(influences or { })
 		-- ("+1 to Level of Socketed Lightning / Physical / all Gems": one on an
 		-- item - two or three of them together is a lottery nobody crafts)
+		-- (the crafting bench can't add a mod of a type the item already has,
+		-- poewiki: "The item cannot already have a mod of that type" - a natural
+		-- Movement Speed and a crafted one: one mod sharing a stat with another)
+		local usedStats = { }
+		local function stats(candidate)
+			return candidate.mod and candidate.mod.statOrder or { }
+		end
+		local function statClash(candidate)
+			for _, so in ipairs(stats(candidate)) do
+				local by = usedStats[so]
+				if by and (by.crafted or candidate.crafted) then return true end
+			end
+			return false
+		end
+		local function useStats(candidate)
+			for _, so in ipairs(stats(candidate)) do usedStats[so] = usedStats[so] or candidate end
+		end
 		local maxGemLevel = opts.maxGemLevelMods or 1
 		local function isGemLevel(candidate)
 			if candidate.gemLevelMod == nil then
@@ -418,6 +435,7 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			if seed.crafted then counts.crafted = counts.crafted + 1 end
 			if isInfluence(seed) then counts.influence = counts.influence + 1 end
 			if isGemLevel(seed) then counts.gemLevel = counts.gemLevel + 1 end
+			useStats(seed)
 			local output, power = evaluate()
 			currentPower, currentDeficit = power, deficit(output, ctx.baseOutput, opts)
 		end
@@ -443,7 +461,8 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 				if not usedGroups[candidate.group] and counts[candidate.type] < limits[candidate.type] and not (candidate.crafted and counts.crafted >= maxCrafts)
 					and metaRoom and not (opts.maxAffixes and not candidate.crafted and natural >= opts.maxAffixes)
 					and not (isInfluence(candidate) and counts.influence >= maxInfluence)
-					and not (isGemLevel(candidate) and counts.gemLevel >= maxGemLevel) then
+					and not (isGemLevel(candidate) and counts.gemLevel >= maxGemLevel)
+					and not statClash(candidate) then
 					t_insert(order, candidate)
 				end
 			end
@@ -493,6 +512,7 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 			if best.crafted then counts.crafted = counts.crafted + 1 end
 			if isInfluence(best) then counts.influence = counts.influence + 1 end
 			if isGemLevel(best) then counts.gemLevel = counts.gemLevel + 1 end
+			useStats(best)
 			currentPower, currentDeficit = bestPower, bestDeficit
 		end
 		-- take the mods off again: the caller builds the real item
