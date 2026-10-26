@@ -39,6 +39,40 @@ local function gemId(name)
 end
 GemSetupClass.GemId = gemId
 
+-- Do the supports of a gem set all apply to its skill? (PoB's own rules:
+-- requireSkillTypes / excludeSkillTypes; a hybrid gem's support part counts -
+-- Automation supports instant spells only, poewiki: "Automation + Frost Bomb"
+-- was set up and does nothing in game)
+local function supportEffectOf(gemData)
+	local ge = gemData and gemData.grantedEffect
+	if ge and ge.support then return ge end
+	local se = gemData and gemData.secondaryGrantedEffect
+	if se and se.support then return se end
+end
+local function supportsApply(ids)
+	local actives = { }
+	for _, id in ipairs(ids) do
+		local g = data.gems[id]
+		if g and g.grantedEffect and not g.grantedEffect.support and not (g.secondaryGrantedEffect and g.secondaryGrantedEffect.support) then
+			t_insert(actives, g.grantedEffect.skillTypes or { })
+		end
+	end
+	if #actives == 0 then return true end
+	for _, id in ipairs(ids) do
+		local effect = supportEffectOf(data.gems[id])
+		if effect then
+			local ok = false
+			for _, types in ipairs(actives) do
+				local required = not effect.requireSkillTypes or #effect.requireSkillTypes == 0 or calcLib.doesTypeExpressionMatch(effect.requireSkillTypes, types)
+				local excluded = effect.excludeSkillTypes and #effect.excludeSkillTypes > 0 and calcLib.doesTypeExpressionMatch(effect.excludeSkillTypes, types)
+				if required and not excluded then ok = true end
+			end
+			if not ok then return false end
+		end
+	end
+	return true
+end
+
 local function gemEntry(id, level)
 	local gem = data.gems[id]
 	return { level = level or gem.naturalMaxLevel or 20, quality = 20, enabled = true, enableGlobal1 = true, enableGlobal2 = true, count = 1, gemId = id }
@@ -593,6 +627,7 @@ function GemSetupClass:ChooseMovement()
 			if not id or (not data.gems[id].grantedEffect.support and not self:CanUse(id)) then return end
 			t_insert(gems, id)
 		end
+		if not supportsApply(gems) then return end
 		t_insert(options, { label = label, gems = gems })
 	end
 	-- (channelling builds move while channelling: a blink for walls and gaps,
@@ -710,6 +745,7 @@ function GemSetupClass:ChooseFillers()
 			if not id or (not data.gems[id].grantedEffect.support and not self:CanUse(id)) then return end
 			t_insert(gems, id)
 		end
+		if not supportsApply(gems) then return end
 		t_insert(options, { label = label, gems = gems, auto = auto })
 	end
 	local used = { }
@@ -732,7 +768,9 @@ function GemSetupClass:ChooseFillers()
 	-- spells cast automatically on cooldown (not buffs that reserve, like
 	-- Arctic Armour or Tempest Shield: they stay on once cast, nothing to repeat)
 	if free("Automation") then
-		for _, spell in ipairs({ "Wave of Conviction", "Frost Bomb" }) do
+		-- (instant spells only: Automation's own rule; Frost Bomb and Wave of
+		-- Conviction have a cast time and are cast by hand)
+		for _, spell in ipairs({ "Withering Step", "Blood Rage", "Corrupting Fever", "Arcane Cloak", "Plague Bearer", "Convocation", "Wave of Conviction", "Frost Bomb" }) do
 			local id = gemId(spell)
 			local types = id and data.gems[id].grantedEffect.skillTypes or { }
 			if free(spell) and not types[SkillType.HasReservation] then add("Automation + " .. spell, { "Automation", spell }, true) end
