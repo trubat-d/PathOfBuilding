@@ -793,7 +793,9 @@ function AutoConfigClass:Run()
 		-- inflicts them x their duration, not always 15 (Withering Touch on a 5
 		-- attacks/s skill: 25% x 5 x 2 s = 2.5)
 		if modDB:Flag(nil, "Condition:CanWither") then
-			local hitRate = speedOf(output)
+			-- (hits a use lands on one target: Toxic Rain's arrows, PoB's dpsMultiplier)
+			local perUse = m_max(1, (skill and skill.skillData and skill.skillData.dpsMultiplier) or 1)
+			local hitRate = speedOf(output) * perUse
 			local stacks, cap, sources = 0, 15, { }
 			for _, line in ipairs(lines) do
 				local chance, dur = line:match("(%d+)%% chance to inflict withered for (%d+) seconds on hit")
