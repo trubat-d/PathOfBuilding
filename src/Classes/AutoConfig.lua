@@ -802,6 +802,16 @@ function AutoConfigClass:Run()
 			self:Set("traumaStacks", stacks, string.format("trauma held at %d of the %d the attack rate keeps up: each stack costs %.0f life a hit, recovery %.0f a second",
 				stacks, math.floor(output.SustainableTrauma), perStack, recovery))
 		end
+		-- Conjoined Spire (Hierophant): "All other Summoned Totems die when you
+		-- Summon a Totem" - PoB doesn't read it and counts every totem the limit
+		-- allows (its damage, Ritual of Awakening's "per Summoned Totem")
+		if flags.totem then
+			for _, line in ipairs(lines) do
+				if line:find("all other summoned totems die when you summon a totem", 1, true) then
+					setIfUsed("TotemsSummoned", 1, "Conjoined Spire: one totem at a time")
+				end
+			end
+		end
 		-- Brands: PoB counts none active unless told ("per brand" lines then give
 		-- nothing); a player keeps as many out as the cast rate and the brand
 		-- duration allow, up to the limit
