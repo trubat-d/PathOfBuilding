@@ -101,7 +101,7 @@ end
 
 local savedKeys = { "id", "title", "buildName", "skillLabel", "gemId", "baseJob", "tries", "scanBuilds", "learningContext",
 	"selectedId", "standardId", "remembered", "combos", "hybrid", "status", "phase", "specs", "scan", "quickScores", "full",
-	"bestScore", "error", "file", "fileBuildName", "partialFile", "startedWall", "finishedWall", "elapsedBefore", "forceQuick", "best" }
+	"bestScore", "error", "file", "fileBuildName", "partialFile", "startedWall", "finishedWall", "elapsedBefore", "forceQuick", "best", "combined" }
 
 function GenerationQueueClass:Save()
 	local dkjson = require "dkjson"
@@ -254,6 +254,17 @@ function GenerationQueueClass:MakeJob(batch, spec)
 	job.variant = spec.variant
 	job.plan = spec.plan or nil
 	job.traceName = nil
+	if spec.combine then
+		-- (the best build crossed with the other tries: Modules/GeneratorWorker "combine")
+		job.kind = "combine"
+		job.buildXml = readFile(spec.buildFile)
+		job.others = { }
+		for _, o in ipairs(spec.others or { }) do
+			local text = readFile(o.stateFile)
+			local ok, state = pcall(require("dkjson").decode, text or "")
+			if ok and state then t_insert(job.others, { state = state, label = o.label }) end
+		end
+	end
 	-- (a failed job sends back the build it had made: Modules/GeneratorWorker)
 	job.partialOnError = true
 	return job
@@ -294,6 +305,14 @@ function GenerationQueueClass:RunPending(batch, indexes)
 				spec.file = saved and path or nil
 				spec.score, spec.dps, spec.ehp = summary.score, summary.dps, summary.ehp
 				spec.plan, spec.combos = summary.plan, summary.combos
+				-- (the build as data, for the combination of the best tries)
+				if summary.state and batch.phase == "full" then
+					local okState, stateText = pcall(require("dkjson").encode, summary.state)
+					if okState and stateText then
+						local statePath = folder() .. string.format("%s_%s_%d.state.json", batch.id, batch.phase, i)
+						if writeFile(statePath, stateText) then spec.stateFile = statePath end
+					end
+				end
 				if batch.phase == "full" and summary.score and (not batch.bestScore or summary.score > batch.bestScore) then batch.bestScore = summary.score end
 			end
 			self:Save()
@@ -349,6 +368,24 @@ function GenerationQueueClass:PhaseDone(batch)
 		end
 		if #quick == 0 then return self:RankAndBuild(batch) end
 		return self:SetPhase(batch, "quick", quick)
+	elseif batch.phase == "full" and not batch.combined and main.generatorCombine ~= false then
+		-- the best build crossed with the next best ones (other tries and close
+		-- archetypes), as the window does it: kept if it is better
+		batch.full = batch.specs
+		local ranked = { }
+		for _, s in ipairs(done) do if s.score and s.file then t_insert(ranked, s) end end
+		table.sort(ranked, function(a, b) return a.score > b.score end)
+		local best = ranked[1]
+		local others = { }
+		for i = 2, #ranked do
+			local s = ranked[i]
+			if #others < 3 and s.stateFile and s.score >= best.score - 1.5 then
+				t_insert(others, { stateFile = s.stateFile, label = self:Label(batch, s.archetypeId) .. " try " .. (s.variant or 1) })
+			end
+		end
+		batch.combined = true
+		if not best or #others == 0 then return self:Finish(batch) end
+		return self:SetPhase(batch, "combine", { { archetypeId = best.archetypeId, variant = best.variant, combine = true, buildFile = best.file, others = others, baseScore = best.score } })
 	elseif batch.phase == "quick" then
 		batch.scan = batch.scan or { }
 		for _, s in ipairs(done) do
@@ -426,12 +463,28 @@ end
 function GenerationQueueClass:Finish(batch)
 	local learning = LoadModule("Modules/GeneratorLearning")
 	local results = { }
-	for _, s in ipairs(batch.specs or { }) do
-		if s.state == "done" and s.file and s.score then
+	local specs = { }
+	for _, s in ipairs(batch.full or batch.specs or { }) do t_insert(specs, s) end
+	-- (the combined build replaces the best try it was made from when it is better)
+	local combined
+	if batch.phase == "combine" then
+		for _, s in ipairs(batch.specs or { }) do
+			if s.state == "done" and s.file and s.score and s.score > (s.baseScore or -math.huge) then combined = s end
+		end
+	end
+	if combined then
+		for i = #specs, 1, -1 do
+			if specs[i].file == combined.buildFile then t_remove(specs, i) end
+		end
+		combined.combinedLabel = true
+		t_insert(specs, combined)
+	end
+	for _, s in ipairs(specs) do
+		if s.state == "done" and s.file and s.score and not s.combine or s == combined then
 			local xml = readFile(s.file)
 			if xml then t_insert(results, { spec = s, xml = xml }) end
 			local quick = batch.quickScores and batch.quickScores[s.archetypeId]
-			if quick and (s.variant or 1) == 1 then
+			if quick and (s.variant or 1) == 1 and not s.combine then
 				pcall(learning.Record, s.archetypeId, batch.skillLabel, quick, s.score, batch.learningContext)
 			end
 		end
@@ -448,7 +501,7 @@ function GenerationQueueClass:Finish(batch)
 	local list = { }
 	for i = 1, m_min(8, #results) do
 		local r = results[i]
-		t_insert(list, { xml = r.xml, title = string.format("%s try %d %.2f", self:Label(batch, r.spec.archetypeId), r.spec.variant or 1, r.spec.score),
+		t_insert(list, { xml = r.xml, title = string.format("%s %s %.2f", self:Label(batch, r.spec.archetypeId), r.spec.combinedLabel and "combined" or ("try " .. (r.spec.variant or 1)), r.spec.score),
 			summary = r.spec.dps and string.format("damage %s, effective hit pool %s", formatNumSep(string.format("%.0f", r.spec.dps)), formatNumSep(string.format("%.0f", r.spec.ehp or 0))) or nil })
 	end
 	local xml = best.xml
@@ -522,9 +575,12 @@ function GenerationQueueClass:Remove(batch)
 		if b == batch then t_remove(self.batches, i) break end
 	end
 	-- (its builds in the queue's folder; a finished one stays in the builds folder)
-	for _, s in ipairs(batch.specs or { }) do
-		if s.file then os.remove(s.file) end
-		if s.partialFile and s.partialFile ~= batch.partialFile then os.remove(s.partialFile) end
+	for _, list in ipairs({ batch.specs or { }, batch.full or { } }) do
+		for _, s in ipairs(list) do
+			if s.file then os.remove(s.file) end
+			if s.stateFile then os.remove(s.stateFile) end
+			if s.partialFile and s.partialFile ~= batch.partialFile then os.remove(s.partialFile) end
+		end
 	end
 	self:Save()
 end
@@ -550,7 +606,7 @@ end
 -- Panel
 ------------------------------------------------------------------------------
 
-local phaseLabels = { scan = "planning the archetypes", quick = "quick builds of the promising archetypes", full = "full builds" }
+local phaseLabels = { scan = "planning the archetypes", quick = "quick builds of the promising archetypes", full = "full builds", combine = "combining the best builds" }
 
 -- The lines of text for a batch
 function GenerationQueueClass:Describe(batch)

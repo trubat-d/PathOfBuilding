@@ -185,6 +185,11 @@ return function(jobJson, userPath, scriptBase)
 		return dkjson.encode({ player = job.player, theirs = theirs, ablation = ablation, ours = ours, transplant = transplant,
 			seconds = os.clock() - startClock }), ""
 	end
+	-- (kind "combine": the best build of a generation crossed with the other
+	-- tries - BuildGenerator:Combine - on that build, loaded)
+	if job.kind == "combine" then
+		build = load(job.buildXml, "combine")
+	end
 	local scorerStatics = new("BuildScorer"):BuildScorer(build)
 	local options = {
 		gemId = job.gemId, classId = job.classId, ascendClassId = job.ascendClassId, level = job.level,
@@ -223,7 +228,10 @@ return function(jobJson, userPath, scriptBase)
 	end
 	local generator = new("BuildGenerator"):BuildGenerator(build, options)
 	trace("generating")
-	local co = coroutine.create(function() return generator:Run() end)
+	local co = coroutine.create(function()
+		if job.kind == "combine" then return generator:Combine(job.others or { }) end
+		return generator:Run()
+	end)
 	local ok, result = coroutine.resume(co)
 	while ok and coroutine.status(co) ~= "dead" do ok, result = coroutine.resume(co) end
 	-- (failed: the build made so far goes back with the error, so it isn't
