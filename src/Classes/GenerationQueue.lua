@@ -302,6 +302,8 @@ function GenerationQueueClass:RunPending(batch, indexes)
 				ConPrintf("Background generation failed (build kept so far): %s", tostring(summary.error))
 			else
 				spec.state = "done"
+				-- (a retry that worked: the earlier failure is gone)
+				spec.error, spec.partialFile = nil, nil
 				spec.file = saved and path or nil
 				spec.score, spec.dps, spec.ehp = summary.score, summary.dps, summary.ehp
 				spec.plan, spec.combos = summary.plan, summary.combos
@@ -464,7 +466,10 @@ function GenerationQueueClass:Finish(batch)
 	local learning = LoadModule("Modules/GeneratorLearning")
 	local results = { }
 	local specs = { }
-	for _, s in ipairs(batch.full or batch.specs or { }) do t_insert(specs, s) end
+	-- (batch.full: the full builds, kept while the combine phase runs - only
+	-- then: a copy left from a full phase that failed and was resumed would
+	-- hide the builds the resumed phase made)
+	for _, s in ipairs((batch.phase == "combine" and batch.full) or batch.specs or { }) do t_insert(specs, s) end
 	-- (the combined build replaces the best try it was made from when it is better)
 	local combined
 	if batch.phase == "combine" then
@@ -562,6 +567,8 @@ function GenerationQueueClass:Resume(batch)
 	for _, s in ipairs(batch.specs or { }) do
 		if s.state == "failed" or s.state == "running" then s.state = "pending" s.attempts = 0 end
 	end
+	-- (a full phase resumed: its builds are combined again once they are done)
+	if batch.phase ~= "combine" then batch.full, batch.combined = nil, nil end
 	batch.error = nil
 	batch.status = "waiting"
 	batch.resumed = true
