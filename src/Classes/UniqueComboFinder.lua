@@ -46,10 +46,28 @@ local function enablerChance(line)
 	return chance, line:find("on kill", 1, true) ~= nil
 end
 
+-- What makes a line give its state: "kill" (on kill, on rampage), "crit",
+-- "hit", "event" (something else happening: a block, a flask, reaching low
+-- life, ward breaking, a warcry, being hit...), "conditional" (only while or
+-- if something holds) or "always"
+local function triggerOf(line)
+	local function has(...) for _, w in ipairs({ ... }) do if line:find(w, 1, true) then return true end end return false end
+	if has("on kill", "when you kill", "on melee kill", "on rampage") then return "kill" end
+	if has("on critical strike", "when you deal a critical strike", "on crit") then return "crit" end
+	if has("on hit", "when you hit", "when you or your totems hit") then return "hit" end
+	if has(" when ", " after ", " every ", " on reaching", " on use", " on block", "when hit", " on ") then return "event" end
+	if has(" while ", " if ", " during ") then return "conditional" end
+	return "always"
+end
+UniqueComboFinderClass.TriggerOf = triggerOf
+
 -- States the build keeps up from its own lines (for AutoConfig): { { var,
 -- on, reason } }. A state from kills only counts while mapping; a chance on
--- hit is turned into uptime at the main skill's hit rate (4 second states).
-function UniqueComboFinderClass.SelfBuffs(lines, hitRate, boss)
+-- hit (or on crit, with the crit chance) is turned into uptime at the main
+-- skill's hit rate over the state's duration (4 seconds when not given); a
+-- state from another event (a block, a flask, reaching low life, ward
+-- breaking...) or only under a condition isn't counted as kept up
+function UniqueComboFinderClass.SelfBuffs(lines, hitRate, boss, crit)
 	local list = { }
 	for _, state in ipairs(UniqueComboFinderClass.states) do
 		local best, source = 0, nil
@@ -59,14 +77,20 @@ function UniqueComboFinderClass.SelfBuffs(lines, hitRate, boss)
 				-- charge when you gain elusive" gives no Elusive)
 				if line:find(pattern, 1, true) and not line:find("enemies", 1, true) and not line:find("allies", 1, true)
 					and not line:find("when you " .. pattern, 1, true) and not line:find("on " .. pattern, 1, true) and not line:find("lose", 1, true) then
-					local chance, onKill = enablerChance(line)
-					if not (onKill and boss) then
-						local p = m_min(1, chance / 100)
-						-- (a chance on hit or kill: up while it is renewed within 4 seconds)
-						local uptime = (p >= 1 or not (line:find("on hit", 1, true) or onKill or line:find("on critical", 1, true))) and 1
-							or (1 - (1 - p) ^ (m_max(0.5, hitRate or 1) * 4))
-						if uptime > best then best, source = uptime, line end
+					local chance = enablerChance(line)
+					local trigger = triggerOf(line)
+					local p = m_min(1, chance / 100)
+					local duration = tonumber(line:match("for (%d+) seconds")) or 4
+					local uptime = 0
+					if trigger == "always" then
+						uptime = 1
+					elseif trigger == "kill" then
+						uptime = boss and 0 or (p >= 1 and 1 or 1 - (1 - p) ^ (10 * duration / 4))
+					elseif trigger == "hit" or trigger == "crit" then
+						if trigger == "crit" then p = p * m_min(1, crit or 0) end
+						uptime = p >= 1 and 1 or (1 - (1 - p) ^ (m_max(0.5, hitRate or 1) * duration))
 					end
+					if uptime > best then best, source = uptime, line end
 				end
 			end
 		end
@@ -147,7 +171,12 @@ local function itemStates(item)
 				-- (not a line that triggers on the state: "24% chance to lose a power
 				-- charge when you gain elusive" gives no Elusive)
 				if line:find(pattern, 1, true) and not line:find("enemies", 1, true) and not line:find("allies", 1, true)
-					and not line:find("when you " .. pattern, 1, true) and not line:find("on " .. pattern, 1, true) and not line:find("lose", 1, true) then enables[state] = true end
+					and not line:find("when you " .. pattern, 1, true) and not line:find("on " .. pattern, 1, true) and not line:find("lose", 1, true) then
+					-- (a state kept up: always, or from hits and crits - not from a
+					-- block, a flask, reaching low life... nor only under a condition)
+					local trigger = triggerOf(line)
+					if trigger == "always" or trigger == "hit" or trigger == "crit" then enables[state] = true end
+				end
 			end
 			for _, pattern in ipairs(state.payoff) do
 				if line:find(pattern, 1, true) then pays[state] = true end
