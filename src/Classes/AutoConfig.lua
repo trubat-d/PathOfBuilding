@@ -678,6 +678,29 @@ function AutoConfigClass:Run()
 						else
 							self:Set(state.var, nil, string.format("no Arcane Surge: the main skill spends %d mana in 4 s, %d needed (life costs don't count)", spent, threshold))
 						end
+					elseif state.var == "buffLifetap" then
+						-- (Lifetap: the buff comes from spending the gem's life
+						-- threshold in costs; it lasts 4 s (+0.1 s per quality).
+						-- A totem or a ballista pays its life cost only when it is
+						-- placed, every totem duration - an Artillery Ballista had
+						-- the buff counted all the time)
+						local levels = gem.gemData.grantedEffect and gem.gemData.grantedEffect.levels
+						local lv = levels and levels[m_min(#levels, m_max(1, gem.level or 20))]
+						local threshold = lv and tonumber(lv[2]) or 0
+						local duration = 4 + (gem.quality or 0) * 0.1
+						local perSecond = output.LifePerSecondCost or 0
+						local mainFlags = env.player.mainSkill and env.player.mainSkill.skillFlags or { }
+						if (mainFlags.totem or mainFlags.brand or mainFlags.mine or mainFlags.trap) and (output.LifeCost or 0) > 0 then
+							local count = mainFlags.totem and (output.ActiveTotemLimit or 1) or 1
+							local life = mainFlags.totem and (output.TotemDuration or 8) or m_max(output.Duration or 4, 2)
+							perSecond = m_min(perSecond, output.LifeCost * m_max(1, count) / m_max(life, 1))
+						end
+						local spent = perSecond * duration
+						if spent >= threshold * 0.9 and spent > 0 then
+							self:Set(state.var, true, string.format("Lifetap: the main skill spends %d life in %.0f s (%d needed)", spent, duration, threshold))
+						else
+							self:Set(state.var, nil, string.format("no Lifetap buff: the main skill spends %d life in %.0f s, %d needed", spent, duration, threshold))
+						end
 					elseif state.var ~= "intensifyIntensity" then self:Set(state.var, state.value or true, state.label) end
 				end
 				-- Cruelty (poewiki): up to 40% more damage over time, by the hit's
