@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610270314" />
+	<Version number="2.67.2-ia.202610270331" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -159,7 +159,7 @@
 	<File name="Classes/FlaskGenerator.lua" part="program" sha1="7cc076af38f4dc39739c19df28a176598dc59522" />
 	<File name="Classes/FolderListControl.lua" part="program" sha1="2fec0874200a71563536324cfb1ea8f75984e53d" />
 	<File name="Classes/GemSelectControl.lua" part="program" sha1="8954e020052121d13122873b578b87e0bb7c60fc" />
-	<File name="Classes/GemSetup.lua" part="program" sha1="a5af88c97944ea19db5fe64bd8ae9bd8569e7ef1" />
+	<File name="Classes/GemSetup.lua" part="program" sha1="5523ae0a883a600aaad1589e480e970d3348cd7c" />
 	<File name="Classes/GemTooltip.lua" part="program" sha1="11a6d37e2e2cb86f4b1a130968db7fd4154da6c2" />
 	<File name="Classes/GenerationQueue.lua" part="program" sha1="60f2fd136a3c8d8c12fa792ca8c269209f5eae71" />
 	<File name="Classes/HitOverlap.lua" part="program" sha1="c8902c12bf6c8be7dbe67ac49376c1270a3f49e1" />
@@ -455,7 +455,7 @@
 	<File name="Modules/GeneratorLearning.lua" part="program" sha1="f38d60dbd6e7d16df97d1bce15ef68bfe42cae3b" />
 	<File name="Modules/GeneratorModel.lua" part="program" sha1="e60b90a5dfcf6b7b5482fb88ef98513bcc7c8dd7" />
 	<File name="Modules/GeneratorModelTrainer.lua" part="program" sha1="3bb58f3180bdeec309519d51f5c9bba55e988e60" />
-	<File name="Modules/GeneratorRules.lua" part="program" sha1="f09d6c6a781e60dda6a83fcf362447c07c2201bc" />
+	<File name="Modules/GeneratorRules.lua" part="program" sha1="8cbd0e7f5f905a00341157fddd6398c42158aa4e" />
 	<File name="Modules/GeneratorWorker.lua" part="program" sha1="055169082a594544a07443f6f1d6a84df2ef8bc4" />
 	<File name="Modules/ItemSlotHelper.lua" part="program" sha1="4b7d441f9ade5d57c413aa1f8f8067b654cfb927" />
 	<File name="Modules/ItemTools.lua" part="program" sha1="3fbd7aba963b6a67eb5c1d213112fc6a3e681952" />
