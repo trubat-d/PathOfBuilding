@@ -175,6 +175,11 @@ function calcs.getMiscCalculator(build)
 		GeneratorOutputNovaBarrage[output] = novaBarrage
 		GeneratorOutputNoTrigger = GeneratorOutputNoTrigger or setmetatable({ }, { __mode = "k" })
 		GeneratorOutputNoTrigger[output] = noTrigger
+		-- (skills PoB shows as "average damage" per use - Essence Drain, Vortex...:
+		-- their CombinedDPS is one use's hit, without the use rate or the damage
+		-- over time; the generator's scorer rebuilds the DPS from TotalDPS)
+		GeneratorOutputShowAverage = GeneratorOutputShowAverage or setmetatable({ }, { __mode = "k" })
+		GeneratorOutputShowAverage[output] = mainSkill and mainSkill.skillData and mainSkill.skillData.showAverage or nil
 		return output
 	end, env.player.output
 end

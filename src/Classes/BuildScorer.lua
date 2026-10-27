@@ -505,6 +505,14 @@ function BuildScorerClass:GetDPS(output)
 	else
 		dps = (output.CombinedDPS or 0) + (output.Minion and output.Minion.CombinedDPS or 0)
 	end
+	-- (a skill PoB shows as average damage per use - Essence Drain: its
+	-- CombinedDPS is one cast's hit, without the cast rate or its damage over
+	-- time; rebuilt from the hit DPS and the damage over time, as PoB would
+	-- for any other skill. An Essence Drain was chosen on its hit alone)
+	if GeneratorOutputShowAverage and GeneratorOutputShowAverage[output] and output.TotalDPS then
+		local rebuilt = ((output.TotalDPS or 0) + (output.TotalDotDPS or 0)) * (output.CullMultiplier or 1) * (output.ReservationDpsMultiplier or 1)
+		dps = m_max(dps, dps - (output.CombinedDPS or 0) + rebuilt)
+	end
 	-- skills whose parts add up on one target (SkillProfiles combine)
 	if self.hitScale and output.TotalDPS then
 		dps = dps + (self.hitScale - 1) * output.TotalDPS
