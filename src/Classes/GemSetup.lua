@@ -624,6 +624,31 @@ function GemSetupClass:ChooseAuras(maxBuffs)
 		current = bestScore
 	end
 	for _, group in ipairs(self.groups) do group.capacity = nil end
+	-- each buff taken out again when the others now give what it gave (Arctic
+	-- Armour taken for freeze immunity before Purity of Ice; its less damage
+	-- taken only counts while stationary - nothing for Cyclone): the greedy
+	-- order kept it for a reason that no longer holds
+	for _, group in ipairs(self.groups) do
+		if group.label:match("^Auras") then
+			for i = #group.gemList, 1, -1 do
+				local g = group.gemList[i]
+				local name = data.gems[g.gemId].name
+				local forced = false
+				for _, a in ipairs(archetypeAuras) do if a == name then forced = true end end
+				if not data.gems[g.gemId].grantedEffect.support and not forced then
+					local before = self:Score()
+					t_remove(group.gemList, i)
+					self.skillsTab:ProcessSocketGroup(group)
+					if self:Score() < before - 0.002 then
+						t_insert(group.gemList, i, g)
+						self.skillsTab:ProcessSocketGroup(group)
+					else
+						self.gen:Note(string.format("Buff left out: %s adds nothing next to the others", name))
+					end
+				end
+			end
+		end
+	end
 	-- each aura group: keep the support that scores best (Enlighten, Arrogance or none)
 	local names = { }
 	for _, group in ipairs(self.groups) do

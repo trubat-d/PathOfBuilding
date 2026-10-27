@@ -1171,7 +1171,7 @@ function BuildGeneratorClass:ChooseUtilityGems(ignoreAttributes)
 		local l = self.log[i]
 		if l:match("^Curse setup") or l:match("^Buffs:") or l:match("^Guard setup") or l:match("^Movement setup") or l:match("^Blink setup") or l:match("^Blood Rage setup") or l:match("^Lifetap linked") or l:match("^Sockets used")
 			or l:match("^Possible addition: Animate") or l:match("^Animate Guardian setup") or l:match("^Secondary bow skill setup")
-			or l:match("^Empty sockets filled") then
+			or l:match("^Empty sockets filled") or l:match("^Buff left out") then
 			t_remove(self.log, i)
 		end
 	end
@@ -4307,12 +4307,15 @@ end
 -- since) judged again on the finished build: one that now costs more than it
 -- gives is taken out with its path, the points spent again (a crit Cyclone
 -- kept Wind Dancer at -0.05 once "hit recently" was on)
-function BuildGeneratorClass:KeystoneRecheck()
+function BuildGeneratorClass:KeystoneRecheck(ids)
 	local spec = self.build.spec
 	local removed = { }
-	for id in pairs(self.keystonesKept or { }) do
+	self.keystonesKept = self.keystonesKept or { }
+	self.protectedNodes = self.protectedNodes or { }
+	for id in pairs(ids or self.keystonesKept) do
 		local node = spec.nodes[id]
 		if node and node.alloc then
+			local wasProtected = self.protectedNodes[id]
 			local before = self:FullScore()
 			local undo = spec:CreateUndoState()
 			local savedInput = copyTable(self.build.configTab.input, true)
@@ -4327,7 +4330,7 @@ function BuildGeneratorClass:KeystoneRecheck()
 				t_insert(removed, string.format("%s (%+.3f)", node.dn, after - before))
 				self.keystonesKept[id] = nil
 			else
-				self.protectedNodes[id] = true
+				self.protectedNodes[id] = (ids == nil) or wasProtected
 				spec:RestoreUndoState(undo)
 				for k in pairs(self.build.configTab.input) do self.build.configTab.input[k] = nil end
 				for k, v in pairs(savedInput) do self.build.configTab.input[k] = v end
@@ -4337,6 +4340,67 @@ function BuildGeneratorClass:KeystoneRecheck()
 		end
 	end
 	if #removed > 0 then self:Note("Keystones taken out on the finished build: " .. table.concat(removed, ", ")) end
+end
+
+-- The finished build's parts that add nothing taken out: utility gems (as
+-- PruneUselessGems), every keystone the archetype doesn't need (not only the
+-- ones KeystoneMove took - a Cyclone ended with Wind Dancer at -0.05), and
+-- unique, timeless or cluster jewels the build is as good without (a Brutal
+-- Restraint whose conquered passives stopped mattering: a rare jewel there,
+-- the cluster's points spent in the tree)
+function BuildGeneratorClass:FinalAudit()
+	self:PruneUselessGems()
+	local spec = self.build.spec
+	local archetypes = new("BuildArchetypes"):BuildArchetypes()
+	local needed = { }
+	for _, name in ipairs((self.options.archetype or { }).keystones or { }) do
+		local node = archetypes.NodeByName(spec, name)
+		if node then needed[node.id] = true end
+	end
+	local ids = { }
+	for id, node in pairs(spec.allocNodes) do
+		if node.type == "Keystone" and not needed[id] and not node.ascendancyName then ids[id] = true end
+	end
+	self:KeystoneRecheck(ids)
+	local removed = { }
+	for _, node in ipairs(nodesById(spec.allocNodes)) do
+		local slotName = "Jewel " .. node.id
+		local slot = self.itemsTab.slots[slotName]
+		local item = slot and self.itemsTab.items[slot.selItemId]
+		if node.alloc and item and (item.rarity == "UNIQUE" or item.rarity == "RELIC" or item.clusterJewel) then
+			local before = self:FullScore()
+			local snap = self:Snapshot()
+			local savedLog = #self.log
+			local title = item.title or item.name
+			-- (taken out for real: an override leaves a cluster's passives and a
+			-- timeless jewel's conquered ones as they are)
+			slot:SetSelItemId(0)
+			self.itemsTab:PopulateSlots()
+			spec:BuildClusterJewelGraphs()
+			self:Recalculate()
+			local without = self:FullScore()
+			if os.getenv("DEBUG_AUDIT") then ConPrintf("[audit] %s in %s: before %.3f without %.3f", title, slotName, before, without) end
+			local kept = false
+			if without >= before - 0.002 then
+				self:FillEmptySockets()
+				self:TrimTree()
+				self:RefineTree(6)
+				self:AutoConfigure()
+				local after = self:FullScore()
+				if after >= before - 0.001 then
+					kept = true
+					t_insert(removed, string.format("%s (%+.3f)", title, after - before))
+				end
+			end
+			for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+			if not kept then
+				self:Restore(snap)
+				self:AutoConfigure()
+				self:Recalculate()
+			end
+		end
+	end
+	if #removed > 0 then self:Note("Jewels taken out on the finished build (they added nothing): " .. table.concat(removed, ", ")) end
 end
 
 function BuildGeneratorClass:ChooseTimelessJewel()
@@ -8798,6 +8862,13 @@ function BuildGeneratorClass:Run()
 			local ok2, err2 = pcall(function() self:SpendBudgetMove() end)
 			if not ok2 then ConPrintf("Spending the budget failed: %s", tostring(err2)) end
 		end
+	end
+	-- (every part judged once more on the build as it now stands: the budget,
+	-- the rares made again and the later moves can leave a buff, a keystone or
+	-- a jewel that no longer adds anything)
+	if opts.finalAudit ~= false then
+		local ok, err = pcall(function() self:FinalAudit() end)
+		if not ok then ConPrintf("Final audit failed: %s", tostring(err)) end
 	end
 	-- hard requirements (resistances, attributes) fixed with bench crafts
 	if opts.requirements ~= false then self:RequirementsMove() end
