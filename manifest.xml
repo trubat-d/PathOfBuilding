@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610271414" />
+	<Version number="2.67.2-ia.202610271513" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -193,7 +193,7 @@
 	<File name="Classes/PoEAPI.lua" part="program" sha1="7c36aec9aac7156dbc8330bc992142f607680618" />
 	<File name="Classes/PopupDialog.lua" part="program" sha1="2475f96e243a38dd3418dfb233207b5ed58c291a" />
 	<File name="Classes/PowerReportListControl.lua" part="program" sha1="47802eb02de22fcb7e4e6837c9dbaeda85d3d274" />
-	<File name="Classes/PriceSource.lua" part="program" sha1="73ac4b71525d9e3e207840bffc04efde33c602c6" />
+	<File name="Classes/PriceSource.lua" part="program" sha1="880c6e5ef29685d1d18c6eedaaec91935a7385b7" />
 	<File name="Classes/ProgressBarControl.lua" part="program" sha1="9aabc68c58dfbe99b36977e91b580aeaeabfcbc9" />
 	<File name="Classes/RadiusJewelFinder.lua" part="program" sha1="82d96964c873fbcedf9155bcf568ea3a72a04ea3" />
 	<File name="Classes/RareItemGenerator.lua" part="program" sha1="3dddbc09caede225a80394c1928583af1dc8799b" />
