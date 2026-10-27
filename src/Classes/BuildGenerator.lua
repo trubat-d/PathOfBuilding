@@ -2624,6 +2624,16 @@ function BuildGeneratorClass:MakeFlasks()
 	local gen = new("FlaskGenerator"):FlaskGenerator(new("BestItemFinder"):BestItemFinder(self.itemsTab).rareGenerator, self.scorer)
 	local result = gen:Generate({ calcFunc = self.calcFunc, override = { }, opts = { quality = self.options.quality, levelOnly = true }, tick = function() self:Tick() end })
 	local names = { }
+	-- (slots the generator fills and left empty this time are emptied: the
+	-- flasks they held were chosen for an earlier build - four utility
+	-- flasks stayed on a build whose bloodline disables them)
+	for _, slotName in ipairs({ "Flask 1", "Flask 2", "Flask 3", "Flask 4", "Flask 5" }) do
+		local slot = self.itemsTab.slots[slotName]
+		local item = slot and self.itemsTab.items[slot.selItemId]
+		if item and not result.slots[slotName] and not (item.base and item.base.flask and (item.base.flask.life or item.base.flask.mana)) then
+			slot:SetSelItemId(0)
+		end
+	end
 	for slotName, item in pairs(result.slots) do
 		-- (an Instilling Orb enchantment, as players put on their flasks: used
 		-- by itself when its charges are full, never in the way of gaining them)
@@ -4326,6 +4336,7 @@ function BuildGeneratorClass:KeystoneRecheck(ids)
 			self:RefineTree(8)
 			self:AutoConfigure()
 			local after = self:FullScore()
+			if os.getenv("DEBUG_AUDIT") then ConPrintf("[keystone] %s: before %.3f after %.3f alloc %s", node.dn, before, after, tostring(node.alloc)) end
 			if after > before + 0.005 and not node.alloc then
 				t_insert(removed, string.format("%s (%+.3f)", node.dn, after - before))
 				self.keystonesKept[id] = nil
@@ -8942,6 +8953,30 @@ function BuildGeneratorClass:Run()
 	if opts.pruneGems ~= false then
 		local ok, err = pcall(function() self:PruneUselessGems() end)
 		if not ok then ConPrintf("Pruning gems failed: %s", tostring(err)) end
+		self:AutoConfigure()
+		self:Recalculate()
+	end
+	-- (keystones once more on the saved build: a Lacerate kept Wind Dancer at
+	-- -0.17 through the audit - the later steps changed what it was worth;
+	-- the requirements fixed again after the points are spent elsewhere)
+	if opts.finalAudit ~= false then
+		local ok, err = pcall(function()
+			local spec = self.build.spec
+			local archetypes = new("BuildArchetypes"):BuildArchetypes()
+			local needed = { }
+			for _, name in ipairs((self.options.archetype or { }).keystones or { }) do
+				local node = archetypes.NodeByName(spec, name)
+				if node then needed[node.id] = true end
+			end
+			local ids = { }
+			for id, node in pairs(spec.allocNodes) do
+				if node.type == "Keystone" and not needed[id] and not node.ascendancyName then ids[id] = true end
+			end
+			local logLength = #self.log
+			self:KeystoneRecheck(ids)
+			if #self.log > logLength and opts.requirements ~= false then self:RequirementsMove() end
+		end)
+		if not ok then ConPrintf("Last keystone check failed: %s", tostring(err)) end
 		self:AutoConfigure()
 		self:Recalculate()
 	end

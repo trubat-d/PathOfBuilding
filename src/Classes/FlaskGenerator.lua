@@ -89,9 +89,13 @@ function FlaskGeneratorClass:GetBases(levelOnly)
 	local output = self.build.calcsTab.mainOutput or { }
 	local bestMana, bestManaLevel
 	local wardBuild = self:WardBuild()
+	-- (utility flasks disabled - Toad's Price on the way to the Nameless
+	-- Bloodline's ring: none worth a slot; a Lacerate kept four at +0.000)
+	local env0 = self.build.calcsTab.mainEnv
+	local utilityOff = env0 and env0.player and env0.player.modDB:Flag(nil, "UtilityFlasksDoNotApplyToPlayer")
 	for name, base in pairs(data.itemBases) do
 		local usable = not base.hidden and not (levelOnly and base.req and (base.req.level or 0) > level)
-			and (wardBuild or not isExpedition(base))
+			and (wardBuild or not isExpedition(base)) and not (utilityOff and isUtilityBase(base))
 		if usable and isUtilityBase(base) then
 			t_insert(list, name)
 		elseif usable and base.type == "Flask" and base.flask and base.flask.mana and not base.flask.life then
@@ -141,7 +145,9 @@ function FlaskGeneratorClass:Generate(ctx)
 			t_insert(fillSlots, slotName)
 			repItems[slotName] = false
 			-- Flasks the build already uses stay available (e.g. unique flasks)
-			if current and (wardBuild or not isExpedition(current.base)) then
+			local env0 = self.build.calcsTab.mainEnv
+			local utilityOff = env0 and env0.player and env0.player.modDB:Flag(nil, "UtilityFlasksDoNotApplyToPlayer")
+			if current and (wardBuild or not isExpedition(current.base)) and not (utilityOff and current.base and isUtilityBase(current.base)) then
 				t_insert(existing, current)
 			end
 		end
