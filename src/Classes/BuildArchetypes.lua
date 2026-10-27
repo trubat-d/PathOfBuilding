@@ -243,8 +243,14 @@ BuildArchetypesClass.list = {
 		id = "IMPALE", label = "Pure physical: Pride, Brutality, impale",
 		summary = "Physical damage only: Pride and Brutality (no elemental or chaos damage), impales stacking on the target.",
 		auras = { "Pride" },
-		supports = { "Brutality" },
-		excludeKeystones = { "Elemental Overload", "Avatar of Fire" },
+		supports = { "Brutality", "Impale" },
+		-- (the impales valued on their own while the build is made, and the
+		-- bleed route closed: a Boneshatter asked for impale ended a Crimson
+		-- Dance bleed build - 69% of its damage bleed, impale 0.1% - where the
+		-- top player's 50M is 45% impale on 98% crit hits)
+		lens = { func = function(o) return 1 + (o.ImpaleDPS or 0) / math.max(1, o.TotalDPS or 1) end, base = 1, label = "Impale share of the hits" },
+		blockSupports = { "Chance to Bleed", "Deadly Ailments", "Awakened Deadly Ailments", "Swift Affliction", "Awakened Swift Affliction", "Crimson Dance" },
+		excludeKeystones = { "Elemental Overload", "Avatar of Fire", "Crimson Dance" },
 		applies = function(info) return info.attack and info.weaponTypes ~= nil and not info.elemental and not info.minion end,
 	},
 	{
