@@ -31,17 +31,17 @@ local exchangeTypes = { "Tattoo", "Oil" }
 -- piece of gear made at that level (rares aren't on poe.ninja); budgetUpTo:
 -- the level a total budget up to that many divines uses
 PriceSourceClass.levels = {
-	{ id = "LEAGUE_START", label = "League start (items up to 1 divine)", rarePrice = 0.05, budgetUpTo = 3, maxUnique = 1, maxAnoint = 1, maxTattoo = 0.1, influences = 0, eldritchTier = 1, quality = 3, unknownAllowed = false,
+	{ id = "LEAGUE_START", jewelAffixes = 2, label = "League start (items up to 1 divine)", rarePrice = 0.05, budgetUpTo = 3, maxUnique = 1, maxAnoint = 1, maxTattoo = 0.1, influences = 0, eldritchTier = 1, quality = 3, unknownAllowed = false,
 		enlighten = nil, exceptionalGems = false, awakenedGems = false, timeless = false, scarce = false },
-	{ id = "BUDGET", label = "Budget (items up to 5 divines)", rarePrice = 0.3, budgetUpTo = 15, maxUnique = 5, maxAnoint = 3, maxTattoo = 0.5, influences = 0, eldritchTier = 2, quality = 2, unknownAllowed = false,
+	{ id = "BUDGET", jewelAffixes = 2, label = "Budget (items up to 5 divines)", rarePrice = 0.3, budgetUpTo = 15, maxUnique = 5, maxAnoint = 3, maxTattoo = 0.5, influences = 0, eldritchTier = 2, quality = 2, unknownAllowed = false,
 		enlighten = nil, exceptionalGems = false, awakenedGems = false, timeless = true, scarce = false },
-	{ id = "MID", label = "Mid investment (items up to 30 divines)", rarePrice = 1.5, budgetUpTo = 100, maxUnique = 30, maxAnoint = 10, maxTattoo = 2, influences = 1, maxInfluenced = 2, eldritchTier = 3, quality = 2, unknownAllowed = false,
+	{ id = "MID", jewelAffixes = 3, label = "Mid investment (items up to 30 divines)", rarePrice = 1.5, budgetUpTo = 100, maxUnique = 30, maxAnoint = 10, maxTattoo = 2, influences = 1, maxInfluenced = 2, eldritchTier = 3, quality = 2, unknownAllowed = false,
 		enlighten = nil, exceptionalGems = false, awakenedGems = false, timeless = true, scarce = false },
-	{ id = "HIGH", label = "High investment (items up to 150 divines)", rarePrice = 8, budgetUpTo = 450, maxUnique = 150, maxAnoint = 50, maxTattoo = 10, influences = 2, maxInfluenced = 4, eldritchTier = 4, quality = 2, unknownAllowed = true,
+	{ id = "HIGH", jewelAffixes = 3, label = "High investment (items up to 150 divines)", rarePrice = 8, budgetUpTo = 450, maxUnique = 150, maxAnoint = 50, maxTattoo = 10, influences = 2, maxInfluenced = 4, eldritchTier = 4, quality = 2, unknownAllowed = true,
 		enlighten = { name = "Enlighten", level = 4 }, exceptionalGems = true, awakenedGems = true, timeless = true, corruptedMain = true },
-	{ id = "ENDGAME", label = "Endgame investment (items up to 500 divines, Mageblood level)", rarePrice = 30, budgetUpTo = 2000, multiCraft = true, maxUnique = 500, maxAnoint = 150, maxTattoo = 30, influences = 2, maxInfluenced = 7, eldritchTier = 5, quality = 4, unknownAllowed = true,
+	{ id = "ENDGAME", jewelAffixes = 4, label = "Endgame investment (items up to 500 divines, Mageblood level)", rarePrice = 30, budgetUpTo = 2000, multiCraft = true, maxUnique = 500, maxAnoint = 150, maxTattoo = 30, influences = 2, maxInfluenced = 7, eldritchTier = 5, quality = 4, unknownAllowed = true,
 		enlighten = { name = "Awakened Enlighten", level = 5 }, exceptionalGems = true, awakenedGems = true, timeless = true, corruptedMain = true, corruptedSupports = true },
-	{ id = "MIRROR", label = "No limit (mirror tier)", rarePrice = 150, multiCraft = true, influences = 2, eldritchTier = 6, elevated = true, quality = 1, unknownAllowed = true,
+	{ id = "MIRROR", jewelAffixes = 4, label = "No limit (mirror tier)", rarePrice = 150, multiCraft = true, influences = 2, eldritchTier = 6, elevated = true, quality = 1, unknownAllowed = true,
 		enlighten = { name = "Awakened Enlighten", level = 5 }, exceptionalGems = true, awakenedGems = true, timeless = true, corruptedMain = true, corruptedSupports = true },
 }
 PriceSourceClass.defaultLevel = 3
@@ -470,10 +470,18 @@ function PriceSourceClass.RareTierQuality(item)
 	return count > 0 and sum / count or nil, count, top
 end
 
+-- (rare jewels by how many useful mods they have - every mod the generator
+-- puts on one is wanted: 2 about half a divine, 3 a few, 4 a "god" jewel)
+local jewelModPrices = { [0] = 0.05, 0.1, 0.5, 5, 40 }
 function PriceSourceClass:RarePrice(item, level)
 	level = level or { }
 	local base = level.rarePrice or 1
 	if not item then return base end
+	if item.type == "Jewel" and not item.clusterJewel and not (item.base and item.base.subType) then
+		local n = 0
+		for _, l in ipairs(item.explicitModLines or { }) do if not l.crafted then n = n + 1 end end
+		return (jewelModPrices[math.min(4, n)] or 40) * self:PhaseFactor("rare")
+	end
 	local good, crafted = 0, 0
 	for _, l in ipairs(item.explicitModLines or { }) do
 		if l.crafted then crafted = crafted + 1 else good = good + 1 end

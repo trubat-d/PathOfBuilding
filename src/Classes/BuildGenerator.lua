@@ -6072,7 +6072,9 @@ function BuildGeneratorClass:BuildCost()
 				-- (rares made at a cheaper level, by the total budget, at that level's price)
 				-- (estimated from its mods, influences and the league phase: PriceSource.RarePrice)
 				local own = self.rarePriceById and self.rarePriceById[item.id] or prices:RarePrice(item, level)
-				local price = kind == "gear" and own or (item.clusterJewel and own * 0.5) or own * 0.25
+				-- (plain rare jewels are priced by their own mods: PriceSource.RarePrice)
+				local plainJewel = item.type == "Jewel" and not item.clusterJewel and not (item.base and item.base.subType)
+				local price = (kind == "gear" or plainJewel) and own or (item.clusterJewel and own * 0.5) or own * 0.25
 				add({ kind = kind, slot = slot.slotName, label = "rare " .. (item.baseName or item.type or "item"), price = price, item = item, estimate = true })
 			end
 			-- anoints (the oils), on any amulet
@@ -6128,6 +6130,7 @@ function BuildGeneratorClass:CheapVersion(entry)
 		-- (a rare: made again as a cheaper level makes it)
 		if entry.cheapLevel then
 			opts.maxAffixes, opts.multiCraft = entry.cheapLevel.rareAffixes, entry.cheapLevel.multiCraft
+			opts.jewelAffixes = entry.cheapLevel.jewelAffixes
 			opts.quality = generator.qualityList[entry.cheapLevel.quality or generator.defaultQuality] or opts.quality
 		end
 		local ctx = { calcFunc = self.calcFunc, baseOutput = baseOutput, basePower = measure(baseOutput), measure = measure, tick = function() self:Tick() end, opts = opts }
@@ -6206,7 +6209,12 @@ function BuildGeneratorClass:PartValues(minPrice, withRares, withUnknown)
 		local wanted
 		if entry.estimate then
 			local cheapPrice = cheapLevel and cheapLevel.rarePrice * GetPriceSource():PhaseFactor("rare")
-			wanted = withRares and entry.kind == "gear" and cheapLevel and cheapPrice < entry.price
+			-- (plain rare jewels too: fewer mods - PriceSource.RarePrice prices them by their mods)
+			local plainJewel = entry.kind == "jewel" and entry.item and not entry.item.clusterJewel and not (entry.item.base and entry.item.base.subType)
+			if plainJewel and cheapLevel then
+				cheapPrice = GetPriceSource():RarePrice({ type = "Jewel", explicitModLines = { { }, { }, { }, { } } }) * ((cheapLevel.jewelAffixes or 4) >= 4 and 1 or (cheapLevel.jewelAffixes == 3 and 0.125 or 0.0125))
+			end
+			wanted = withRares and (entry.kind == "gear" or plainJewel) and cheapLevel and cheapPrice < entry.price
 				and not (self.cheapRareIds and self.cheapRareIds[entry.item.id])
 			if wanted then
 				entry.cheapLevel = cheapLevel
@@ -8603,6 +8611,10 @@ end
 -- The scorer for the options (focus, budget tier, configuration, archetype lens)
 function BuildGeneratorClass:SetupScorer()
 	local opts = self.options
+	-- (the mods a rare jewel of this investment has: RareItemGenerator)
+	local rareClass = common.classes and common.classes["RareItemGenerator"]
+	if not rareClass then new("BestItemFinder"):BestItemFinder(self.itemsTab) rareClass = common.classes and common.classes["RareItemGenerator"] end
+	if rareClass then rareClass.jewelAffixCap = opts.investment and opts.investment.jewelAffixes or nil end
 	self.overlap = new("HitOverlap"):HitOverlap(self.build, opts.scenario)
 	local bossFight = not opts.configScenario or opts.configScenario.boss and true or false
 	opts.chargesPerSecond = opts.chargesPerSecond or (bossFight and 1.5 or 4)

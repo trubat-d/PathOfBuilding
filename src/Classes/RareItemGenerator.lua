@@ -550,6 +550,12 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 		-- has at the quality chosen, plus the bench craft)
 		local total = prefixLimit + suffixLimit
 		if opts.maxAffixes then total = m_min(total, opts.maxAffixes + 1) end
+		-- (rare jewels: the mods a jewel of the budget has - four useful mods
+		-- on one jewel is a 30-100 divine "god" jewel; RareItemGenerator.jewelAffixCap
+		-- is set from the investment level by the generator)
+		local jewelCap = current.type == "Jewel" and not (current.base and current.base.subType) and not current.clusterJewel
+			and (opts.jewelAffixes or RareItemGeneratorClass.jewelAffixCap)
+		if jewelCap then total = m_min(total, jewelCap) end
 		while counts.Prefix + counts.Suffix < total do
 			local natural = counts.Prefix + counts.Suffix - counts.crafted
 			local best, bestPower, bestDeficit
