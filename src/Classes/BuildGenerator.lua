@@ -4380,6 +4380,41 @@ end
 -- the cluster's points spent in the tree)
 function BuildGeneratorClass:FinalAudit()
 	self:PruneUselessGems()
+	-- (main link supports that add nothing any more - Endurance Charge on Melee
+	-- Stun once the build had its charges elsewhere, on a Sunder - swapped for
+	-- the best support that does)
+	local main = self.mainGroup
+	if main then
+		local current = self:FullScore()
+		local swapped = { }
+		for i = #main.gemList, 2, -1 do
+			local gem = main.gemList[i]
+			local gd = gem.gemData
+			if gem.enabled ~= false and gd and gd.grantedEffect.support then
+				gem.enabled = false
+				self.build.skillsTab:ProcessSocketGroup(main)
+				local without = self:FullScore()
+				gem.enabled = true
+				self.build.skillsTab:ProcessSocketGroup(main)
+				if without >= current - 0.002 then
+					local snap = self:Snapshot()
+					t_remove(main.gemList, i)
+					self.build.skillsTab:ProcessSocketGroup(main)
+					self:ChooseSupports(5, true)
+					self:AutoConfigure()
+					local after = self:FullScore()
+					if after > current + 0.002 then
+						t_insert(swapped, gd.name)
+						current = after
+					else
+						self:Restore(snap)
+						self:Recalculate()
+					end
+				end
+			end
+		end
+		if #swapped > 0 then self:Note("Main link supports that added nothing replaced on the finished build: " .. table.concat(swapped, ", ")) end
+	end
 	local spec = self.build.spec
 	local archetypes = new("BuildArchetypes"):BuildArchetypes()
 	local needed = { }
