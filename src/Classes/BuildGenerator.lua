@@ -8805,6 +8805,15 @@ function BuildGeneratorClass:Run()
 		-- (auras again: the finished tree and gear can pay for more of them)
 		self:Move(5, 6, "Aura stacking on the finished build")
 		if opts.auraStacking ~= false then self:AuraStackMove() end
+		-- (every affordable unique once more, on the finished build: the sweep
+		-- early in the run measured them against first rares and a first tree -
+		-- a Righteous Fire Chieftain finished without Kaom's Heart, +0.59 for
+		-- 0.6 div when tried on the finished build)
+		if opts.uniqueSweep ~= false and opts.finalUniqueSweep ~= false then
+			local ok, found = pcall(function() return self:UniqueSweep(4) end)
+			if not ok then ConPrintf("Final unique sweep failed: %s", tostring(found)) end
+			if ok and found and found > 0 then gain = gain + 0.01 end
+		end
 		self:Move(6, 6, "Supports and ascendancy once more")
 		if opts.finalSupports ~= false then gain = gain + self:FinalSupports() end
 		if opts.ascendancyRecheck ~= false then gain = gain + self:AscendancyRecheck() end
