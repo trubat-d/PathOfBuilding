@@ -8816,6 +8816,7 @@ function BuildGeneratorClass:PrepareOptions()
 	-- Investment level decides rare quality and influences unless set
 	local probe = new("PriceSource"):PriceSource()
 	opts.investment = opts.investment or probe.levels[probe.defaultLevel]
+	GetGeneratorRules().corruptedGemsAllowed = opts.investment.corruptedSupports and true or false
 	if opts.midTier then
 		opts.investment = copyTable(opts.investment, true)
 		local cap = opts.midTierMaxUnique or 30

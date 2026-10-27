@@ -85,6 +85,10 @@ rules.uniques = {
 	["Vorana's Preparation"] = { excluded = true, reason = "its effect ends as soon as its ward breaks; PoB counts Culling Strike for the whole duration" },
 	["Haunting Memories"] = { excluded = true, reason = "suppressed spell damage bypasses energy shield" },
 	-- (found by the unique combo search: PoB reads each of its timed effects as always on)
+	-- (poewiki: only corrupted gems can be socketed in it - the main link's
+	-- six gems all Vaal-orbed: only at the investment levels that corrupt
+	-- supports; a mid-tier Vortex took it for +0.04)
+	["Skin of the Lords"] = { corruptedGems = true, reason = "only corrupted gems can be socketed in it" },
 	["Bound Fate"] = { excluded = true, reason = "every 5 seconds one random effect, half of them drawbacks; PoB counts the good ones as permanent" },
 	-- build checks
 	-- (totems: the score counts every totem the limit allows)
@@ -140,6 +144,8 @@ rules.behaviourSupports = {
 -- whatever the rules say (set by the generator for its run)
 rules.userExcluded = { }
 rules.userForced = { }
+-- (the investment level corrupts the main link's supports: set by the generator)
+rules.corruptedGemsAllowed = true
 
 function rules.UniqueAllowed(item, output, countsMax)
 	local title = item and (item.title or item.name)
@@ -148,6 +154,7 @@ function rules.UniqueAllowed(item, output, countsMax)
 	local rule = title and rules.uniques[title]
 	if not rule then return true end
 	if rule.excluded then return false, rule.reason end
+	if rule.corruptedGems and not rules.corruptedGemsAllowed then return false, rule.reason end
 	if rule.chargeLoss and not (countsMax and countsMax[rule.chargeLoss]) then return false, rule.reason end
 	if rule.check and output and not rule.check(output) then return false, rule.reason end
 	return true
