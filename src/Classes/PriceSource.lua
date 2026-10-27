@@ -409,6 +409,19 @@ function PriceSourceClass:UniquePrice(item)
 		for _, l in ipairs(item.explicitModLines or { }) do if l.range then range = l.range end end
 		price = math.max(price, rollPriced[title] * range ^ 3)
 	end
+	-- (uniques bought for chosen mods: poe.ninja's cheapest copy is a random
+	-- one - Forbidden Flame / Flesh at 0.12 div, Watcher's Eye at 0.15 - a
+	-- copy with the build's notable or aura mods costs far more; rough floors)
+	if price and title == "Watcher's Eye" then
+		local mods = 0
+		for _, v in ipairs({ item.variant, item.variantAlt, item.variantAlt2 }) do
+			local name = item.variantList and item.variantList[v]
+			if name and name ~= "None" then mods = mods + 1 end
+		end
+		price = math.max(price, ({ [1] = 3, [2] = 15, [3] = 60 })[mods] or 0)
+	elseif price and (title == "Forbidden Flame" or title == "Forbidden Flesh") then
+		price = math.max(price, 10)
+	end
 	return price
 end
 

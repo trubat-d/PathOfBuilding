@@ -861,6 +861,9 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 			if ci then
 				ratio, why = measure({ "200% more maximum Energy Shield" }, { ci }), "energy shield pool with Chaos Inoculation"
 			end
+		elseif a.id == "BLOCK" then
+			-- (tested as block near the cap: what it saves on the hits taken)
+			ratio, why = measure({ "+40% Chance to Block Attack Damage", "+40% Chance to Block Spell Damage" }), "attack and spell block"
 		elseif a.id == "LIFE" and life and damageFollowsLife then
 			ratio, why = math.exp(m_log(life.ratio) / m_log(1.1) * m_log(3)), "life pool the damage follows"
 		elseif a.lens and stackLines[a.lens.stat] then

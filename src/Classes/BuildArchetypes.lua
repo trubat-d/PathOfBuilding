@@ -254,6 +254,23 @@ BuildArchetypesClass.list = {
 		applies = function(info) return info.attack and info.weaponTypes ~= nil and not info.elemental and not info.minion end,
 	},
 	{
+		-- (a defence commitment: attack AND spell block near their cap. Of the
+		-- level 94-97 characters poe.ninja lists with 100k+ EHP and the most
+		-- damage, 86% block 50%+ of attacks and 84% 40%+ of spells (98% of the
+		-- tankiest ones with 5M+ DPS), while under 2% reach 90% suppression;
+		-- the generator's builds stopped halfway (24-52% / 12-36%): each point
+		-- of block is worth more the more there is - the hits let through are
+		-- (1 - block) - so a few points tested alone looked worth little)
+		id = "BLOCK", label = "Block: attack and spell block near the cap",
+		summary = "Attack and spell block built together towards 75%: shield (or staff / dual wield) block, the block passives and masteries, spell block from attack block.",
+		lens = { func = function(o)
+			local attack = math.min(0.75, math.max(0, (o.EffectiveBlockChance or o.BlockChance or 0) / 100))
+			local spell = math.min(0.75, math.max(0, (o.EffectiveSpellBlockChance or o.SpellBlockChance or 0) / 100))
+			return 2 / ((1 - attack) + (1 - spell))
+		end, base = 1, label = "Hits let through by block (inverse)", weight = 0.4 },
+		applies = function(info) return not info.minion end,
+	},
+	{
 		-- (what top Righteous Fire players run: a huge life pool that the
 		-- skill and its uniques turn into damage)
 		id = "LIFE", label = "Life stacking (Kaom's Heart, life scaling uniques)",
