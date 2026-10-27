@@ -6440,11 +6440,25 @@ function BuildGeneratorClass:SpendBudgetMove()
 	local prices = GetPriceSource()
 	if not budget or budget <= 0 or not prices.loaded then return 0 end
 	local investment = self.options.investment or { }
-	local nextLevel
+	local invIndex
 	for i, level in ipairs(prices.levels) do
-		if level.id == (investment.baseId or investment.id) then nextLevel = prices.levels[i + 1] end
+		if level.id == (investment.baseId or investment.id) then invIndex = i end
 	end
-	if not nextLevel or nextLevel.id == "MIRROR" then return 0 end
+	if not invIndex then return 0 end
+	local nextLevel = prices.levels[invIndex + 1]
+	if nextLevel and nextLevel.id == "MIRROR" then nextLevel = nil end
+	-- (rares the total budget made cheaper go back up first: two levels down,
+	-- they're tried at the level between and at the build's own level - a
+	-- 300 div Endgame Cyclone ended at 202 div, its fitted-down Mid rares never
+	-- tried again since Endgame's next level is Mirror)
+	local function levelsFor(item)
+		if self.cheapRareIds and self.cheapRareIds[item.id] then
+			local out = { }
+			for i = m_max(1, invIndex - 1), invIndex do t_insert(out, prices.levels[i]) end
+			return out
+		end
+		return nextLevel and { nextLevel } or { }
+	end
 	local total = self:BuildCost()
 	if total > budget * 0.85 then return 0 end
 	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
@@ -6453,7 +6467,7 @@ function BuildGeneratorClass:SpendBudgetMove()
 	local function priceOf(item, level)
 		return (self.rarePriceById and self.rarePriceById[item.id]) or prices:RarePrice(item, level) or 0
 	end
-	-- 1. every rare gear slot made at the next level, alone
+	-- 1. every rare gear slot made at a higher level, alone
 	local before = self:FullScore()
 	local options = { }
 	for _, slot in ipairs(self.itemsTab.orderedSlots) do
@@ -6464,32 +6478,34 @@ function BuildGeneratorClass:SpendBudgetMove()
 			and slot.nodeId and self.build.spec.allocNodes[slot.nodeId]
 		if item and item.rarity == "RARE" and (not slot.nodeId or plainJewel) and (item.type ~= "Jewel" or plainJewel) and not (item.base and item.base.flask)
 			and not (self.lockedSlots and self.lockedSlots[slot.slotName]) and (not slot.IsShown or slot:IsShown()) then
-			local snap = self:Snapshot()
-			local ok, result = pcall(function()
-				self.itemsTab.slots[slot.slotName]:SetSelItemId(0)
-				self.itemsTab:PopulateSlots()
+			for _, level in ipairs(levelsFor(item)) do
+				local snap = self:Snapshot()
+				local ok, result = pcall(function()
+					self.itemsTab.slots[slot.slotName]:SetSelItemId(0)
+					self.itemsTab:PopulateSlots()
+					self:Recalculate()
+					local opts = self:RareOptions(true)
+					opts.maxAffixes, opts.multiCraft = level.rareAffixes, level.multiCraft
+					opts.influences, opts.eldritchTier, opts.elevated = level.influences or 0, level.eldritchTier or 0, level.elevated or false
+					opts.quality = generator.qualityList[level.quality or generator.defaultQuality] or opts.quality
+					opts.jewelAffixes = level.jewelAffixes
+					local baseOutput = self.calcFunc({ })
+					local ctx = { calcFunc = self.calcFunc, baseOutput = baseOutput, basePower = measure(baseOutput), measure = measure, tick = function() self:Tick() end, opts = opts }
+					return generator:GenerateForSlotWith(slot.slotName, makeBase(item.baseName), ctx, nil)
+				end)
+				self:Restore(snap)
 				self:Recalculate()
-				local opts = self:RareOptions(true)
-				opts.maxAffixes, opts.multiCraft = nextLevel.rareAffixes, nextLevel.multiCraft
-				opts.influences, opts.eldritchTier, opts.elevated = nextLevel.influences or 0, nextLevel.eldritchTier or 0, nextLevel.elevated or false
-				opts.quality = generator.qualityList[nextLevel.quality or generator.defaultQuality] or opts.quality
-				opts.jewelAffixes = nextLevel.jewelAffixes
-				local baseOutput = self.calcFunc({ })
-				local ctx = { calcFunc = self.calcFunc, baseOutput = baseOutput, basePower = measure(baseOutput), measure = measure, tick = function() self:Tick() end, opts = opts }
-				return generator:GenerateForSlotWith(slot.slotName, makeBase(item.baseName), ctx, nil)
-			end)
-			self:Restore(snap)
-			self:Recalculate()
-			if ok and result and result.item then
-				local newItem = new("Item"):Item(result.item.raw)
-				newItem:NormaliseQuality()
-				newItem:BuildModList()
-				local extra = (prices:RarePrice(newItem, nextLevel) or 0) - priceOf(item, investment)
-				t_insert(options, { slot = slot.slotName, item = result.item, extra = m_max(0.1, extra), old = item })
-			elseif not ok then
-				ConPrintf("Budget upgrade of %s failed: %s", slot.slotName, tostring(result))
+				if ok and result and result.item then
+					local newItem = new("Item"):Item(result.item.raw)
+					newItem:NormaliseQuality()
+					newItem:BuildModList()
+					local extra = (prices:RarePrice(newItem, level) or 0) - priceOf(item, investment)
+					t_insert(options, { slot = slot.slotName, item = result.item, extra = m_max(0.1, extra), old = item, level = level })
+				elseif not ok then
+					ConPrintf("Budget upgrade of %s failed: %s", slot.slotName, tostring(result))
+				end
+				self:Tick()
 			end
-			self:Tick()
 		end
 	end
 	-- 2. measured in the build, best gain per extra divine first
@@ -6503,30 +6519,42 @@ function BuildGeneratorClass:SpendBudgetMove()
 	self:Recalculate()
 	t_sort(options, function(a, b) return a.gain / a.extra > b.gain / b.extra end)
 	local kept, gainTotal = { }, 0
-	for _, o in ipairs(options) do
-		-- (small gains count too: the divines are there to be spent - a
-		-- mid-tier Penance Brand kept 31 of its 80 divines for gains of 0.01)
-		if o.gain > 0.005 and total + o.extra <= budget then
-			local current = self:FullScore()
-			local snap = self:Snapshot()
-			local item = self:Equip(o.item, o.slot)
-			self.rarePriceById = self.rarePriceById or { }
-			self.rarePriceById[item.id] = prices:RarePrice(item, nextLevel)
-			self:Recalculate()
-			local after = self:FullScore()
-			if after > current + 0.003 then
-				total = total + o.extra
-				gainTotal = gainTotal + after - current
-				t_insert(kept, string.format("%s (+%s, %+.3f)", o.slot, prices.FormatPrice(o.extra), after - current))
-			else
-				self:Restore(snap)
+	local done = { }
+	-- (two passes: a slot taken at the level between can still go to the
+	-- build's own level when the divines are there)
+	for _ = 1, 2 do
+		for _, o in ipairs(options) do
+			-- (small gains count too: the divines are there to be spent - a
+			-- mid-tier Penance Brand kept 31 of its 80 divines for gains of 0.01)
+			local prev = done[o.slot]
+			local extra = prev and (o.extra - prev.extra) or o.extra
+			if o.gain > 0.005 and (not prev or (o.gain > prev.gain and extra > 0)) and total + extra <= budget then
+				local current = self:FullScore()
+				local snap = self:Snapshot()
+				local item = self:Equip(o.item, o.slot)
+				self.rarePriceById = self.rarePriceById or { }
+				self.rarePriceById[item.id] = prices:RarePrice(item, o.level)
 				self:Recalculate()
+				local after = self:FullScore()
+				if after > current + 0.003 then
+					total = total + extra
+					gainTotal = gainTotal + after - current
+					done[o.slot] = o
+				else
+					self:Restore(snap)
+					self:Recalculate()
+				end
 			end
 		end
 	end
+	for _, o in ipairs(options) do
+		if done[o.slot] == o then
+			t_insert(kept, string.format("%s at %s (+%s, %+.3f)", o.slot, o.level.label:match("^([^%(]+)"):gsub("%s+$", ""), prices.FormatPrice(o.extra), o.gain))
+		end
+	end
 	if #kept > 0 then
-		self:Note(string.format("Budget left spent: rares made at the %s level in %s; build now about %s of %s",
-			nextLevel.label:match("^([^%(]+)"):gsub("%s+$", ""), table.concat(kept, ", "), prices.FormatPrice(total), prices.FormatPrice(budget)))
+		self:Note(string.format("Budget left spent: rares made again at a higher investment level in %s; build now about %s of %s",
+			table.concat(kept, ", "), prices.FormatPrice(total), prices.FormatPrice(budget)))
 	end
 	return gainTotal
 end
