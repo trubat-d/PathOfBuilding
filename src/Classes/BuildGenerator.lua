@@ -7219,7 +7219,7 @@ end
 function BuildGeneratorClass:PruneUselessGems()
 	-- (auras: each aura or herald alone; other setups as a whole: a curse
 	-- without its Arcanist Brand would just be cast by hand)
-	local prunable = { "^Auras", "^Golem", "^Filler", "^Blessing", "^Curse" }
+	local prunable = { "^Auras", "^Golem", "^Filler", "^Blessing", "^Curse", "^Brand spell" }
 	local function isPrunable(label)
 		for _, p in ipairs(prunable) do if (label or ""):match(p) then return true end end
 		return false
@@ -9317,6 +9317,27 @@ function BuildGeneratorClass:Run()
 			end
 		end
 		if changed then self.itemsTab:PopulateSlots() self:Recalculate() end
+	end
+	-- (tattoos left on passives the tree no longer takes do nothing: drop them)
+	do
+		local spec = self.build.spec
+		local dropped = { }
+		for nodeId, override in pairs(spec.hashOverrides or { }) do
+			if not spec.allocNodes[nodeId] then t_insert(dropped, nodeId) end
+		end
+		if #dropped > 0 then
+			local state = spec:CreateUndoState()
+			local names = { }
+			for _, nodeId in ipairs(dropped) do
+				local o = state.hashOverrides[nodeId]
+				t_insert(names, (((o and o.dn) or tostring(nodeId)):gsub("^Tattoo of the ", "")))
+				state.hashOverrides[nodeId] = nil
+			end
+			spec:RestoreUndoState(state)
+			self.build.buildFlag = true
+			self:Recalculate()
+			self:Note(string.format("Tattoos dropped from passives the tree no longer takes: %s", table.concat(names, ", ")))
+		end
 	end
 	self:RemoveUnusedItems()
 	-- (last check: every gem setup fits its item's sockets)
