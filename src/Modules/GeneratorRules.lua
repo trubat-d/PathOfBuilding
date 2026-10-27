@@ -14,6 +14,7 @@
 --   needsAvoid: the build must be immune to what is turned back on it
 --     (Maligaro's Restraint with shock immunity is fine)
 --   noMinions: only without minion skills
+--   tempMinionsOnly: only when the main minions expire on their own
 -- Only drawbacks with no counter here are excluded outright.
 --
 local rules = { }
@@ -35,12 +36,17 @@ rules.uniques = {
 	["Shackles of the Wretched"] = { needsAvoid = { "CurseAvoidChance" }, reason = "hexes from socketed curses are reflected to you" },
 	["Temptation Step"] = { needsAvoid = { "PoisonAvoidChance" }, reason = "poison from travel skills is reflected to you" },
 	["Self-Flagellation"] = { needsAvoid = { "CurseAvoidChance" }, reason = "an additional curse can be applied to you" },
+	["Replica Reckless Defence"] = { needsAvoid = { "FreezeAvoidChance", "ShockAvoidChance", "IgniteAvoidChance" }, reason = "+10% chance to be frozen, shocked and ignited (not counted by PoB)" },
 	["Mokou's Embrace"] = { needsAvoid = { "IgniteAvoidChance" }, reason = "all damage taken from hits can ignite you" },
 	["Call of the Void"] = { needsAvoid = { "ChillAvoidChance" }, reason = "all damage taken from hits can chill you" },
 	-- minion restrictions: fine without minion skills
 	["The Primordial Chain"] = { noMinions = true, reason = "you can't have non-golem minions" },
 	["Wraithlord"] = { noMinions = true, reason = "you can't have non-spectre minions" },
 	["Chains of Command"] = { noMinions = true, reason = "you can't have non-animated, non-manifested minions" },
+	-- (poewiki: minions that hear the whispers lose 20% of their life a second
+	-- and stop following you; fine for minions that only last seconds, like
+	-- Summon Raging Spirit - not for zombies or spectres)
+	["Ancient Skull"] = { tempMinionsOnly = true, reason = "minions that crit hear the whispers: 20% of their life lost per second, they stop listening; only for minions that expire anyway" },
 	-- no counter in the generated build (charges PoB assumes stay at maximum,
 	-- flasks it still uses, defences it still counts). chargeLoss: fine when
 	-- the build counts as having the maximum of those charges (Ralakesh's
@@ -185,6 +191,10 @@ function rules.Penalties(output)
 			end
 		end
 		if rule.noMinions and output.Minion then
+			list[#list + 1] = { label = string.format("%s: %s", title, rule.reason), value = 3 }
+		end
+		-- (permanent minions: the main minion skill has no duration)
+		if rule.tempMinionsOnly and output.Minion and (output.Duration or 0) <= 0 then
 			list[#list + 1] = { label = string.format("%s: %s", title, rule.reason), value = 3 }
 		end
 	end
