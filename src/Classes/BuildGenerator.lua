@@ -84,8 +84,9 @@ function BuildGeneratorClass.SkillList()
 		local effect = gem.grantedEffect
 		if effect and not effect.support and gem.tags and gem.tags.grants_active_skill and not gem.vaalGem and not effect.unsupported
 			-- (movement skills are utility, except channelled attacks like Cyclone and
-			-- strikes like Flicker Strike; auras too, except attacks like Smite)
-			and not ((gem.tags.aura and not gem.tags.attack) or gem.tags.herald or gem.tags.guard
+			-- strikes like Flicker Strike; auras too, except attacks like Smite and
+			-- mines with an aura - Icicle, Pyroclast, Stormblast Mine: damage skills)
+			and not ((gem.tags.aura and not gem.tags.attack and not gem.tags.mine) or gem.tags.herald or gem.tags.guard
 				or ((gem.tags.movement or gem.tags.travel or gem.tags.blink) and not gem.tags.channelling and not (gem.tags.strike and not gem.tags.travel))
 				or gem.tags.warcry and not gem.tags.attack) then
 			t_insert(list, { label = gem.name, gemId = gemId })
