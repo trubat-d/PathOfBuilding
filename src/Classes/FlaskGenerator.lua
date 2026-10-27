@@ -199,6 +199,13 @@ function FlaskGeneratorClass:Generate(ctx)
 	local bases = self:GetBases(opts.levelOnly)
 	local usedBases = { }
 	local usedTincture = false -- one tincture at a time
+	-- (an ailment immunity suffix on one flask only: players put bleed immunity
+	-- on one flask kept up, not on three - a Boneshatter had "of the Skink" on
+	-- its Gold, Silver and Granite Flasks, the Gold one then worth +0.000)
+	local usedImmunities = { }
+	local function immunityGroup(candidate)
+		return candidate and candidate.type == "Suffix" and candidate.label and candidate.label:find("Immun", 1, true) and candidate.group
+	end
 	local currentScore = evaluate()
 	local chosen = { }
 	local chosenItems = { }
@@ -233,7 +240,7 @@ function FlaskGeneratorClass:Generate(ctx)
 			local bonus = baseName == "Quicksilver Flask" and 0.004 or 0
 			for _, affixType in ipairs({ "Prefix", "Suffix" }) do
 				for _, candidate in ipairs(candidates) do
-					if candidate.type == affixType then
+					if candidate.type == affixType and not usedImmunities[immunityGroup(candidate) or false] then
 						local prefix = affixType == "Prefix" and candidate or pick.Prefix
 						local suffix = affixType == "Suffix" and candidate or pick.Suffix
 						local score = quickScore(slotName, self:MakeFlask(baseName, prefix, suffix, quality.range)) + bonus
@@ -268,6 +275,8 @@ function FlaskGeneratorClass:Generate(ctx)
 			if score > currentScore - 0.002 then
 				chosenItems[item] = true
 				if item.type == "Tincture" then usedTincture = true end
+				local g = not best.existing and immunityGroup(best.suffix)
+				if g then usedImmunities[g] = true end
 				usedBases[best.baseName] = true
 				currentScore = math.max(currentScore, score)
 				chosen[slotName] = item
