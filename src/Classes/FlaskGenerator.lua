@@ -214,6 +214,10 @@ function FlaskGeneratorClass:Generate(ctx)
 			local isTincture = data.itemBases[baseName].type == "Tincture"
 			if not usedBases[baseName] and not (isTincture and usedTincture) then
 				local score = quickScore(slotName, self:MakeFlask(baseName, nil, nil, quality.range))
+				-- (when nothing else helps, the Quicksilver Flask every player
+				-- runs - moving faster between a boss's attacks - over a Gold
+				-- Flask's rarity, which a Boneshatter got at +0.000)
+				if baseName == "Quicksilver Flask" then score = score + 0.004 end
 				t_insert(ranked, { baseName = baseName, score = score })
 			end
 		end
@@ -226,12 +230,13 @@ function FlaskGeneratorClass:Generate(ctx)
 			local candidates = self.rareGenerator:GetCandidates(blank, quality, opts.levelOnly, blank.type == "Tincture" and data.itemMods.Tincture or data.itemMods.Flask)
 			local pick = { Prefix = nil, Suffix = nil }
 			local pickScore = ranked[i].score
+			local bonus = baseName == "Quicksilver Flask" and 0.004 or 0
 			for _, affixType in ipairs({ "Prefix", "Suffix" }) do
 				for _, candidate in ipairs(candidates) do
 					if candidate.type == affixType then
 						local prefix = affixType == "Prefix" and candidate or pick.Prefix
 						local suffix = affixType == "Suffix" and candidate or pick.Suffix
-						local score = quickScore(slotName, self:MakeFlask(baseName, prefix, suffix, quality.range))
+						local score = quickScore(slotName, self:MakeFlask(baseName, prefix, suffix, quality.range)) + bonus
 						if score > pickScore then
 							pickScore = score
 							pick[affixType] = candidate
