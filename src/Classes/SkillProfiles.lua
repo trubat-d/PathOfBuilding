@@ -124,7 +124,14 @@ SkillProfilesClass.list = {
 	-- (poewiki: a typical-sized target isn't hit by the explosions of a
 	-- collision against it; a large boss's hitbox catches about one)
 	{ pattern = "^Kinetic Blast", combine = { { part = "Projectile", weight = 1 }, { part = "Explosions", weight = bossOr(1, 2) } }, note = "the projectile and about one explosion on a large boss (the target hit isn't hit by its own explosions)" },
-	{ pattern = "^Earthquake", combine = { { part = "Initial impact", weight = 1 }, { part = "Aftershock", weight = 1 } }, note = "each impact and its aftershock" },
+	-- (a crack made before the last one erupted makes no aftershock of its own -
+	-- poewiki: attacking faster than the crack's duration gives one aftershock
+	-- per duration, not one per impact)
+	{ pattern = "^Earthquake", combine = { { part = "Initial impact", weight = 1 }, { part = "Aftershock", weight = function(ctx)
+		local speed, duration = ctx.output.Speed or 0, ctx.output.Duration or 0
+		if speed <= 0 or duration <= 0 then return 1 end
+		return math.min(1, 1 / (speed * duration))
+	end } }, note = "each impact, and an aftershock for every crack that erupts (one per crack duration when attacking faster)" },
 	-- Earthshatter's spikes shatter only when a warcry or a different slam is
 	-- used near them (poewiki), not by Earthshatter itself: counted when the
 	-- build has a warcry or another slam skill
