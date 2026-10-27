@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610271343" />
+	<Version number="2.67.2-ia.202610271347" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -127,7 +127,7 @@
 	<File name="Classes/BestItemListControl.lua" part="program" sha1="75edb896520eedbfb9fa2f7ede7f109c3d4bc39b" />
 	<File name="Classes/BuildArchetypes.lua" part="program" sha1="290a9451d9bb0e709de2fd5ab5d8098aa021b080" />
 	<File name="Classes/BuildDoctor.lua" part="program" sha1="bfcb1509f98ba151d192654da9b49db53eed5ad7" />
-	<File name="Classes/BuildGenerator.lua" part="program" sha1="74b5d6dbc45a86f6f1d186dee9c91a7536355318" />
+	<File name="Classes/BuildGenerator.lua" part="program" sha1="d24e0fa6d6c7cb4eb1f574cd3cf985650e6871c0" />
 	<File name="Classes/BuildIdeaListControl.lua" part="program" sha1="6645c5ae1b6a7db6927041851c7188055c83ab7f" />
 	<File name="Classes/BuildIdeasPopup.lua" part="program" sha1="ac9b9e81150dc49cb3afb1506606ebf695f49c83" />
 	<File name="Classes/BuildListControl.lua" part="program" sha1="f60f0d7f6aecbe851db896913cd1aa707c7fb304" />
@@ -193,10 +193,10 @@
 	<File name="Classes/PoEAPI.lua" part="program" sha1="7c36aec9aac7156dbc8330bc992142f607680618" />
 	<File name="Classes/PopupDialog.lua" part="program" sha1="2475f96e243a38dd3418dfb233207b5ed58c291a" />
 	<File name="Classes/PowerReportListControl.lua" part="program" sha1="47802eb02de22fcb7e4e6837c9dbaeda85d3d274" />
-	<File name="Classes/PriceSource.lua" part="program" sha1="0b549caaa6bbac01375289e8b08af2c5376590d3" />
+	<File name="Classes/PriceSource.lua" part="program" sha1="73ac4b71525d9e3e207840bffc04efde33c602c6" />
 	<File name="Classes/ProgressBarControl.lua" part="program" sha1="9aabc68c58dfbe99b36977e91b580aeaeabfcbc9" />
 	<File name="Classes/RadiusJewelFinder.lua" part="program" sha1="82d96964c873fbcedf9155bcf568ea3a72a04ea3" />
-	<File name="Classes/RareItemGenerator.lua" part="program" sha1="3a6c36192a7d0597dd4eef9aed3f6927b4c27b1e" />
+	<File name="Classes/RareItemGenerator.lua" part="program" sha1="3dddbc09caede225a80394c1928583af1dc8799b" />
 	<File name="Classes/RectangleOutlineControl.lua" part="program" sha1="c87605ee59b8ff258a12c58ba4d4d32e67023ede" />
 	<File name="Classes/ResizableEditControl.lua" part="program" sha1="8e1133756eece339330ad669c219ee28f1bd0c62" />
 	<File name="Classes/ScalingAnalyzer.lua" part="program" sha1="3e7cf96b037c4e1909aaba3273fcd4cf98bbf9bd" />
