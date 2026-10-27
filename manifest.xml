@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610270313" />
+	<Version number="2.67.2-ia.202610270314" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -156,7 +156,7 @@
 	<File name="Classes/EditControl.lua" part="program" sha1="b551d57d4addbd7e409644b42c29acea3659fae4" />
 	<File name="Classes/ExtBuildListControl.lua" part="program" sha1="2a8ac205bbbcff1a413554131d6cfff0ece379af" />
 	<File name="Classes/ExtBuildListProvider.lua" part="program" sha1="8bc44f4b0096876a078b12e4bf6dce09104b683d" />
-	<File name="Classes/FlaskGenerator.lua" part="program" sha1="606c507e812bfa3533304ac6cd2c7be3908068d0" />
+	<File name="Classes/FlaskGenerator.lua" part="program" sha1="7cc076af38f4dc39739c19df28a176598dc59522" />
 	<File name="Classes/FolderListControl.lua" part="program" sha1="2fec0874200a71563536324cfb1ea8f75984e53d" />
 	<File name="Classes/GemSelectControl.lua" part="program" sha1="8954e020052121d13122873b578b87e0bb7c60fc" />
 	<File name="Classes/GemSetup.lua" part="program" sha1="a5af88c97944ea19db5fe64bd8ae9bd8569e7ef1" />
