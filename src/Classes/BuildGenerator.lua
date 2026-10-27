@@ -338,23 +338,8 @@ function BuildGeneratorClass:UpdateCombinedParts()
 	local rule = gem and first and self.options.skillProfiles ~= false and self.skillProfiles.Combine(gem, ctx)
 	if not rule then
 		local hits = gem and first and self.options.skillProfiles ~= false and self.skillProfiles.Hits(gem, ctx)
-		-- (Arrow Nova with Barrage: the arrows are fired in a spiral out of the
-		-- landing point - poewiki - not one after another into the target;
-		-- PoB still counts every Barrage projectile hitting it. On a boss one
-		-- of them does: a Tornado Shot scored 19.5M DPS on that)
-		if ctx.boss and self.mainGroup then
-			local nova, barrage = false, false
-			for _, g in ipairs(self.mainGroup.gemList) do
-				local name = g.enabled ~= false and g.gemData and g.gemData.name
-				if name == "Arrow Nova" or name == "Awakened Arrow Nova" then nova = true end
-				if name == "Barrage Support" then barrage = true end
-			end
-			local count = ctx.output.ProjectileCount or 1
-			-- (all of it: the hits and the poisons, ignites... they apply)
-			self.scorer.dpsScale = nova and barrage and count > 1 and 1 / count or nil
-		else
-			self.scorer.dpsScale = nil
-		end
+		-- (Arrow Nova with Barrage: counted in BuildScorer:GetDPS, from the calculation itself)
+		self.scorer.dpsScale = nil
 		self.scorer.hitScale = hits and hits > 0 and hits ~= 1 and hits or nil
 		return
 	end

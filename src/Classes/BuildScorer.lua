@@ -512,6 +512,8 @@ function BuildScorerClass:GetDPS(output)
 	-- (a share of the skill's projectiles that reach a boss: Arrow Nova
 	-- with Barrage, BuildGenerator:UpdateCombinedParts)
 	if self.dpsScale then dps = dps * self.dpsScale end
+	local novaCount = not self.clearBuffs and GeneratorOutputNovaBarrage and GeneratorOutputNovaBarrage[output]
+	if novaCount and novaCount > 1 and not self.dpsScale then dps = dps / novaCount end
 	-- totems: PoB's figures are one totem's (its own Calcs count totems only for
 	-- bleed stacks); every totem summoned hits the boss. Their hits, poisons,
 	-- impales and stacking damage over time add up; ignite, bleed and a

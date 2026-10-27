@@ -126,6 +126,19 @@ function calcs.getMiscCalculator(build)
 		-- output, and a weak key whose value refers back to it is never
 		-- collected in LuaJIT)
 		local stationary = calcs.hasStationaryLines(env.player.modDB)
+		-- (build generator: Arrow Nova with Barrage - the arrows spiral out of
+		-- the landing point, PoB counts every one hitting a single target;
+		-- BuildScorer keeps one per use on a boss)
+		local novaBarrage
+		local mainSkill = env.player.mainSkill
+		if mainSkill and mainSkill.skillModList and mainSkill.skillModList:Flag(mainSkill.skillCfg, "SequentialProjectiles") then
+			for _, effect in ipairs(mainSkill.effectList or { }) do
+				local name = effect.grantedEffect and effect.grantedEffect.name
+				if name == "Arrow Nova" or name == "Awakened Arrow Nova" then
+					novaBarrage = output.ProjectileCount or (output.MainHand and output.MainHand.ProjectileCount)
+				end
+			end
+		end
 		if (useFullDPS ~= false or build.viewMode == "TREE") and usedFullDPS then
 			-- prevent upcoming calculation from using Cached Data and thus forcing it to re-calculate new FullDPS roll-up 
 			-- without this, FullDPS increase/decrease when for node/item/gem comparison would be all 0 as it would be comparing
@@ -147,6 +160,8 @@ function calcs.getMiscCalculator(build)
 		GeneratorOutputItems[output] = itemList
 		GeneratorOutputStationary = GeneratorOutputStationary or setmetatable({ }, { __mode = "k" })
 		GeneratorOutputStationary[output] = stationary
+		GeneratorOutputNovaBarrage = GeneratorOutputNovaBarrage or setmetatable({ }, { __mode = "k" })
+		GeneratorOutputNovaBarrage[output] = novaBarrage
 		return output
 	end, env.player.output
 end
