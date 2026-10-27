@@ -2341,6 +2341,22 @@ function BuildGeneratorClass:ChooseBases()
 	if scored[1] then
 		self:EquipWeapons(scored[1].option)
 		self.weaponFinalists = { scored[1].option, scored[2] and scored[2].option }
+		-- (and the best two-handed option when neither is one: white bases
+		-- undersell it against a white shield's block, while a two-handed
+		-- weapon's base damage is what top melee builds stack - a 2.5 times
+		-- larger physical DPS on a top Boneshatter's Eventuality Rod)
+		local hasTwoHand = false
+		for _, o in ipairs(self.weaponFinalists) do if not o.weapon2 then hasTwoHand = true end end
+		if not hasTwoHand then
+			for _, s in ipairs(scored) do
+				local base = data.itemBases[s.option.weapon1]
+				local info = base and data.weaponTypeInfo[base.type]
+				if not s.option.weapon2 and info and not info.oneHand and base.type ~= "Bow" then
+					t_insert(self.weaponFinalists, s.option)
+					break
+				end
+			end
+		end
 	end
 	self.itemsTab:PopulateSlots()
 	self:Recalculate()
