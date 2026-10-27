@@ -71,6 +71,12 @@ rules.uniques = {
 	["The Red Trail"] = { excluded = true, reason = "you bleed from half the attack hits you take (PoB counts none of that damage) and its frenzy charges need you bleeding" },
 	["Replica Red Trail"] = { excluded = true, reason = "spell hits poison you half the time (PoB counts none of that damage) and its power charges need you poisoned" },
 	["The Infinite Pursuit"] = { excluded = true, reason = "you bleed from half the attack hits you take (PoB counts none of that damage)" },
+	-- (poewiki: its flask effect petrifies you - you can't act while it lasts;
+	-- PoB parses neither that nor the endurance charge, only the block)
+	["Replica Rumi's Concoction"] = { excluded = true, reason = "petrifies you while its effect lasts (you can't act); PoB counts only the block" },
+	-- (its effect ends when the flask's ward breaks - the first hit above it
+	-- on a boss; PoB counts Culling Strike for the whole duration)
+	["Vorana's Preparation"] = { excluded = true, reason = "its effect ends as soon as its ward breaks; PoB counts Culling Strike for the whole duration" },
 	["Haunting Memories"] = { excluded = true, reason = "suppressed spell damage bypasses energy shield" },
 	-- (found by the unique combo search: PoB reads each of its timed effects as always on)
 	["Bound Fate"] = { excluded = true, reason = "every 5 seconds one random effect, half of them drawbacks; PoB counts the good ones as permanent" },

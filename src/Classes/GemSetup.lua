@@ -1000,7 +1000,11 @@ function GemSetupClass:ChooseFillers()
 					if not bestScore or score > bestScore + 1e-9 then best, bestScore = id, score end
 				end
 			end
-			if best and bestScore > current + 0.002 then
+			-- (a blessing is cast again by hand: 0.5 s every 11.4 s base duration
+			-- at level 25, the main skill stopped meanwhile, and only one blessing
+			-- can be on you - poewiki, Divine Blessing Support; PoB counts it as
+			-- always up, so it must pay for that time like a curse cast by hand)
+			if best and bestScore > current + 0.002 + 0.04 then
 				self:Keep("Blessing", { gemEntry(best) }, slotName)
 				t_insert(kept, data.gems[best].name .. " as a blessing (" .. slotName .. ")")
 			end
