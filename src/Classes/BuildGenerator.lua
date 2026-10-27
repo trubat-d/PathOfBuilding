@@ -6904,6 +6904,24 @@ function BuildGeneratorClass:PruneUselessGems()
 						self.build.skillsTab:ProcessSocketGroup(group)
 					end
 				end
+				-- (its support too - Enlighten, a costly gem, left on auras the
+				-- mana now pays for anyway)
+				for i = #group.gemList, 1, -1 do
+					local gem = group.gemList[i]
+					local gd = gem.gemData
+					if #names(group) > 0 and gem.enabled ~= false and gd and gd.grantedEffect.support then
+						t_remove(group.gemList, i)
+						self.build.skillsTab:ProcessSocketGroup(group)
+						local score = self:FullScore()
+						if score >= current - 0.002 then
+							t_insert(removed, gd.name .. " (on the auras)")
+							current = math.max(current, score)
+						else
+							t_insert(group.gemList, i, gem)
+							self.build.skillsTab:ProcessSocketGroup(group)
+						end
+					end
+				end
 				if #names(group) == 0 then t_remove(list, gi) end
 			else
 				group.enabled = false
