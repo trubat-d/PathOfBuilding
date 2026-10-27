@@ -2646,11 +2646,26 @@ function BuildGeneratorClass:MakeFlasks()
 	-- (slots the generator fills and left empty this time are emptied: the
 	-- flasks they held were chosen for an earlier build - four utility
 	-- flasks stayed on a build whose bloodline disables them)
+	-- (a life or mana flask left there stays only as the build's one flask of
+	-- that kind: an old mana flask carrying an immunity suffix stayed beside the
+	-- new ones, worth nothing - a 300 div Molten Strike's "of the Dielectric")
+	local kinds = { life = 0, mana = 0 }
+	for _, item in pairs(result.slots) do
+		local f = item.base and item.base.flask
+		if f and f.life then kinds.life = kinds.life + 1 end
+		if f and f.mana then kinds.mana = kinds.mana + 1 end
+	end
 	for _, slotName in ipairs({ "Flask 1", "Flask 2", "Flask 3", "Flask 4", "Flask 5" }) do
 		local slot = self.itemsTab.slots[slotName]
 		local item = slot and self.itemsTab.items[slot.selItemId]
-		if item and not result.slots[slotName] and not (item.base and item.base.flask and (item.base.flask.life or item.base.flask.mana)) then
-			slot:SetSelItemId(0)
+		if item and not result.slots[slotName] then
+			local f = item.base and item.base.flask
+			local kind = f and (f.life and "life" or (f.mana and "mana"))
+			if kind and kinds[kind] == 0 then
+				kinds[kind] = 1
+			else
+				slot:SetSelItemId(0)
+			end
 		end
 	end
 	for slotName, item in pairs(result.slots) do
