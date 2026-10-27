@@ -139,6 +139,17 @@ function calcs.getMiscCalculator(build)
 				end
 			end
 		end
+		-- (and a main skill triggered on ward break with no ward to break: PoB
+		-- still counts its cooldown as the trigger rate - an Essence Drain on
+		-- Cast on Ward Break with 0 ward)
+		-- (nor one cast on death or when stunned: not a way to deal damage)
+		local noTrigger
+		if mainSkill then
+			for _, effect in ipairs(mainSkill.effectList or { }) do
+				local name = effect.grantedEffect and effect.grantedEffect.name
+				if (name == "Cast on Ward Break" and (output.Ward or 0) <= 0) or name == "Cast on Death" or name == "Cast when Stunned" then noTrigger = true end
+			end
+		end
 		if (useFullDPS ~= false or build.viewMode == "TREE") and usedFullDPS then
 			-- prevent upcoming calculation from using Cached Data and thus forcing it to re-calculate new FullDPS roll-up 
 			-- without this, FullDPS increase/decrease when for node/item/gem comparison would be all 0 as it would be comparing
@@ -162,6 +173,8 @@ function calcs.getMiscCalculator(build)
 		GeneratorOutputStationary[output] = stationary
 		GeneratorOutputNovaBarrage = GeneratorOutputNovaBarrage or setmetatable({ }, { __mode = "k" })
 		GeneratorOutputNovaBarrage[output] = novaBarrage
+		GeneratorOutputNoTrigger = GeneratorOutputNoTrigger or setmetatable({ }, { __mode = "k" })
+		GeneratorOutputNoTrigger[output] = noTrigger
 		return output
 	end, env.player.output
 end

@@ -514,6 +514,9 @@ function BuildScorerClass:GetDPS(output)
 	if self.dpsScale then dps = dps * self.dpsScale end
 	local novaCount = not self.clearBuffs and GeneratorOutputNovaBarrage and GeneratorOutputNovaBarrage[output]
 	if novaCount and novaCount > 1 and not self.dpsScale then dps = dps / novaCount end
+	-- (a main skill triggered by something that never happens: Cast on Ward
+	-- Break with no ward)
+	if GeneratorOutputNoTrigger and GeneratorOutputNoTrigger[output] then dps = 0 end
 	-- totems: PoB's figures are one totem's (its own Calcs count totems only for
 	-- bleed stacks); every totem summoned hits the boss. Their hits, poisons,
 	-- impales and stacking damage over time add up; ignite, bleed and a
