@@ -322,8 +322,24 @@ function SkillProfilesClass.Apply(gen)
 	local gem = gen.mainGem
 	local first = gen.mainGroup and gen.mainGroup.gemList[1]
 	if not gem or not first then return false end
+	-- mines: how many are out near the enemy when they detonate (PoB's per-gem
+	-- "active mines" count, unset by default: Icicle Mine's aura - increased
+	-- critical strike chance against enemies per mine near them - and other
+	-- "each mine applies..." auras counted nothing). A player throws about a
+	-- second's worth before detonating them, up to the mine limit
+	local mineChanged = false
+	if gem.tags and gem.tags.mine then
+		local o = gen.build.calcsTab.mainOutput or { }
+		local speed = o.MineLayingSpeed or o.Speed or 0
+		local count = math.max(1, math.min(o.ActiveMineLimit or 15, math.floor(speed + 0.5)))
+		if first.skillMineCount ~= count then
+			first.skillMineCount, first.skillMineCountCalcs = count, count
+			gen.build.skillsTab:ProcessSocketGroup(gen.mainGroup)
+			mineChanged = true
+		end
+	end
 	local profile = SkillProfilesClass.Find(gem.name)
-	if not profile then return false end
+	if not profile then return mineChanged end
 	local output = gen.build.calcsTab.mainOutput or { }
 	local configScenario = gen.options.configScenario
 	local ctx = { output = output, boss = not configScenario or configScenario.boss and true or false, gen = gen }
@@ -393,5 +409,5 @@ function SkillProfilesClass.Apply(gen)
 		end
 	end
 	gen.skillProfileNote = string.format("%s: %s", gem.name, note)
-	return changed
+	return changed or mineChanged
 end
