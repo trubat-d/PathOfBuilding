@@ -880,7 +880,25 @@ function AutoConfigClass:Run()
 		end
 		if modDB:Flag(nil, "Condition:CanGainGaleForce") then
 			local maxGale = 10 + modDB:Sum("BASE", nil, "MaximumGaleForce")
-			self:Set("multiplierGaleForce", maxGale, "Gale Force builds up while using skills")
+			-- (Wind Ward: "lose all Gale Force when hit" - PoB doesn't parse
+			-- it and counted 40% less damage taken all the time, 78% of a 300
+			-- div Tornado Shot's max hit. A boss hits about once a second: the
+			-- Gale Force is what one second of skill uses builds back)
+			-- (also when a Forbidden Flame / Flesh pair grants Wind Ward: it is
+			-- in the calculation's passives, not the tree's)
+			local windWard = anyLine({ "lose all gale force when hit" })
+			for _, node in pairs(env.allocNodes or { }) do
+				for _, line in ipairs(node.sd or { }) do
+					if line:lower():find("lose all gale force when hit", 1, true) then windWard = true end
+				end
+			end
+			if windWard then
+				local uses = m_max(1, math.floor(output.Speed or 1))
+				local stacks = math.min(maxGale, uses)
+				self:Set("multiplierGaleForce", stacks, string.format("Gale Force lost when hit: %d built back in the second between boss hits (%.1f skill uses a second)", stacks, output.Speed or 0))
+			else
+				self:Set("multiplierGaleForce", maxGale, "Gale Force builds up while using skills")
+			end
 		end
 		-- (poewiki Instruments of Zeal: a Fanatic charge each second you've
 		-- attacked - a new attack used yourself, not a trigger, a proxy or a
