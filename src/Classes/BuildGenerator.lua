@@ -6261,6 +6261,41 @@ end
 -- rare on the same base (jewels: a rare jewel; flasks: taken out), an anoint
 -- taken off, an awakened gem by its normal version, an exceptional gem taken out
 function BuildGeneratorClass:CheapVersion(entry)
+	-- (a Watcher's Eye with three chosen mods: its cheap version keeps the
+	-- best two - 15 div instead of 60 - not a rare jewel; the 300 div builds
+	-- lost the whole jewel to the budget for a +0.012 it scored)
+	local we = entry.unique and entry.item and entry.item.title == "Watcher's Eye" and entry.item.variantList and entry.item
+	if we then
+		local fields, none = { }, nil
+		for i, name in ipairs(we.variantList) do if name == "None" then none = i end end
+		for _, f in ipairs({ "variant", "variantAlt", "variantAlt2" }) do
+			local v = we[f]
+			if v and we.variantList[v] and we.variantList[v] ~= "None" then t_insert(fields, f) end
+		end
+		if none and #fields >= 2 then
+			local best
+			for _, drop in ipairs(fields) do
+				local copy = new("Item"):Item(we:BuildRaw())
+				for _, f in ipairs({ "variant", "variantAlt", "variantAlt2" }) do copy[f] = we[f] end
+				copy[drop] = none
+				copy:BuildAndParseRaw()
+				copy:NormaliseQuality()
+				local equipped = self:Equip(copy, entry.slot)
+				self:Recalculate()
+				local score = self:FullScore()
+				if not best or score > best.score then best = { score = score, fields = { variant = copy.variant, variantAlt = copy.variantAlt, variantAlt2 = copy.variantAlt2 } } end
+				self:Tick()
+			end
+			local final = new("Item"):Item(we:BuildRaw())
+			for f, v in pairs(best.fields) do final[f] = v end
+			final:BuildAndParseRaw()
+			final:NormaliseQuality()
+			self:Equip(final, entry.slot)
+			self.itemsTab:PopulateSlots()
+			self:Recalculate()
+			return true
+		end
+	end
 	if entry.kind == "gear" or entry.kind == "jewel" then
 		local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
 		local generator = finder.rareGenerator
@@ -6376,6 +6411,13 @@ function BuildGeneratorClass:PartValues(minPrice, withRares, withUnknown)
 			local ok, done = pcall(function() return self:CheapVersion(entry) end)
 			if ok and done then
 				entry.loss = before - self:FullScore()
+				-- (a unique made cheaper as itself - a Watcher's Eye with one
+				-- mod less - saves the difference, not its whole price)
+				local slot = entry.unique and entry.slot and self.itemsTab.slots[entry.slot]
+				local now = slot and self.itemsTab.items[slot.selItemId]
+				if now and now.rarity == "UNIQUE" then
+					entry.price = m_max(0.1, entry.price - (GetPriceSource():UniquePrice(now) or 0))
+				end
 				t_insert(list, entry)
 			elseif not ok then
 				ConPrintf("Cheap version of %s failed: %s", entry.label, tostring(done))
