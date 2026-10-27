@@ -269,6 +269,13 @@ function BuildScorerClass:SustainableRate(output, resource)
 			recovery = recovery + (output.EnergyShieldRegenRecovery or 0) + (output.EnergyShieldLeechGainRate or 0)
 			pool = pool + (output.EnergyShield or 0)
 		end
+	elseif resource == "ES" then
+		-- (energy shield paying a skill's cost - Replica Covenant: regeneration
+		-- and leech; recharge only in the gaps between hits taken, a quarter
+		-- of a boss fight)
+		recovery = (output.EnergyShieldRegenRecovery or 0) + (output.EnergyShieldLeechGainRate or output.EnergyShieldLeechRate or 0)
+			+ 0.25 * (output.EnergyShieldRecharge or 0)
+		pool = math.max(0, output.EnergyShield or 0)
 	else
 		recovery = (output.LifeRegenRecovery or output.LifeRegen or 0) + (output.LifeLeechGainRate or 0) + (output.LifeOnHitRate or 0)
 		pool = math.max(0, (output.LifeUnreserved or 0) * 0.5) -- keep half your life
@@ -310,7 +317,7 @@ function BuildScorerClass:SkillSustain(output)
 		local pool = (output.LifeUnreserved or output.Life or 0) + (output.EnergyShield or 0)
 		if pool > 0 and selfHit >= pool then return 0, "Life" end
 	end
-	for _, resource in ipairs({ "Mana", "Life" }) do
+	for _, resource in ipairs({ "Mana", "Life", "ES" }) do
 		local perSecond = output[resource .. "PerSecondCost"] or 0
 		-- totems and brands are placed again only when they expire, not at the
 		-- placement / cast speed PoB's per-second cost assumes
@@ -692,7 +699,7 @@ function BuildScorerClass:GetPenalties(output)
 		-- running out of mana mid-fight is worse than lower DPS: casting stops
 		local p = 4 * (1 - sustain)
 		total = total + p
-		t_insert(penalties, { label = string.format("Can only pay for the main skill %d%% of the time in a long fight (%s recovery below its cost plus other skills); DPS is reduced to match", sustain * 100, limiting:lower()), value = p })
+		t_insert(penalties, { label = string.format("Can only pay for the main skill %d%% of the time in a long fight (%s recovery below its cost plus other skills); DPS is reduced to match", sustain * 100, limiting == "ES" and "energy shield" or limiting:lower()), value = p })
 	end
 	-- Self-damage over time (Righteous Fire, degen auras...) bigger than regeneration
 	local deficit, degen = self:DegenDeficit(output)

@@ -228,7 +228,7 @@ function BuildDoctorClass:Diagnose()
 				local n = math.ceil(extra * 1.1)
 				local relieved = { }
 				for i, l in ipairs(lines) do relieved[i] = l end
-				t_insert(relieved, string.format("Regenerate %d %s per second", n, short.resource))
+				t_insert(relieved, string.format("Regenerate %d %s per second", n, short.resource == "ES" and "Energy Shield" or short.resource))
 				override.addNodes = { [probeNode(spec.tree, relieved)] = true }
 				score, r = gen:Score(override)
 				reliefCost = n / 15
