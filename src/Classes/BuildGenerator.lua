@@ -6423,7 +6423,11 @@ function BuildGeneratorClass:SpendBudgetMove()
 	local options = { }
 	for _, slot in ipairs(self.itemsTab.orderedSlots) do
 		local item = self.itemsTab.items[slot.selItemId]
-		if item and item.rarity == "RARE" and not slot.nodeId and item.type ~= "Jewel" and not (item.base and item.base.flask)
+		-- (plain rare jewels too: the total budget may have made them cheaper -
+		-- a 300 div Boneshatter ended at 175 div with 3-mod jewels)
+		local plainJewel = item and item.type == "Jewel" and not item.clusterJewel and not (item.base and item.base.subType)
+			and slot.nodeId and self.build.spec.allocNodes[slot.nodeId]
+		if item and item.rarity == "RARE" and (not slot.nodeId or plainJewel) and (item.type ~= "Jewel" or plainJewel) and not (item.base and item.base.flask)
 			and not (self.lockedSlots and self.lockedSlots[slot.slotName]) and (not slot.IsShown or slot:IsShown()) then
 			local snap = self:Snapshot()
 			local ok, result = pcall(function()
@@ -6434,6 +6438,7 @@ function BuildGeneratorClass:SpendBudgetMove()
 				opts.maxAffixes, opts.multiCraft = nextLevel.rareAffixes, nextLevel.multiCraft
 				opts.influences, opts.eldritchTier, opts.elevated = nextLevel.influences or 0, nextLevel.eldritchTier or 0, nextLevel.elevated or false
 				opts.quality = generator.qualityList[nextLevel.quality or generator.defaultQuality] or opts.quality
+				opts.jewelAffixes = nextLevel.jewelAffixes
 				local baseOutput = self.calcFunc({ })
 				local ctx = { calcFunc = self.calcFunc, baseOutput = baseOutput, basePower = measure(baseOutput), measure = measure, tick = function() self:Tick() end, opts = opts }
 				return generator:GenerateForSlotWith(slot.slotName, makeBase(item.baseName), ctx, nil)
