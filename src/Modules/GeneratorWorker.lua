@@ -132,7 +132,7 @@ return function(jobJson, userPath, scriptBase)
 			focus = sc.focusCustom or byId(statics.focusList, sc.focusId) or statics.focusList[1], chargesPerSecond = sc.chargesPerSecond, overlap = overlap,
 			ehpFloor = sc.ehpFloor, hitFloor = sc.hitFloor, bossTier = sc.bossTier, killsPerSecond = sc.killsPerSecond, flaskRealism = sc.flaskRealism,
 		})
-		for _, key in ipairs({ "hitScale", "resourceSustain", "ignoreCosts", "ignoreAttributes", "ignoreReservation", "useChecklist",
+		for _, key in ipairs({ "hitScale", "dpsScale", "resourceSustain", "ignoreCosts", "ignoreAttributes", "ignoreReservation", "useChecklist",
 			"lens", "lens2", "avoidanceWeight", "pastTarget", "fightWeight", "smoothBuffs", "reservationSlope", "clearBoost", "clearBuffs", "fightSim", "softSustain", "secondaryTrim", "stationaryBlend" }) do
 			scorer[key] = sc[key]
 		end
