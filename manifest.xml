@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610270345" />
+	<Version number="2.67.2-ia.202610270435" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -127,13 +127,13 @@
 	<File name="Classes/BestItemListControl.lua" part="program" sha1="75edb896520eedbfb9fa2f7ede7f109c3d4bc39b" />
 	<File name="Classes/BuildArchetypes.lua" part="program" sha1="290a9451d9bb0e709de2fd5ab5d8098aa021b080" />
 	<File name="Classes/BuildDoctor.lua" part="program" sha1="bfcb1509f98ba151d192654da9b49db53eed5ad7" />
-	<File name="Classes/BuildGenerator.lua" part="program" sha1="8ea4411a9e1c12ff6025b45bb2151f73ead3bc42" />
+	<File name="Classes/BuildGenerator.lua" part="program" sha1="7ec5317179bba2bd0955d667429ba5b2463d86e6" />
 	<File name="Classes/BuildIdeaListControl.lua" part="program" sha1="6645c5ae1b6a7db6927041851c7188055c83ab7f" />
 	<File name="Classes/BuildIdeasPopup.lua" part="program" sha1="ac9b9e81150dc49cb3afb1506606ebf695f49c83" />
 	<File name="Classes/BuildListControl.lua" part="program" sha1="f60f0d7f6aecbe851db896913cd1aa707c7fb304" />
 	<File name="Classes/BuildMetaSource.lua" part="program" sha1="49121c15f4d2ff04bfb09556a88c9d480e4d30eb" />
 	<File name="Classes/BuildReview.lua" part="program" sha1="43ae7d5ee40faf05b9d96dd65f66c8e9b2256a98" />
-	<File name="Classes/BuildScorer.lua" part="program" sha1="f60526772316e233f9eaf4626fc3246d2a423a85" />
+	<File name="Classes/BuildScorer.lua" part="program" sha1="8ffd436d7185e916a18fe2230772a409faefa1b8" />
 	<File name="Classes/ButtonControl.lua" part="program" sha1="dd46384fc87d495e7ef5a11803cfc70360ac8bf1" />
 	<File name="Classes/CalcBreakdownControl.lua" part="program" sha1="40ec12ec9a37b1a73aad44f1d6d473377821efbf" />
 	<File name="Classes/CalcSectionControl.lua" part="program" sha1="ace88981a36381c6ccecbdb76ee1b9b04d1afeaf" />
@@ -456,7 +456,7 @@
 	<File name="Modules/GeneratorModel.lua" part="program" sha1="e60b90a5dfcf6b7b5482fb88ef98513bcc7c8dd7" />
 	<File name="Modules/GeneratorModelTrainer.lua" part="program" sha1="3bb58f3180bdeec309519d51f5c9bba55e988e60" />
 	<File name="Modules/GeneratorRules.lua" part="program" sha1="8cbd0e7f5f905a00341157fddd6398c42158aa4e" />
-	<File name="Modules/GeneratorWorker.lua" part="program" sha1="055169082a594544a07443f6f1d6a84df2ef8bc4" />
+	<File name="Modules/GeneratorWorker.lua" part="program" sha1="3bf74caacbb0de4faeacc48b254ea65538f81bd1" />
 	<File name="Modules/ItemSlotHelper.lua" part="program" sha1="4b7d441f9ade5d57c413aa1f8f8067b654cfb927" />
 	<File name="Modules/ItemTools.lua" part="program" sha1="3fbd7aba963b6a67eb5c1d213112fc6a3e681952" />
 	<File name="Modules/Main.lua" part="program" sha1="ca815decedb56af27f4cd480e706e2782f6d00d6" />
