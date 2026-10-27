@@ -9120,6 +9120,17 @@ function BuildGeneratorClass:Run()
 			local ok2, err2 = pcall(function() self:SpendBudgetMove() end)
 			if not ok2 then ConPrintf("Spending the budget failed: %s", tostring(err2)) end
 		end
+		-- (the rares made cheaper to fit the budget: a cheap unique can now beat
+		-- them - a 300 div Righteous Fire's body armour went from a 165 div rare
+		-- to a mid one, Kaom's Heart then worth +0.67 for 0.6 div)
+		if opts.uniqueSweep ~= false and opts.finalUniqueSweep ~= false then
+			local ok3, found = pcall(function() return self:UniqueSweep(3) end)
+			if not ok3 then ConPrintf("Unique sweep after the budget failed: %s", tostring(found)) end
+			if ok3 and found and found > 0 then
+				self:RefineTree(6)
+				if self:BuildCost() > opts.totalBudget then pcall(function() self:FitTotalBudget() end) end
+			end
+		end
 	end
 	-- (every part judged once more on the build as it now stands: the budget,
 	-- the rares made again and the later moves can leave a buff, a keystone or
