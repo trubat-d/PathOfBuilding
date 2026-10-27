@@ -401,6 +401,14 @@ function PriceSourceClass:UniquePrice(item)
 	local variantName = item.variant and item.variantList and item.variantList[item.variant]
 	local price = title and variantName and self.uniques[title .. "|" .. variantName] or (title and self.uniques[title])
 	if price and self.phase and self.phase ~= "NOW" then price = price * self:PhaseFactor("unique", price) end
+	-- (uniques whose roll is the whole item: poe.ninja's cheapest copy is a
+	-- low roll - The Adorned at 0.09 div - a high roll costs far more)
+	local rollPriced = { ["The Adorned"] = 20 }
+	if price and title and rollPriced[title] then
+		local range = 0.5
+		for _, l in ipairs(item.explicitModLines or { }) do if l.range then range = l.range end end
+		price = math.max(price, rollPriced[title] * range ^ 3)
+	end
 	return price
 end
 
