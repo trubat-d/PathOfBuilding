@@ -4510,6 +4510,201 @@ function BuildGeneratorClass:ChooseTimelessJewel()
 	t_insert(self.costs, price or false)
 end
 
+-- The Adorned: "(0-100)% increased Effect of Jewel Socket Passive Skills
+-- containing Corrupted Magic Jewels". Top players fill their jewel sockets
+-- with corrupted magic jewels (one prefix and one suffix, the best tiers)
+-- and one Adorned: with four or more sockets the doubled mods beat rare
+-- jewels (a top Righteous Fire lost 0.7 without its Adorned). Each rare
+-- jewel the generator made becomes a magic one with its best prefix and best
+-- suffix, one socket takes The Adorned; kept if the build is better
+-- (net of its price)
+local jewelModTypes
+local function jewelLineType(line)
+	if not jewelModTypes then
+		jewelModTypes = { }
+		local function template(text)
+			return (text:gsub("%(%-?[%d%.]+%-%-?[%d%.]+%)", "#"):gsub("%-?[%d%.]+", "#"))
+		end
+		for _, mod in pairs(data.itemMods.Jewel or { }) do
+			if (mod.type == "Prefix" or mod.type == "Suffix") and mod[1] then
+				jewelModTypes[template(mod[1])] = mod.type
+			end
+		end
+		jewelModTypes.template = template
+	end
+	return jewelModTypes[jewelModTypes.template(line)]
+end
+
+function BuildGeneratorClass:AdornedMove()
+	local investment = self.options.investment or { }
+	if not GetPriceSource().Available(investment, "The Adorned") then return 0 end
+	local adornedDb
+	for _, unique in pairs(main.uniqueDB.list) do
+		if unique.title == "The Adorned" then adornedDb = unique end
+	end
+	if not adornedDb then return 0 end
+	local spec = self.build.spec
+	-- sockets holding a rare jewel the generator made (not abyss, not cluster)
+	local sockets = { }
+	for _, node in ipairs(nodesById(spec.allocNodes)) do
+		local slotName = "Jewel " .. node.id
+		local slot = self.itemsTab.slots[slotName]
+		local item = slot and self.itemsTab.items[slot.selItemId]
+		if node.type == "Socket" and item and item.rarity == "RARE" and item.title and item.title:match("^Best Rare")
+			and item.base and not item.base.subType and not item.clusterJewel then
+			t_insert(sockets, { slotName = slotName, item = item })
+		end
+	end
+	-- (the Adorned's socket and at least three magic jewels)
+	if #sockets < 4 then return 0 end
+	self:Recalculate()
+	local before = self:FullScore()
+	local snap = self:Snapshot()
+	local savedLog = #self.log
+	-- The Adorned (current version) in the socket whose rare jewel is worth least
+	local adorned = new("Item"):Item(adornedDb.raw)
+	if adorned.variantList then adorned.variant = #adorned.variantList end
+	for _, modLine in ipairs(adorned.explicitModLines) do modLine.range = 0.9 end
+	adorned:BuildAndParseRaw()
+	local worst, worstScore
+	for _, s in ipairs(sockets) do
+		local score = self:Score({ repSlotName = s.slotName, repItem = adorned })
+		if not worstScore or score > worstScore then worst, worstScore = s, score end
+	end
+	self:Equip(adorned, worst.slotName)
+	self.itemsTab:PopulateSlots()
+	self:Recalculate()
+	-- every other rare jewel made magic: its best prefix and best suffix, corrupted
+	local made = 0
+	for _, s in ipairs(sockets) do
+		if s ~= worst then
+			local prefixes, suffixes = { }, { }
+			for _, modLine in ipairs(s.item.explicitModLines) do
+				local kind = jewelLineType(modLine.line)
+				if kind == "Prefix" then t_insert(prefixes, modLine.line) elseif kind == "Suffix" then t_insert(suffixes, modLine.line) end
+			end
+			local best, bestScore
+			for _, p in ipairs(#prefixes > 0 and prefixes or { false }) do
+				for _, sfx in ipairs(#suffixes > 0 and suffixes or { false }) do
+					local raw = "Rarity: MAGIC\n" .. s.item.baseName .. "\n" .. s.item.baseName .. "\nImplicits: 0\n"
+						.. (p and (p .. "\n") or "") .. (sfx and (sfx .. "\n") or "") .. "Corrupted"
+					local magic = new("Item"):Item(raw)
+					magic:BuildModList()
+					local score = self:Score({ repSlotName = s.slotName, repItem = magic })
+					if not bestScore or score > bestScore then best, bestScore = magic, score end
+				end
+			end
+			if best then
+				self:Equip(best, s.slotName)
+				made = made + 1
+			end
+		end
+	end
+	self.itemsTab:PopulateSlots()
+	self:AutoConfigure()
+	local after = self:FullScore()
+	local cost = self:PriceCost(adorned)
+	if made >= 3 and after > before + cost + 0.005 then
+		local price = GetPriceSource():UniquePrice(adorned)
+		self.costs = self.costs or { }
+		t_insert(self.costs, price or false)
+		self:Note(string.format("The Adorned (%s) with %d corrupted magic jewels (each a rare jewel's best prefix and suffix) instead of rare jewels: score %+.3f",
+			GetPriceSource().FormatPrice(price), made, after - before))
+		return after - before
+	end
+	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+	self:Restore(snap)
+	self:AutoConfigure()
+	self:Recalculate()
+	if os.getenv("DEBUG_ADORNED") then ConPrintf("[adorned] %d sockets, %.3f -> %.3f (cost %.3f): not kept", #sockets, before, after, cost) end
+	return 0
+end
+
+-- Voices: a Large Cluster Jewel that adds 3 jewel sockets (and 1, 3, 5 or 7
+-- small passives that grant nothing). Top players use it to hold more of
+-- their best jewels (a top Righteous Fire had four). Tried in the nearest
+-- outer socket - an empty one, or one holding a cluster jewel the generator
+-- made - with the build's best rare jewels in its sockets and the tree
+-- adjusted; kept if the build is better net of its price
+function BuildGeneratorClass:VoicesMove()
+	local investment = self.options.investment or { }
+	if investment.timeless == false or not GetPriceSource().Available(investment, "Voices") then return 0 end
+	local voicesDb
+	for _, unique in pairs(main.uniqueDB.list) do
+		if unique.title == "Voices" then voicesDb = unique end
+	end
+	if not voicesDb then return 0 end
+	local gen = new("ClusterJewelGenerator"):ClusterJewelGenerator({
+		build = self.build,
+		innerJewel = function() return self.rareJewel end,
+		score = function(override) return (self:Score(override)) end,
+		fullScore = function() return (self:FullScore()) end,
+		quickScore = function() self:Recalculate() return (self:Score()) end, noQuick = true,
+		equip = function(item, slotName) return self:Equip(item, slotName) end,
+		tick = function() self:Tick() end,
+	})
+	local candidates = { }
+	local empty = gen:Sockets(6, false)[1]
+	if empty then t_insert(candidates, empty) end
+	local held = gen:Sockets(6, false, function(item) return item and item.clusterJewel and item.rarity == "RARE" end)[1]
+	if held then t_insert(candidates, held) end
+	if #candidates == 0 then return 0 end
+	local before = self:FullScore()
+	local best, bestState, bestLabel
+	for _, socket in ipairs(candidates) do
+		-- (each variant: fewer small passives cost fewer points but more divines)
+		for variant = 1, #(voicesDb.variantList or { 1 }) do
+			local item = new("Item"):Item(voicesDb.raw)
+			item.variant = variant
+			item:BuildAndParseRaw()
+			local snap = self:Snapshot()
+			local savedLog = #self.log
+			local ok, err = pcall(function()
+				local slot = self.itemsTab.slots["Jewel " .. socket.node.id]
+				local old = slot and self.itemsTab.items[slot.selItemId]
+				if old then slot:SetSelItemId(0) self.build.spec:BuildClusterJewelGraphs() self.itemsTab:PopulateSlots() end
+				gen:TryReal(socket, item, true)
+				-- (its jewel sockets allocated: the rare jewels go in them)
+				local spec = self.build.spec
+				for _, subGraph in pairs(spec.subGraphs or { }) do
+					if subGraph.parentSocket and subGraph.parentSocket.id == socket.node.id then
+						for _, node in ipairs(subGraph.nodes) do
+							local n = spec.nodes[node.id]
+							if n and n.type == "Socket" and not n.alloc and n.path then spec:AllocNode(n) end
+						end
+					end
+				end
+				spec:BuildAllDependsAndPaths()
+				self.itemsTab:PopulateSlots()
+				self:Recalculate()
+				self:FillEmptySockets()
+				self:TrimTree()
+				self:RefineTree(8)
+				self:AutoConfigure()
+			end)
+			if not ok then ConPrintf("Voices move failed: %s", tostring(err)) end
+			local after = ok and self:FullScore() or before
+			local net = after - self:PriceCost(item)
+			if os.getenv("DEBUG_VOICES") then ConPrintf("[voices] socket %d variant %d: %.3f -> %.3f (net %.3f)", socket.node.id, variant, before, after, net) end
+			if ok and (not best or net > best) then
+				best, bestState = net, self:CaptureState()
+				bestLabel = string.format("%s (%s), %s", item.title, item.variantList and item.variantList[variant] or "", GetPriceSource().FormatPrice(GetPriceSource():UniquePrice(item)))
+			end
+			for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+			self:Restore(snap)
+		end
+	end
+	if best and best > before + 0.01 then
+		self:ApplyState(bestState)
+		self:AutoConfigure()
+		local after = self:FullScore()
+		self:Note(string.format("Voices: %s in an outer socket, its 3 jewel sockets filled with rare jewels: score %+.3f", bestLabel, after - before))
+		return after - before
+	end
+	self:Recalculate()
+	return 0
+end
+
 -- The unique jewels most poe.ninja builds use: a Forbidden Flame / Flesh pair
 -- (from Budget) and a Watcher's Eye for the build's auras (from Mid)
 function BuildGeneratorClass:ChooseMetaJewels(onlyKinds)
@@ -8813,6 +9008,16 @@ function BuildGeneratorClass:Run()
 			local ok, found = pcall(function() return self:UniqueSweep(4) end)
 			if not ok then ConPrintf("Final unique sweep failed: %s", tostring(found)) end
 			if ok and found and found > 0 then gain = gain + 0.01 end
+		end
+		-- (the unique jewels top players fill their jewel sockets with: Voices'
+		-- three extra sockets, The Adorned with corrupted magic jewels)
+		if opts.voices ~= false then
+			local ok, g = pcall(function() return self:VoicesMove() end)
+			if not ok then ConPrintf("Voices move failed: %s", tostring(g)) elseif g > 0 then gain = gain + g end
+		end
+		if opts.adorned ~= false then
+			local ok, g = pcall(function() return self:AdornedMove() end)
+			if not ok then ConPrintf("Adorned move failed: %s", tostring(g)) elseif g > 0 then gain = gain + g end
 		end
 		self:Move(6, 6, "Supports and ascendancy once more")
 		if opts.finalSupports ~= false then gain = gain + self:FinalSupports() end
