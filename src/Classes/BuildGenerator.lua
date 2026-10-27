@@ -4721,6 +4721,84 @@ function BuildGeneratorClass:VoicesMove()
 	return 0
 end
 
+-- The weapon style judged again on the finished build: a two-handed weapon
+-- against one hand and a shield (or the other way round), with rares made
+-- for it and the tree adjusted. The style is chosen early on white bases,
+-- where a shield's block can beat a two-hander's base damage; top melee
+-- builds stack that damage (a top Boneshatter: a 1,267 physical DPS
+-- two-hander, 98% crit). Kept if the build is better
+function BuildGeneratorClass:WeaponStyleRecheck()
+	local effect = self.mainGem and self.mainGem.grantedEffect
+	if not effect or not effect.weaponTypes or self.triggerSource then return 0 end
+	local w1, w2 = self.itemsTab.slots["Weapon 1"], self.itemsTab.slots["Weapon 2"]
+	if (self.lockedSlots and (self.lockedSlots["Weapon 1"] or self.lockedSlots["Weapon 2"])) then return 0 end
+	local cur1 = w1 and self.itemsTab.items[w1.selItemId]
+	local cur2 = w2 and self.itemsTab.items[w2.selItemId]
+	if not cur1 or (cur1.rarity ~= "RARE" and cur1.rarity ~= "NORMAL") then return 0 end
+	if cur2 and cur2.rarity == "UNIQUE" then return 0 end
+	local twoHanded = not cur2
+	local alternatives = { }
+	for _, option in ipairs(self:WeaponOptions()) do
+		local base = data.itemBases[option.weapon1]
+		local isTwo = not option.weapon2 and base and base.type ~= "Bow"
+		if base and (isTwo and not twoHanded or (not isTwo and twoHanded and option.weapon2)) then t_insert(alternatives, option) end
+	end
+	if #alternatives == 0 then return 0 end
+	-- (the best base of each style first: WeaponOptions ranks bases by physical DPS)
+	t_sort(alternatives, function(a, b)
+		local wa, wb = data.itemBases[a.weapon1].weapon, data.itemBases[b.weapon1].weapon
+		return (wa.PhysicalMin + wa.PhysicalMax) * wa.AttackRateBase > (wb.PhysicalMin + wb.PhysicalMax) * wb.AttackRateBase
+	end)
+	local generator = new("BestItemFinder"):BestItemFinder(self.itemsTab).rareGenerator
+	local before = self:FullScore()
+	local best, bestState, bestLabel
+	for i = 1, m_min(2, #alternatives) do
+		local option = alternatives[i]
+		local snap = self:Snapshot()
+		local savedLog = #self.log
+		local ok, err = pcall(function()
+			self:EquipWeapons(option)
+			self.itemsTab:PopulateSlots()
+			self:FitSockets()
+			self:Recalculate()
+			for _, slotName in ipairs({ "Weapon 1", "Weapon 2" }) do
+				local slot = self.itemsTab.slots[slotName]
+				local item = slot and self.itemsTab.items[slot.selItemId]
+				if item and item.rarity == "NORMAL" then
+					local measure = function(output) return self.scorer:ScoreOutput(output, self.ratio) end
+					local baseOutput = self.calcFunc({ })
+					local ctx = { calcFunc = self.calcFunc, baseOutput = baseOutput, basePower = measure(baseOutput), measure = measure, tick = function() self:Tick() end, opts = self:RareOptions(true) }
+					local result = generator:GenerateForSlotWith(slotName, makeBase(item.baseName), ctx, nil)
+					if result then self:Equip(result.item, slotName) end
+					self.itemsTab:PopulateSlots()
+					self:Recalculate()
+				end
+			end
+			self:ChooseSupports(5, true)
+			self:RefineTree(8)
+			self:AutoConfigure()
+		end)
+		if not ok then ConPrintf("Weapon style recheck failed: %s", tostring(err)) end
+		local after = ok and self:FullScore() or before
+		if os.getenv("DEBUG_WEAPON") then ConPrintf("[weapon] %s%s: %.3f -> %.3f", option.weapon1, option.weapon2 and (" + " .. option.weapon2) or "", before, after) end
+		if ok and (not best or after > best) then
+			best, bestState = after, self:CaptureState()
+			bestLabel = option.weapon2 and string.format("%s + %s", option.weapon1, option.weapon2) or (option.weapon1 .. " (two-handed)")
+		end
+		for j = #self.log, savedLog + 1, -1 do t_remove(self.log, j) end
+		self:Restore(snap)
+	end
+	if best and best > before + 0.02 then
+		self:ApplyState(bestState)
+		self:AutoConfigure()
+		local after = self:FullScore()
+		self:Note(string.format("Weapon style changed on the finished build: rare %s, supports and tree adjusted: score %+.3f", bestLabel, after - before))
+		return after - before
+	end
+	self:Recalculate()
+	return 0
+end
+
 -- The unique jewels most poe.ninja builds use: a Forbidden Flame / Flesh pair
 -- (from Budget) and a Watcher's Eye for the build's auras (from Mid)
 function BuildGeneratorClass:ChooseMetaJewels(onlyKinds)
@@ -9039,6 +9117,10 @@ function BuildGeneratorClass:Run()
 		end
 		-- (the unique jewels top players fill their jewel sockets with: Voices'
 		-- three extra sockets, The Adorned with corrupted magic jewels)
+		if opts.weaponStyleRecheck ~= false then
+			local ok, g = pcall(function() return self:WeaponStyleRecheck() end)
+			if not ok then ConPrintf("Weapon style recheck failed: %s", tostring(g)) elseif g > 0 then gain = gain + g end
+		end
 		if opts.voices ~= false then
 			local ok, g = pcall(function() return self:VoicesMove() end)
 			if not ok then ConPrintf("Voices move failed: %s", tostring(g)) elseif g > 0 then gain = gain + g end
