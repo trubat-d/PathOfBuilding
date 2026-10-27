@@ -8936,6 +8936,15 @@ function BuildGeneratorClass:Run()
 	self:SanitizeRares()
 	self:AutoConfigure()
 	self:Recalculate()
+	-- (buffs once more on the build exactly as it is saved: the steps since the
+	-- audit - requirements, rares made legal, the configuration - can leave
+	-- one adding nothing; Arctic Armour on a Righteous Fire, +0.015 without it)
+	if opts.pruneGems ~= false then
+		local ok, err = pcall(function() self:PruneUselessGems() end)
+		if not ok then ConPrintf("Pruning gems failed: %s", tostring(err)) end
+		self:AutoConfigure()
+		self:Recalculate()
+	end
 	-- what each bought part is worth, best value first (not for quick builds)
 	if opts.upgradeOrder ~= false and not opts.quick then
 		local ok, err = pcall(function() self:UpgradeOrder() end)
