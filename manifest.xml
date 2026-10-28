@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610281707" />
+	<Version number="2.67.2-ia.202610281722" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -196,7 +196,7 @@
 	<File name="Classes/PriceSource.lua" part="program" sha1="35535fb010fb562ca09007f25d4ffd3522a5993f" />
 	<File name="Classes/ProgressBarControl.lua" part="program" sha1="9aabc68c58dfbe99b36977e91b580aeaeabfcbc9" />
 	<File name="Classes/RadiusJewelFinder.lua" part="program" sha1="82d96964c873fbcedf9155bcf568ea3a72a04ea3" />
-	<File name="Classes/RareItemGenerator.lua" part="program" sha1="3dddbc09caede225a80394c1928583af1dc8799b" />
+	<File name="Classes/RareItemGenerator.lua" part="program" sha1="71146a338f7c1144e003a03cbdae24cd321c4872" />
 	<File name="Classes/RectangleOutlineControl.lua" part="program" sha1="c87605ee59b8ff258a12c58ba4d4d32e67023ede" />
 	<File name="Classes/ResizableEditControl.lua" part="program" sha1="8e1133756eece339330ad669c219ee28f1bd0c62" />
 	<File name="Classes/ScalingAnalyzer.lua" part="program" sha1="3e7cf96b037c4e1909aaba3273fcd4cf98bbf9bd" />
@@ -288,6 +288,7 @@
 	<File name="Data/ModEldritch.lua" part="program" sha1="605ee6232a96def2bab99a94ea5e9dd6ab04e3e0" />
 	<File name="Data/ModExplicit.lua" part="program" sha1="1cf8030f2e0cedd61fa20e90839736cc39c97916" />
 	<File name="Data/ModFamilies.lua" part="program" sha1="8eca7503eae4fca8133fce6f72581e5f2d5509e7" />
+	<File name="Data/ModFamilyById.lua" part="program" sha1="ec6b347f4beaa42a1ee29a036beef97fcf6a4cfd" />
 	<File name="Data/ModFlask.lua" part="program" sha1="e45940c90eaafddc14a7cb26887c7c7793895495" />
 	<File name="Data/ModFoulborn.lua" part="program" sha1="8c0427498f9329d505987464aff634891eea502c" />
 	<File name="Data/ModFoulbornMap.jsonc" part="program" sha1="79ff194be67afeeb54cd7b4f79d417626de5387b" />
