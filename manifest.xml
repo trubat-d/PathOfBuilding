@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610281217" />
+	<Version number="2.67.2-ia.202610281336" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -125,7 +125,7 @@
 	<File name="Classes/AutoConfig.lua" part="program" sha1="6d1368b002689c4969f532b03dd6bfe7e9db7271" />
 	<File name="Classes/BestItemFinder.lua" part="program" sha1="3af5aa67f70351eee5070cc47f46b94a859145f8" />
 	<File name="Classes/BestItemListControl.lua" part="program" sha1="75edb896520eedbfb9fa2f7ede7f109c3d4bc39b" />
-	<File name="Classes/BuildArchetypes.lua" part="program" sha1="385b1e7883ca373ad0699dc055b9a9b1f8bc9afb" />
+	<File name="Classes/BuildArchetypes.lua" part="program" sha1="812789eae27b8792882263156751843e20207834" />
 	<File name="Classes/BuildDoctor.lua" part="program" sha1="b53ee46e8369714838d2ea984076f656ac085954" />
 	<File name="Classes/BuildGenerator.lua" part="program" sha1="38d92fefcbe48c30d232925998e209d66a63e2e4" />
 	<File name="Classes/BuildIdeaListControl.lua" part="program" sha1="6645c5ae1b6a7db6927041851c7188055c83ab7f" />
@@ -133,7 +133,7 @@
 	<File name="Classes/BuildListControl.lua" part="program" sha1="f60f0d7f6aecbe851db896913cd1aa707c7fb304" />
 	<File name="Classes/BuildMetaSource.lua" part="program" sha1="49121c15f4d2ff04bfb09556a88c9d480e4d30eb" />
 	<File name="Classes/BuildReview.lua" part="program" sha1="43ae7d5ee40faf05b9d96dd65f66c8e9b2256a98" />
-	<File name="Classes/BuildScorer.lua" part="program" sha1="0548c1ccbaf99970c41aba6089a6c20ebc50e858" />
+	<File name="Classes/BuildScorer.lua" part="program" sha1="9e18f097d64214adbd1a9693e84954b38e39c64f" />
 	<File name="Classes/ButtonControl.lua" part="program" sha1="dd46384fc87d495e7ef5a11803cfc70360ac8bf1" />
 	<File name="Classes/CalcBreakdownControl.lua" part="program" sha1="40ec12ec9a37b1a73aad44f1d6d473377821efbf" />
 	<File name="Classes/CalcSectionControl.lua" part="program" sha1="ace88981a36381c6ccecbdb76ee1b9b04d1afeaf" />
@@ -274,10 +274,10 @@
 	<File name="Data/Gems.lua" part="program" sha1="4e36e80d2f531ba5fe6950aa2a80189a782036c6" />
 	<File name="Data/GeneratorLayerTargets.json" part="program" sha1="f42ad31eace1bc75db25517a0a6eb1c4e13d1018" />
 	<File name="Data/GeneratorModel.json" part="program" sha1="78826f5421e035717149795805fe9d1f29751f4a" />
-	<File name="Data/GeneratorPlayerArchetypes.json" part="program" sha1="72f5a06683dd101ddef3fba96b72fddbca4e3cd4" />
+	<File name="Data/GeneratorPlayerArchetypes.json" part="program" sha1="01a8911e3e7c4c269669315e54b8022e891be6f4" />
 	<File name="Data/GeneratorPriors.json" part="program" sha1="e1a06d11d2506d6324eac1f452a10aef84de5bfb" />
 	<File name="Data/GeneratorStepPriors.json" part="program" sha1="1ffefe7abb5be3ca3cd2deaf046d0fe3bf468bb6" />
-	<File name="Data/GeneratorUniquePackages.json" part="program" sha1="fda9c14f1733daa8794a1faeab0a71268e29b595" />
+	<File name="Data/GeneratorUniquePackages.json" part="program" sha1="516f2585f08f1f23dc6cb2bc91c3d598eabdb106" />
 	<File name="Data/Global.lua" part="program" sha1="72bff7e953555cf3045880b0ff0dc0c37f43056e" />
 	<File name="Data/IncursionDropOnly.lua" part="program" sha1="1fa5c24b1bf897e781c54b3ce7a7fcd7d23fd645" />
 	<File name="Data/Minions.lua" part="program" sha1="96b00b39dded3f5459349665abc3d2e6c30a142f" />
