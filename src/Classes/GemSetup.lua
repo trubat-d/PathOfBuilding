@@ -623,6 +623,27 @@ function GemSetupClass:ChooseAuras(maxBuffs)
 		if not gem.tags.golem then count = count + 1 end
 		current = bestScore
 	end
+	-- golems after the auras: they reserve nothing and take a socket each,
+	-- but the loop above ends at the aura count before a golem (worth 3-5%
+	-- each, less than an aura) gets its turn. Every top player's Elementalist
+	-- (66 of 66 at 25M DPS / 100k EHP on poe.ninja) runs 3-4 golems; ours ran 0-1.
+	while golems < golemLimit() and (golemLimit() > 1 or self:AscendancyLovesGolems()) do
+		local best, bestScore
+		if not self:SlotFor(1) then break end
+		for _, id in ipairs(candidates) do
+			local gem = data.gems[id]
+			if gem.tags.golem and not chosen[id] then
+				local score = self:TryGroup({ gemEntry(id) })
+				if score and (not bestScore or score > bestScore + 1e-9) then best, bestScore = id, score end
+			end
+		end
+		self.gen:Tick()
+		if not best or bestScore <= current + 0.005 then break end
+		self:Keep("Golem", { gemEntry(best) }, self:SlotFor(1))
+		golems = golems + 1
+		chosen[best] = true
+		current = bestScore
+	end
 	for _, group in ipairs(self.groups) do group.capacity = nil end
 	-- each buff taken out again when the others now give what it gave (Arctic
 	-- Armour taken for freeze immunity before Purity of Ice; its less damage
