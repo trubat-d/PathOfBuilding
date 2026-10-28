@@ -9111,8 +9111,12 @@ function BuildGeneratorClass:SetupScorer()
 		self.scorer.checklistScale = 0.5
 		self.scorer.hitTarget = self.scorer.hitTarget or 20000
 		-- (not a glass cannon either: the first 30 div Cyclone with the damage
-		-- target went to 3.3M with 26k EHP and a 9.8k max hit)
-		self.scorer.ehpFloor = self.scorer.ehpFloor or 40000
+		-- target went to 3.3M with a 9.8k max hit. The floor is the max hit of
+		-- the weakest damage type - the pool times its mitigation - not PoB's
+		-- total EHP, which averages block, evasion and suppression in and goes
+		-- to infinity under Chaos Inoculation: a 4M Cyclone passed a 40k EHP
+		-- floor with a 9.7k max hit)
+		self.scorer.hitFloor = self.scorer.hitFloor or 12000
 	end
 	-- (mana the build can't pay for priced, not cut, while it is made: the
 	-- finishing stages judge on the real cut and buy the recovery)
