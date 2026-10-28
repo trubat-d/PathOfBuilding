@@ -545,7 +545,9 @@ function GemSetupClass:ChooseAuras(maxBuffs)
 			and gem.grantedEffect.skillTypes[SkillType.Buff] and not (gem.tags and (gem.tags.minion or gem.tags.guard))
 		if gem.tags and (gem.tags.aura or gem.tags.herald or gem.tags.golem or gem.tags.banner or reservedBuff) and not gem.tags.attack and not gem.tags.mine and not gem.tags.trap and not gem.tags.totem
 			and gem.grantedEffect and not gem.grantedEffect.support and not gem.vaalGem and not gem.grantedEffect.unsupported
-			and (gem.name ~= "Petrified Blood" or lowLife) then
+			and (gem.name ~= "Petrified Blood" or lowLife)
+			-- (a buff the rebuild search took out: not straight back, Modules/GeneratorSearch)
+			and not (self.gen.forbiddenGems and self.gen.forbiddenGems[gem.name]) then
 			t_insert(candidates, id)
 		end
 	end

@@ -690,7 +690,7 @@ function BuildScorerClass:GetPenalties(output)
 		-- below the cap is a mistake a player sees at once (a Slayer left 2%
 		-- short on cold and lightning, 0.016 lost: the generator kept a damage
 		-- craft over the resistance) - a step, then more per point
-		local p = 0.3 + missing * 0.05
+		local p = (0.3 + missing * 0.05) * ((self.escalate and self.escalate.resist) or 1)
 		total = total + p
 		t_insert(penalties, { label = string.format("Elemental resistances %d%% below cap", missing), value = p })
 	end
@@ -698,7 +698,7 @@ function BuildScorerClass:GetPenalties(output)
 		local short = (output["Req" .. attr] or 0) - (output[attr] or 0)
 		-- (ignoreAttributes: while choosing gems before the gear is made to supply them)
 		if short > 0 and not self.ignoreAttributes and not self.ignoreRequirements then
-			local p = 1 + short * 0.01
+			local p = (1 + short * 0.01) * ((self.escalate and self.escalate.attributes) or 1)
 			total = total + p
 			t_insert(penalties, { label = string.format("%d %s missing for gem/item requirements", short, attr), value = p })
 		end
@@ -1162,7 +1162,7 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 	-- the 30 div Cyclone traded down to 0.76M for 6,400 life
 	local dpsTarget = self.dpsTarget
 	if dpsTarget and dps < dpsTarget then
-		score = score - (self.dpsTargetWeight or 1) * self.focus.dps * m_log(dpsTarget / m_max(dps, 1))
+		score = score - (self.dpsTargetWeight or 1) * ((self.escalate and self.escalate.dpsTarget) or 1) * self.focus.dps * m_log(dpsTarget / m_max(dps, 1))
 	end
 	-- below the EHP floor, every missing bit costs more than damage can pay back
 	-- (the pool alone isn't how tanky a build is: what it recovers while
@@ -1177,7 +1177,7 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 	-- same for the max hit floor (weakest damage type)
 	local hitFloor = self.hitFloor or self.focus.hitFloor
 	if hitFloor and minHit and minHit < hitFloor then
-		score = score - 3 * m_log(hitFloor / minHit)
+		score = score - 3 * ((self.escalate and self.escalate.hitFloor) or 1) * m_log(hitFloor / minHit)
 	end
 	return score
 end

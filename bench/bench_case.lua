@@ -180,6 +180,9 @@ else
 	result.supports = gems
 	result.log = res.log
 	result.cost = (gen:BuildCost())
+	result.seconds = result.seconds or math.floor(os.clock())
+	result.alns = gen.alnsStats
+	result.priceWeight = gen.priceWeight
 	-- the generated build, for comparisons (bench/transplant.lua)
 	local saveDir = os.getenv("BENCH_SAVE")
 	if saveDir and saveDir ~= "" then

@@ -142,6 +142,27 @@ elseif step == "doctor" or step == "diagnose" then
 	for _, l in ipairs(doctor:ReportLines(20)) do print(l) end
 	for _, p in ipairs(doctor:Plans()) do print("PLAN", p.id, p.label, p.reason) end
 	if step == "doctor" then print("GAIN", doctor:Run(tonumber(os.getenv("PLANS") or "3"))) end
+elseif step == "alns" or step == "alnsbase" then
+	-- (the bench's setup: budget, league phase, mid tier, the scorer as SetupScorer makes it)
+	gen.options.totalBudget = tonumber(os.getenv("BUDGET") or "")
+	gen.options.leaguePhase = os.getenv("PHASE")
+	gen.options.midTier = true
+	gen.options.investment = nil
+	for pair in (os.getenv("GEN_OPTS") or ""):gmatch("[^,]+") do
+		local k, v = pair:match("^%s*([%w_]+)%s*=%s*(.-)%s*$")
+		if k then if v == "true" then v = true elseif v == "false" then v = false else v = tonumber(v) or v end gen.options[k] = v end
+	end
+	gen:PrepareOptions()
+	gen:SetupScorer()
+	gen.scorer.useChecklist = true
+	if gen:HasEngine("lagrange") then gen.priceWeight = gen.options.priceWeight or 0.3 end
+	gen:AutoConfigure()
+	print("START", (gen:FullScore()), (gen:BuildCost()))
+	if step == "alns" then print("GAIN", gen:AlnsSearch(tonumber(os.getenv("ROUNDS") or "10")))
+	else print("GAIN", gen:RepairSearch(tonumber(os.getenv("ROUNDS") or "8"))) end
+	local _, r = gen:FullScore()
+	print("END", r.score, r.dps, r.ehp, (gen:BuildCost()))
+	for _, l in ipairs(gen.log) do print("LOG", l) end
 elseif step == "repair" then
 	local rg = new("BestItemFinder"):BestItemFinder(build.itemsTab).rareGenerator
 	gen.options.quality = rg.qualityList[investment.quality or rg.defaultQuality]

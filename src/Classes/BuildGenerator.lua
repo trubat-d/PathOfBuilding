@@ -369,6 +369,12 @@ function BuildGeneratorClass:FullScore()
 	self:UpdateCombinedParts()
 	local r = self.scorer:Evaluate(self.calcFunc, { })
 	self.ratio = self.scorer.lastFlaskRatio
+	-- (engine "lagrange": the build's price paid in score, Modules/GeneratorSearch)
+	if self.priceWeight then
+		local price = self:BudgetPrice()
+		r.price = price
+		return r.score - price, r
+	end
 	return r.score, r
 end
 
@@ -8796,6 +8802,10 @@ function BuildGeneratorClass:Upgrade()
 	self.stageCount = 6
 	local function stage(index, label)
 		if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
+		-- (engine "lagrange": the price of a divine follows the budget)
+		if self.priceWeight and index > 5 then self:UpdatePriceWeight("stage " .. index) end
+		-- (engine "escalate": requirements still unmet weigh more from here on)
+		if index > 5 and self.scorer and self:HasEngine("escalate") then self:UpdateEscalation("stage " .. index) end
 		self.stageIndex, self.stage = index, label
 		self.subProgress, self.moveFrom, self.moveTo = 0, 0, 1
 		self:Tick()
@@ -9225,6 +9235,10 @@ function BuildGeneratorClass:Run()
 	self:Setup()
 	self:InitKnowledge()
 	self:SetupScorer()
+	if self:HasEngine("lagrange") and opts.totalBudget and opts.totalBudget > 0 then
+		self.priceWeight = opts.priceWeight or 0.3
+		self:Note(string.format("Engine: the budget priced in the score (%.2f per %s div)", self.priceWeight, tostring(opts.totalBudget)))
+	end
 	if opts.archetype then
 		self:Note("Archetype: " .. opts.archetype.label)
 	end
@@ -9294,6 +9308,7 @@ function BuildGeneratorClass:Run()
 		self.scorer.lens = nil
 	self.scorer.lens2 = nil
 	self.scorer.lensExtra = nil
+		self.scorer.escalate = nil
 		local final = self.scorer:Evaluate(self.calcFunc, { })
 		self.final = final
 		self.build.buildFlag = true
@@ -9611,7 +9626,11 @@ function BuildGeneratorClass:Run()
 		if not ok then ConPrintf("Boss skill move failed: %s", tostring(err)) end
 	end
 	-- the finished build partly rebuilt, again and again (large neighbourhood search)
-	if (opts.repairRounds or 8) > 0 then
+	if self:HasEngine("alns") then
+		self:Move(6, 6, "Rebuilding parts of the build to improve it (adaptive search)")
+		local ok, err = pcall(function() self:AlnsSearch() end)
+		if not ok then ConPrintf("ALNS failed: %s", tostring(err)) end
+	elseif (opts.repairRounds or 8) > 0 then
 		self:Move(6, 6, "Rebuilding parts of the build to improve it")
 		self:RepairSearch(opts.repairRounds or 8)
 	end
@@ -9824,6 +9843,7 @@ function BuildGeneratorClass:Run()
 	self.scorer.lens = nil
 	self.scorer.lens2 = nil
 	self.scorer.lensExtra = nil
+		self.scorer.escalate = nil
 	local final = self.scorer:Evaluate(self.calcFunc, { })
 	self.final = final
 	self.build.buildFlag = true
@@ -9979,3 +9999,6 @@ function BuildGeneratorClass:WriteNotes(assumptions, costLine)
 	edit:SetText(table.concat(lines, "\n") .. "\n----\n" .. old)
 	self.build.notesTab.modified = true
 end
+
+-- search engines (options.engine): Modules/GeneratorSearch
+LoadModule("Modules/GeneratorSearch", BuildGeneratorClass)
