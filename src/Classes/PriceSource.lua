@@ -498,15 +498,29 @@ end
 
 -- (rare jewels by how many useful mods they have - every mod the generator
 -- puts on one is wanted: 2 about half a divine, 3 a few, 4 a "god" jewel)
-local jewelModPrices = { [0] = 0.05, 0.1, 0.5, 5, 40 }
+-- (counted by affixes, not lines: "Attacks have 4% chance to cause Bleeding"
+-- + "13% increased Bleeding Duration" is one mod; by lines a 3 mod jewel was a
+-- 4 mod "god" jewel - 74 divines at first-week prices in a 30 divines build;
+-- 4 mods 10, a good 3 mod 2: poe.ninja-era trade prices for wanted mods)
+local jewelModPrices = { [0] = 0.05, 0.1, 0.4, 2, 10 }
 function PriceSourceClass:RarePrice(item, level)
 	level = level or { }
 	local base = level.rarePrice or 1
 	if not item then return base end
 	if item.type == "Jewel" and not item.clusterJewel and not (item.base and item.base.subType) then
 		local n = 0
-		for _, l in ipairs(item.explicitModLines or { }) do if not l.crafted then n = n + 1 end end
-		return (jewelModPrices[math.min(4, n)] or 40) * self:PhaseFactor("rare")
+		local affixes = 0
+		for _, list in ipairs({ item.prefixes or { }, item.suffixes or { } }) do
+			for _, a in ipairs(list) do
+				if a.modId and a.modId ~= "None" then affixes = affixes + 1 end
+			end
+		end
+		if affixes > 0 then
+			n = affixes
+		else
+			for _, l in ipairs(item.explicitModLines or { }) do if not l.crafted then n = n + 1 end end
+		end
+		return (jewelModPrices[math.min(4, n)] or 10) * self:PhaseFactor("rare")
 	end
 	local good, crafted = 0, 0
 	for _, l in ipairs(item.explicitModLines or { }) do
