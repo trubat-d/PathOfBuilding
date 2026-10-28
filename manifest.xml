@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610281912" />
+	<Version number="2.67.2-ia.202610281953" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -456,7 +456,7 @@
 	<File name="Modules/GeneratorLearning.lua" part="program" sha1="f38d60dbd6e7d16df97d1bce15ef68bfe42cae3b" />
 	<File name="Modules/GeneratorModel.lua" part="program" sha1="e60b90a5dfcf6b7b5482fb88ef98513bcc7c8dd7" />
 	<File name="Modules/GeneratorModelTrainer.lua" part="program" sha1="3bb58f3180bdeec309519d51f5c9bba55e988e60" />
-	<File name="Modules/GeneratorRules.lua" part="program" sha1="4416635ac5af5e2418457c84efd5467745533196" />
+	<File name="Modules/GeneratorRules.lua" part="program" sha1="5160649a68999fdd1cdf4c393487d79d79695d2f" />
 	<File name="Modules/GeneratorWorker.lua" part="program" sha1="38d32c02bc18cd9f7f6742ad02444c45a06f2d74" />
 	<File name="Modules/ItemSlotHelper.lua" part="program" sha1="4b7d441f9ade5d57c413aa1f8f8067b654cfb927" />
 	<File name="Modules/ItemTools.lua" part="program" sha1="3fbd7aba963b6a67eb5c1d213112fc6a3e681952" />
