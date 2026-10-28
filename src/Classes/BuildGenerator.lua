@@ -7219,6 +7219,22 @@ function BuildGeneratorClass:FitSockets()
 			end
 		end
 	end
+	-- (a secondary damage link in an item that came later with fewer sockets:
+	-- its last supports taken off until it fits)
+	for _, group in ipairs(skillsTab.socketGroupList) do
+		if group ~= main and group.slot and (group.label or ""):find("(generated secondary)", 1, true) then
+			local sockets = setup:SlotSockets(group.slot)
+			if sockets > 0 and #group.gemList > sockets then
+				for i = #group.gemList, 1, -1 do
+					if #group.gemList <= sockets then break end
+					local gd = group.gemList[i].gemData or data.gems[group.gemList[i].gemId]
+					if gd and gd.grantedEffect and gd.grantedEffect.support then t_remove(group.gemList, i) end
+				end
+				skillsTab:ProcessSocketGroup(group)
+				changed = true
+			end
+		end
+	end
 	local used = { }
 	for _, group in ipairs(skillsTab.socketGroupList) do
 		if group ~= main and group.slot and group.enabled ~= false then
@@ -7674,13 +7690,27 @@ end
 function BuildGeneratorClass:UniqueSweep(maxTries)
 	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
 	local filter = { obtainableOnly = true, levelOnly = true, investment = self.options.investment }
-	local groupSlots = { }
+	local groupSlots, fixedGems = { }, { }
 	for _, group in ipairs(self.build.skillsTab.socketGroupList) do
-		if group.slot and group.enabled ~= false and #group.gemList > 0 then groupSlots[group.slot] = true end
+		if group.slot and group.enabled ~= false and #group.gemList > 0 then
+			groupSlots[group.slot] = true
+			-- (the main and secondary links stay where they are; utility setups are packed again)
+			if not (group.label or ""):find("(generated utility)", 1, true) then
+				fixedGems[group.slot] = (fixedGems[group.slot] or 0) + #group.gemList
+			end
+		end
 	end
 	local setup = new("GemSetup"):GemSetup(self)
 	local function noSockets(item)
 		return setup.ItemGemSockets(item) == 0
+	end
+	-- (fewer sockets than the gems there: measured with all of them socketed
+	-- it scores gems it can't hold - Crest of Desire, one socket, valued
+	-- +0.60 on a Righteous Fire's four-gem Scorching Ray link)
+	local function tooFewSockets(item, slotName)
+		local gems = fixedGems[slotName]
+		local n = setup.ItemGemSockets(item)
+		return gems and n > 0 and n < gems
 	end
 	-- (a two handed weapon would also empty the off hand: left to the weapon stages)
 	local function changesHands(item, slotName)
@@ -7729,7 +7759,8 @@ function BuildGeneratorClass:UniqueSweep(maxTries)
 				-- (no sockets where the main skill is: it moves to a 4-link, scored when tried)
 				local relocate = noSockets(item) and self.mainGroup and self.mainGroup.slot == slotName and slotName == "Body Armour"
 				if self.itemsTab:IsItemValidForSlot(item, slotName) and not (equipped and equipped.title == item.title)
-					and (relocate or not (groupSlots[slotName] and noSockets(item))) and not changesHands(item, slotName) then
+					and (relocate or not (groupSlots[slotName] and noSockets(item))) and not changesHands(item, slotName)
+					and not tooFewSockets(item, slotName) then
 					-- (items that change flasks, like Mageblood, need the flask uptimes: a full evaluation)
 					local score
 					if flaskItem(item) then
