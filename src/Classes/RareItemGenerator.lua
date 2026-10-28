@@ -223,13 +223,15 @@ end
 -- Mod families (Data/ModFamilies, from poewiki): a bench craft can't share
 -- one with a mod already on the item - "+X to Strength and Intelligence" is
 -- of the Strength and the Intelligence families
-local modFamilies
+local modFamilies, familyById
 local function familiesOf(mod, modId, crafted)
 	modFamilies = modFamilies or LoadModule("Data/ModFamilies")
+	familyById = familyById or LoadModule("Data/ModFamilyById")
 	if not mod then return { } end
 	if crafted then
 		return modFamilies.craft[mod.group or ""] or { mod.group }
 	end
+	if modId and familyById[modId] then return familyById[modId] end
 	local stem = modId and modId:gsub("%d*_*$", "")
 	return (stem and modFamilies.natural[stem]) or { mod.group }
 end
@@ -472,9 +474,11 @@ function RareItemGeneratorClass:GenerateForSlotWith(slotName, current, ctx, infl
 				local by = usedStats[so]
 				if by and (by.crafted or candidate.crafted) then return true end
 			end
+			-- (two natural mods of one family can't be on an item either: the
+			-- Shaper "Supported by Faster Attacks / increased Attack Speed" and
+			-- the plain attack speed suffix both rolled on a 30 div claw)
 			for _, f in ipairs(families(candidate)) do
-				local by = usedFamilies[f]
-				if by and (by.crafted or candidate.crafted) then return true end
+				if usedFamilies[f] then return true end
 			end
 			return false
 		end
