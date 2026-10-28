@@ -93,6 +93,12 @@ rules.uniques = {
 	-- build checks
 	-- (totems: the score counts every totem the limit allows)
 	["Cadigan's Authority"] = { check = function(output) return not output.ActiveTotemLimit or output.ActiveTotemLimit <= 2 end, reason = "no more than 2 totems of the same type" },
+	-- (poewiki: "Removes all but one Life on use", regenerated as energy shield
+	-- only up to its maximum: a build with a life pool loses it each use;
+	-- for Chaos Inoculation or a pool that is almost all energy shield)
+	["Coruscating Elixir"] = { check = function(output)
+		return output.ChaosInoculation or (output.Life or 0) <= 0.15 * ((output.Life or 0) + (output.EnergyShield or 0))
+	end, reason = "removes all but one life on use: only for a pool that is (almost) all energy shield" },
 	["Midnight Bargain"] = { check = function(output) return not output.ChaosInoculation end, reason = "can't be used with Chaos Inoculation" },
 	["Replica Midnight Bargain"] = { check = function(output) return not output.ChaosInoculation end, reason = "can't be used with Chaos Inoculation" },
 }
