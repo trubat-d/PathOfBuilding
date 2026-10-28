@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610282206" />
+	<Version number="2.67.2-ia.202610282216" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -133,7 +133,7 @@
 	<File name="Classes/BuildListControl.lua" part="program" sha1="f60f0d7f6aecbe851db896913cd1aa707c7fb304" />
 	<File name="Classes/BuildMetaSource.lua" part="program" sha1="49121c15f4d2ff04bfb09556a88c9d480e4d30eb" />
 	<File name="Classes/BuildReview.lua" part="program" sha1="43ae7d5ee40faf05b9d96dd65f66c8e9b2256a98" />
-	<File name="Classes/BuildScorer.lua" part="program" sha1="db3bbc9056124f13fcc299423e149d778a867c39" />
+	<File name="Classes/BuildScorer.lua" part="program" sha1="abc51a8c23b941ce82f0b10242be7c2b7ad7e143" />
 	<File name="Classes/ButtonControl.lua" part="program" sha1="dd46384fc87d495e7ef5a11803cfc70360ac8bf1" />
 	<File name="Classes/CalcBreakdownControl.lua" part="program" sha1="40ec12ec9a37b1a73aad44f1d6d473377821efbf" />
 	<File name="Classes/CalcSectionControl.lua" part="program" sha1="ace88981a36381c6ccecbdb76ee1b9b04d1afeaf" />
@@ -438,7 +438,7 @@
 	<File name="Modules/CalcFormat.lua" part="program" sha1="eacfddab6dc96067db1822b48d906d20d25708dc" />
 	<File name="Modules/CalcMirages.lua" part="program" sha1="bac0e5323fabbda5536a896b965b99006830cb3a" />
 	<File name="Modules/CalcOffence.lua" part="program" sha1="f3cb1c01c30fe5a0ee93c8ffe9f7bdd8ffdd4f93" />
-	<File name="Modules/CalcPerform.lua" part="program" sha1="2a108ed35e1de12e576b7c1880ce39476218c323" />
+	<File name="Modules/CalcPerform.lua" part="program" sha1="a705860032fa59eacc447c7823a74ad62240e933" />
 	<File name="Modules/Calcs.lua" part="program" sha1="d3b1bdf8c7c4376a168badc605d7398d7a07082f" />
 	<File name="Modules/CalcSections.lua" part="program" sha1="eafc7111e8fcfb77e9ccda4c2bb190a9dc395ce6" />
 	<File name="Modules/CalcSetup.lua" part="program" sha1="d1aeacff2fa6c7cf5d72d979e4321376fc497283" />
