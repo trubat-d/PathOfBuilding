@@ -17,6 +17,7 @@
 --   tempMinionsOnly: only when the main minions expire on their own
 -- Only drawbacks with no counter here are excluded outright.
 --
+local m_min = math.min
 local rules = { }
 
 -- { [title] = rule }
@@ -96,6 +97,12 @@ rules.uniques = {
 	-- (poewiki: "Removes all but one Life on use", regenerated as energy shield
 	-- only up to its maximum: a build with a life pool loses it each use;
 	-- for Chaos Inoculation or a pool that is almost all energy shield)
+	-- (poewiki: "You take 450 Chaos Damage per second for 3 seconds on Kill" -
+	-- killing all the time while mapping, PoB doesn't count it: the build's
+	-- regeneration must cover it after its chaos resistance)
+	["Death's Oath"] = { check = function(output)
+		return (output.LifeRegenRecovery or 0) >= 450 * (1 - m_min(75, output.ChaosResist or 0) / 100)
+	end, reason = "takes 450 chaos damage per second for 3 seconds on kill: regeneration must cover it" },
 	["Coruscating Elixir"] = { check = function(output)
 		return output.ChaosInoculation or (output.Life or 0) <= 0.15 * ((output.Life or 0) + (output.EnergyShield or 0))
 	end, reason = "removes all but one life on use: only for a pool that is (almost) all energy shield" },
