@@ -6533,7 +6533,7 @@ function BuildGeneratorClass:SpendBudgetMove()
 		return nextLevel and { nextLevel } or { }
 	end
 	local total = self:BuildCost()
-	if total > budget * 0.85 then return 0 end
+	if total > budget * 0.95 then return 0 end
 	local finder = new("BestItemFinder"):BestItemFinder(self.itemsTab)
 	local generator = finder.rareGenerator
 	local measure = function(output) return self.scorer:ScoreOutput(output, self.ratio) end
