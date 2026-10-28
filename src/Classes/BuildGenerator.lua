@@ -9368,7 +9368,12 @@ function BuildGeneratorClass:Run()
 			if not ok3 then ConPrintf("Unique sweep after the budget failed: %s", tostring(found)) end
 			if ok3 and found and found > 0 then
 				self:RefineTree(6)
-				if self:BuildCost() > opts.totalBudget then pcall(function() self:FitTotalBudget() end) end
+				-- (fitted again, then what that fit left spent again: a 300 div
+				-- Smite ended at 259 after a second fit took out a 52 div amulet)
+				if self:BuildCost() > opts.totalBudget then
+					pcall(function() self:FitTotalBudget() end)
+					if opts.spendBudget ~= false then pcall(function() self:SpendBudgetMove() end) end
+				end
 			end
 		end
 	end
