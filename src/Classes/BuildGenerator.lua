@@ -9006,6 +9006,9 @@ function BuildGeneratorClass:SetupScorer()
 	if lowBudget then
 		self.scorer.checklistScale = 0.5
 		self.scorer.hitTarget = self.scorer.hitTarget or 20000
+		-- (not a glass cannon either: the first 30 div Cyclone with the damage
+		-- target went to 3.3M with 26k EHP and a 9.8k max hit)
+		self.scorer.ehpFloor = self.scorer.ehpFloor or 40000
 	end
 	-- (mana the build can't pay for priced, not cut, while it is made: the
 	-- finishing stages judge on the real cut and buy the recovery)
@@ -9527,6 +9530,10 @@ function BuildGeneratorClass:Run()
 				if self:BuildCost() > opts.totalBudget then
 					pcall(function() self:FitTotalBudget() end)
 					if opts.spendBudget ~= false then pcall(function() self:SpendBudgetMove() end) end
+				elseif opts.spendBudget ~= false then
+					-- (or a cheap unique took a rare's place: what it freed spent
+					-- again - a 30 div Cyclone ended at 19 div)
+					pcall(function() self:SpendBudgetMove() end)
 				end
 			end
 		end
@@ -9537,6 +9544,11 @@ function BuildGeneratorClass:Run()
 	if opts.finalAudit ~= false then
 		local ok, err = pcall(function() self:FinalAudit() end)
 		if not ok then ConPrintf("Final audit failed: %s", tostring(err)) end
+	end
+	-- (the audit can take parts out: what it freed spent again)
+	if opts.totalBudget and opts.spendBudget ~= false and self:BuildCost() < 0.9 * opts.totalBudget then
+		local ok, err = pcall(function() self:SpendBudgetMove() end)
+		if not ok then ConPrintf("Spending the budget failed: %s", tostring(err)) end
 	end
 	-- hard requirements (resistances, attributes) fixed with bench crafts
 	if opts.requirements ~= false then self:RequirementsMove() end
