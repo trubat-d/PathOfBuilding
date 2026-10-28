@@ -2768,6 +2768,32 @@ end
 function BuildGeneratorClass:MakeFlasks()
 	self:Recalculate()
 	local gen = new("FlaskGenerator"):FlaskGenerator(new("BestItemFinder"):BestItemFinder(self.itemsTab).rareGenerator, self.scorer)
+	-- (a life build carries a life flask: every player does, for the hits PoB's
+	-- boss numbers don't show - five utility flasks and none to drink was what
+	-- the budget builds ended with. An instant one, Seething, in the first slot;
+	-- the generator keeps recovery flasks and fills the others)
+	do
+		local out = self.build.calcsTab.mainOutput or { }
+		local hasLife = false
+		for _, slotName in ipairs({ "Flask 1", "Flask 2", "Flask 3", "Flask 4", "Flask 5" }) do
+			local slot = self.itemsTab.slots[slotName]
+			local item = slot and self.itemsTab.items[slot.selItemId]
+			if item and item.base and item.base.flask and item.base.flask.life then hasLife = true end
+		end
+		if not hasLife and (out.Life or 0) > 1 and not out.ChaosInoculation and self.options.lifeFlask ~= false then
+			local level = self.build.characterLevel or 100
+			local baseName = level >= 60 and "Divine Life Flask" or "Sacred Life Flask"
+			local prefix = data.itemMods.Flask["FlaskFullInstantRecovery1"]
+			local ok, item = pcall(function()
+				return gen:MakeFlask(baseName, prefix and { modId = "FlaskFullInstantRecovery1" } or nil, nil, 0.5)
+			end)
+			if ok and item and data.itemBases[baseName] then
+				self:Equip(item, "Flask 1")
+				self.itemsTab.slots["Flask 1"].active = true
+				self:Recalculate()
+			end
+		end
+	end
 	local result = gen:Generate({ calcFunc = self.calcFunc, override = { }, opts = { quality = self.options.quality, levelOnly = true }, tick = function() self:Tick() end })
 	local names = { }
 	-- (slots the generator fills and left empty this time are emptied: the
@@ -8371,8 +8397,11 @@ function BuildGeneratorClass:UniqueFlaskSweep(maxTries)
 		local slot = self.itemsTab.slots[slotName]
 		if slot then
 			local equipped = self.itemsTab.items[slot.selItemId]
+			-- (the build's life flask is replaced by a life flask only)
+			local lifeSlot = equipped and equipped.base and equipped.base.flask and equipped.base.flask.life
 			for _, item in ipairs(candidates) do
-				if self.itemsTab:IsItemValidForSlot(item, slotName) and not (equipped and equipped.title == item.title) then
+				if self.itemsTab:IsItemValidForSlot(item, slotName) and not (equipped and equipped.title == item.title)
+					and not (lifeSlot and not item.base.flask.life) then
 					local score = self:Score({ repSlotName = slotName, repItem = item, activeFlaskSlots = active })
 					if score > current + 0.005 then
 						t_insert(gains, { item = item, slot = slotName, gain = score - current })
