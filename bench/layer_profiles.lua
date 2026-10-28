@@ -19,7 +19,7 @@ for path in (os.getenv("FILES") or ""):gmatch("[^;]+") do
 		local xml = text:match("^%s*<") and text or Inflate(common.base64.decode(text:gsub("%s", ""):gsub("-", "+"):gsub("_", "/")))
 		loadBuildFromXML(xml, "profile")
 		runCallback("OnFrame")
-		local skillName = path:match("([^/\\]+)__%d+%.%w+$"):gsub("_", " ")
+		local skillName = path:match("([^/\\]+)__%w+%.%w+$"):gsub("_", " ")
 		local found
 		for index, group in ipairs(build.skillsTab.socketGroupList) do
 			for _, gem in ipairs(group.gemList) do

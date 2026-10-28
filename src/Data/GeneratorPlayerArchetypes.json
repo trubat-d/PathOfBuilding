@@ -29,8 +29,8 @@
     "Windscream": 0.83
    },
    "supports": [
-    "Greater Spell Echo",
     "Physical to Lightning",
+    "Greater Spell Echo",
     "Increased Critical Damage"
    ],
    "uniques": [
@@ -48,10 +48,10 @@
   },
   "Arc of Oscillating": {
    "auras": [
-    "Vitality",
     "Zealotry",
-    "Clarity",
-    "Wrath"
+    "Vitality",
+    "Wrath",
+    "Clarity"
    ],
    "builds": 6,
    "keystones": [
@@ -78,9 +78,9 @@
     "Greater Spell Echo",
     "Sacrifice",
     "Lifetap",
-    "Arcane Surge",
     "Archmage",
-    "Power Charge On Critical"
+    "Power Charge On Critical",
+    "Arcane Surge"
    ],
    "uniques": [
     "Rathpith Globe",
@@ -93,14 +93,13 @@
   },
   "Blade Blast": {
    "auras": [
-    "Vitality",
     "Herald of Purity"
    ],
-   "builds": 14,
+   "builds": 15,
    "keystones": [],
    "maxAuras": 3,
    "shares": {
-    "Mageblood": 0.5
+    "Mageblood": 0.53
    },
    "supports": [
     "Increased Critical Damage"
@@ -114,14 +113,14 @@
     "Herald of Purity",
     "Herald of Ash",
     "Hatred",
-    "Herald of Thunder",
     "Zealotry",
     "Summon Flame Golem",
     "Herald of Ice",
+    "Herald of Thunder",
     "Summon Stone Golem",
     "Summon Lightning Golem",
-    "Petrified Blood",
     "Herald of Agony",
+    "Petrified Blood",
     "Tempest Shield"
    ],
    "builds": 12,
@@ -167,10 +166,10 @@
     "Zealot's Oath": 1.0
    },
    "supports": [
-    "Swift Affliction",
-    "Controlled Destruction",
     "Infused Channelling",
+    "Controlled Destruction",
     "Void Manipulation",
+    "Swift Affliction",
     "Arcane Surge"
    ],
    "uniques": [
@@ -242,10 +241,10 @@
    },
    "supports": [
     "Overexertion",
-    "Endurance Charge on Melee Stun",
     "Melee Physical Damage",
-    "Elemental Damage with Attacks",
-    "Pulverise"
+    "Endurance Charge on Melee Stun",
+    "Pulverise",
+    "Elemental Damage with Attacks"
    ],
    "uniques": [
     "Kaom's Sign",
@@ -257,17 +256,17 @@
   },
   "Corrupting Fever": {
    "auras": [
+    "Herald of Purity",
     "Summon Stone Golem",
     "Pride",
     "Summon Chaos Golem",
-    "Herald of Thunder",
-    "Herald of Purity",
     "Summon Flame Golem",
+    "Herald of Thunder",
     "Summon Stone Golem of Safeguarding",
-    "Summon Lightning Golem",
     "Tempest Shield",
-    "Summon Carrion Golem of Hordes",
-    "Herald of Ash"
+    "Summon Lightning Golem",
+    "Herald of Ash",
+    "Summon Carrion Golem of Hordes"
    ],
    "builds": 13,
    "keystones": [
@@ -283,9 +282,9 @@
     "The Primordial Chain": 1.0
    },
    "supports": [
+    "Brutality",
     "Swift Affliction",
     "Eclipse",
-    "Brutality",
     "Vaal Reap of Butchery",
     "Awakened Empower"
    ],
@@ -313,8 +312,8 @@
    "supports": [
     "Greater Spell Echo",
     "Intensify",
-    "Arcane Surge",
-    "Overloaded Intensity"
+    "Overloaded Intensity",
+    "Arcane Surge"
    ],
    "uniques": [
     "Mageblood"
@@ -322,26 +321,26 @@
   },
   "Cyclone": {
    "auras": [
-    "Flesh and Stone",
     "Precision",
+    "Flesh and Stone",
+    "Herald of Purity",
     "Pride",
-    "Blood and Sand",
-    "Herald of Purity"
+    "Blood and Sand"
    ],
-   "builds": 12,
+   "builds": 13,
    "keystones": [
     "Versatile Combatant"
    ],
    "maxAuras": 6,
    "shares": {
-    "Mageblood": 0.83,
-    "Versatile Combatant": 0.58
+    "Mageblood": 0.85,
+    "Versatile Combatant": 0.54
    },
    "supports": [
-    "Brutality",
+    "Pulverise",
     "Infused Channelling",
     "Melee Physical Damage",
-    "Pulverise",
+    "Brutality",
     "Void Shockwave"
    ],
    "uniques": [
@@ -381,10 +380,10 @@
   },
   "Detonate Dead of Scavenging": {
    "auras": [
-    "Vitality",
     "Tempest Shield",
-    "Petrified Blood",
+    "Vitality",
     "Determination",
+    "Petrified Blood",
     "Malevolence"
    ],
    "builds": 6,
@@ -410,12 +409,12 @@
     "Valyrium": 1.0
    },
    "supports": [
-    "Cruelty",
     "Cast when Stunned",
-    "Unbound Ailments",
+    "Cruelty",
     "Efficacy",
-    "Fire Penetration",
-    "Combustion"
+    "Unbound Ailments",
+    "Combustion",
+    "Fire Penetration"
    ],
    "uniques": [
     "Azadi Crest",
@@ -452,10 +451,10 @@
    },
    "supports": [
     "Trinity",
-    "Greater Spell Echo",
-    "Intensify",
     "Inspiration",
-    "Overloaded Intensity"
+    "Greater Spell Echo",
+    "Overloaded Intensity",
+    "Intensify"
    ],
    "uniques": [
     "Replica Farrul's Fur",
@@ -514,13 +513,13 @@
   },
   "Doom Blast": {
    "auras": [
-    "Malevolence",
     "Herald of Agony",
+    "Malevolence",
     "Tempest Shield",
     "Summon Chaos Golem",
     "Summon Stone Golem",
-    "Summon Lightning Golem",
-    "Summon Flame Golem"
+    "Summon Flame Golem",
+    "Summon Lightning Golem"
    ],
    "builds": 6,
    "keystones": [
@@ -553,10 +552,10 @@
   "Double Strike of Momentum": {
    "auras": [
     "Determination",
-    "Arctic Armour",
-    "Herald of Purity"
+    "Herald of Purity",
+    "Arctic Armour"
    ],
-   "builds": 7,
+   "builds": 8,
    "keystones": [
     "Unwavering Stance",
     "Divine Shield",
@@ -564,16 +563,16 @@
    ],
    "maxAuras": 3,
    "shares": {
-    "Annihilation's Approach": 0.71,
-    "Divine Shield": 0.86,
-    "Eyes of the Greatwolf": 0.86,
-    "Iron Grip": 0.71,
-    "Loreweave": 0.71,
-    "Mageblood": 0.86,
+    "Annihilation's Approach": 0.62,
+    "Divine Shield": 0.88,
+    "Eyes of the Greatwolf": 0.88,
+    "Iron Grip": 0.62,
+    "Loreweave": 0.62,
+    "Mageblood": 0.75,
     "Moonbender's Wing": 1.0,
-    "Original Sin": 0.71,
+    "Original Sin": 0.62,
     "Unwavering Stance": 1.0,
-    "Zana's Ingenuity": 0.86
+    "Zana's Ingenuity": 0.75
    },
    "supports": [
     "Trauma",
@@ -653,11 +652,11 @@
     "The Iron Fortress": 0.67
    },
    "supports": [
-    "Overexertion",
     "Pulverise",
+    "Overexertion",
     "Volatility",
-    "Increased Critical Damage",
-    "Increased Critical Strikes"
+    "Increased Critical Strikes",
+    "Increased Critical Damage"
    ],
    "uniques": [
     "Mageblood",
@@ -703,8 +702,8 @@
   },
   "Elemental Hit of the Spectrum": {
    "auras": [
-    "Precision",
     "Anger",
+    "Precision",
     "Purity of Elements"
    ],
    "builds": 6,
@@ -752,11 +751,11 @@
     "Zealot's Oath": 1.0
    },
    "supports": [
-    "Swift Affliction",
     "Empower",
-    "Controlled Destruction",
     "Efficacy",
-    "Void Manipulation"
+    "Controlled Destruction",
+    "Void Manipulation",
+    "Swift Affliction"
    ],
    "uniques": [
     "Mageblood",
@@ -773,28 +772,28 @@
     "Summon Flame Golem",
     "Herald of Ice",
     "Herald of Ash",
-    "Summon Ice Golem",
-    "Herald of Thunder"
+    "Herald of Thunder",
+    "Summon Ice Golem"
    ],
-   "builds": 17,
+   "builds": 18,
    "keystones": [
     "Chaos Inoculation",
-    "Pain Attunement",
-    "Zealot's Oath"
+    "Zealot's Oath",
+    "Pain Attunement"
    ],
    "maxAuras": 5,
    "shares": {
-    "Chaos Inoculation": 0.76,
-    "Headhunter": 0.53,
-    "Lost Unity": 0.59,
-    "Mageblood": 0.41,
-    "Nimis": 0.71,
-    "Pain Attunement": 0.53,
-    "Zealot's Oath": 0.53
+    "Chaos Inoculation": 0.78,
+    "Headhunter": 0.5,
+    "Lost Unity": 0.61,
+    "Mageblood": 0.44,
+    "Nimis": 0.67,
+    "Pain Attunement": 0.5,
+    "Zealot's Oath": 0.56
    },
    "supports": [
-    "Greater Spell Echo",
     "Inspiration",
+    "Greater Spell Echo",
     "Pinpoint",
     "Overloaded Intensity",
     "Invert the Rules"
@@ -808,15 +807,15 @@
   },
   "Ethereal Knives of the Massacre": {
    "auras": [
-    "Summon Stone Golem",
-    "Malevolence",
-    "Summon Chaos Golem",
-    "Herald of Thunder",
-    "Summon Lightning Golem",
     "Herald of Purity",
+    "Summon Stone Golem",
     "Herald of Ash",
+    "Summon Lightning Golem",
+    "Summon Chaos Golem",
+    "Malevolence",
     "Summon Flame Golem",
     "Herald of Ice",
+    "Herald of Thunder",
     "Herald of Agony",
     "Tempest Shield"
    ],
@@ -838,8 +837,8 @@
     "Svalinn": 1.0
    },
    "supports": [
-    "Cruelty",
     "Swift Affliction",
+    "Cruelty",
     "Inspiration"
    ],
    "uniques": [
@@ -856,9 +855,9 @@
    "auras": [
     "Summon Stone Golem",
     "Summon Chaos Golem",
-    "Summon Lightning Golem",
-    "Summon Flame Golem",
     "Tempest Shield",
+    "Summon Flame Golem",
+    "Summon Lightning Golem",
     "Malevolence",
     "Determination"
    ],
@@ -902,37 +901,37 @@
    "auras": [
     "Summon Stone Golem",
     "Summon Ice Golem",
-    "Summon Lightning Golem",
     "Zealotry",
+    "Tempest Shield",
     "Summon Flame Golem",
-    "Tempest Shield"
+    "Summon Lightning Golem"
    ],
-   "builds": 6,
+   "builds": 7,
    "keystones": [
     "Zealot's Oath"
    ],
    "maxAuras": 3,
    "shares": {
-    "Ashes of the Stars": 0.83,
-    "Enmity's Embrace": 0.83,
-    "Mageblood": 0.83,
-    "Skin of the Lords": 0.83,
-    "Svalinn": 0.83,
-    "Zealot's Oath": 0.67
+    "Ashes of the Stars": 0.86,
+    "Enmity's Embrace": 0.71,
+    "Mageblood": 0.86,
+    "Skin of the Lords": 0.71,
+    "Svalinn": 0.71,
+    "Zealot's Oath": 0.71
    },
    "supports": [
-    "Pinpoint",
     "Greater Spell Echo",
     "Overloaded Intensity",
-    "Empower",
-    "Inspiration"
+    "Pinpoint",
+    "Inspiration",
+    "Empower"
    ],
    "uniques": [
+    "Ashes of the Stars",
+    "Mageblood",
     "Svalinn",
     "Skin of the Lords",
-    "Ashes of the Stars",
-    "Enmity's Embrace",
-    "Mageblood"
+    "Enmity's Embrace"
    ]
   },
   "Flicker Strike": {
@@ -941,15 +940,15 @@
     "Herald of Ice",
     "Grace"
    ],
-   "builds": 38,
+   "builds": 40,
    "keystones": [],
    "maxAuras": 3,
    "shares": {
-    "Arn's Anguish": 0.61,
-    "Forbidden Shako": 0.66,
+    "Arn's Anguish": 0.57,
+    "Forbidden Shako": 0.65,
     "Kalandra's Touch": 0.47,
-    "Ralakesh's Impatience": 0.61,
-    "Replica Farrul's Fur": 0.92
+    "Ralakesh's Impatience": 0.57,
+    "Replica Farrul's Fur": 0.9
    },
    "supports": [
     "Greater Multistrike",
@@ -966,29 +965,26 @@
   "Forbidden Rite": {
    "auras": [
     "Petrified Blood",
-    "Arctic Armour",
     "Herald of Agony",
     "Flesh and Stone",
-    "Purity of Lightning"
+    "Purity of Lightning",
+    "Arctic Armour"
    ],
-   "builds": 6,
-   "keystones": [
-    "Acrobatics"
-   ],
+   "builds": 7,
+   "keystones": [],
    "maxAuras": 5,
    "shares": {
-    "Acrobatics": 0.5,
     "Anathema": 1.0,
-    "Annihilation's Approach": 0.67,
-    "Betrayal's Sting": 0.67,
+    "Annihilation's Approach": 0.71,
+    "Betrayal's Sting": 0.57,
     "Doppelganger Guise": 1.0,
-    "Leper's Alms": 0.5,
+    "Leper's Alms": 0.43,
     "The Tides of Time": 1.0
    },
    "supports": [
+    "Greater Multiple Projectiles",
     "Deadly Ailments",
     "Unbound Ailments",
-    "Greater Multiple Projectiles",
     "Greater Spell Echo",
     "Void Manipulation"
    ],
@@ -1005,11 +1001,11 @@
    "auras": [
     "Zealotry",
     "Summon Stone Golem",
-    "Summon Flame Golem",
     "Precision",
+    "Summon Flame Golem",
     "Summon Ice Golem",
-    "Summon Lightning Golem",
     "Purity of Elements",
+    "Summon Lightning Golem",
     "Discipline",
     "Tempest Shield"
    ],
@@ -1033,11 +1029,11 @@
     "Zealot's Oath": 1.0
    },
    "supports": [
-    "Pinpoint",
     "Greater Spell Echo",
+    "Pinpoint",
     "Power Charge On Critical",
-    "Intensify",
-    "Void Manipulation"
+    "Void Manipulation",
+    "Intensify"
    ],
    "uniques": [
     "Whispers of Infinity",
@@ -1056,14 +1052,13 @@
     "Hatred",
     "Precision"
    ],
-   "builds": 6,
+   "builds": 8,
    "keystones": [],
    "maxAuras": 5,
    "shares": {
-    "Headhunter": 0.5,
-    "Heatshiver": 0.67,
-    "Svalinn": 0.83,
-    "Yoke of Suffering": 0.67
+    "Heatshiver": 0.62,
+    "Svalinn": 0.88,
+    "Yoke of Suffering": 0.75
    },
    "supports": [
     "Greater Multistrike",
@@ -1073,15 +1068,14 @@
    ],
    "uniques": [
     "Svalinn",
-    "Heatshiver",
     "Yoke of Suffering",
-    "Headhunter"
+    "Heatshiver"
    ]
   },
   "Heavy Strike of Trarthus": {
    "auras": [
-    "Arctic Armour",
-    "Purity of Fire"
+    "Purity of Fire",
+    "Arctic Armour"
    ],
    "builds": 12,
    "keystones": [
@@ -1102,9 +1096,9 @@
     "Versatile Combatant": 0.5
    },
    "supports": [
-    "Increased Critical Damage",
     "Volatility",
     "Greater Multistrike",
+    "Increased Critical Damage",
     "Void Manipulation",
     "Ruthless"
    ],
@@ -1136,10 +1130,10 @@
     "The Apostate": 1.0
    },
    "supports": [
-    "Unholy Trinity",
     "Void Manipulation",
-    "Increased Critical Damage",
+    "Unholy Trinity",
     "Lifetap",
+    "Increased Critical Damage",
     "Greater Spell Echo"
    ],
    "uniques": [
@@ -1151,8 +1145,8 @@
   },
   "Kinetic Blast": {
    "auras": [
-    "Arctic Armour",
-    "Purity of Fire"
+    "Purity of Fire",
+    "Arctic Armour"
    ],
    "builds": 12,
    "keystones": [
@@ -1202,8 +1196,8 @@
     "Whispers of Infinity": 0.67
    },
    "supports": [
-    "Increased Critical Damage",
     "Greater Fork",
+    "Increased Critical Damage",
     "Damage on Full Life",
     "Returning Projectiles",
     "Sacred Wisps"
@@ -1254,8 +1248,8 @@
   },
   "Kinetic Fusillade": {
    "auras": [
-    "Precision",
     "Determination",
+    "Precision",
     "Purity of Elements"
    ],
    "builds": 12,
@@ -1274,9 +1268,9 @@
    },
    "supports": [
     "Greater Volley",
-    "Increased Critical Damage",
     "Less Duration",
     "Ballista Totem",
+    "Increased Critical Damage",
     "Volatility"
    ],
    "uniques": [
@@ -1290,8 +1284,8 @@
    "auras": [
     "Pride",
     "Malevolence",
-    "Tempest Shield",
-    "Purity of Elements"
+    "Purity of Elements",
+    "Tempest Shield"
    ],
    "builds": 6,
    "keystones": [
@@ -1314,9 +1308,9 @@
     "Venopuncture": 0.5
    },
    "supports": [
+    "Melee Physical Damage",
     "Volatility",
     "Brutality",
-    "Melee Physical Damage",
     "Deadly Ailments"
    ],
    "uniques": [
@@ -1330,8 +1324,8 @@
   },
   "Lancing Steel of Spraying": {
    "auras": [
-    "Vitality",
     "Precision",
+    "Vitality",
     "Zealotry",
     "Purity of Elements",
     "Tempest Shield"
@@ -1362,8 +1356,8 @@
   },
   "Lightning Arrow": {
    "auras": [
-    "Purity of Elements",
     "Precision",
+    "Purity of Elements",
     "Hatred",
     "Herald of Purity"
    ],
@@ -1389,8 +1383,8 @@
   "Lightning Tendrils of Eccentricity": {
    "auras": [
     "Summon Stone Golem",
-    "Summon Lightning Golem",
     "Summon Flame Golem",
+    "Summon Lightning Golem",
     "Wrath",
     "Zealotry",
     "Summon Chaos Golem"
@@ -1426,59 +1420,58 @@
   "Lightning Tendrils of Escalation": {
    "auras": [
     "Summon Stone Golem",
-    "Discipline",
-    "Summon Lightning Golem",
     "Summon Flame Golem",
-    "Wrath",
+    "Summon Lightning Golem",
+    "Discipline",
     "Arctic Armour",
-    "Zealotry"
+    "Zealotry",
+    "Wrath"
    ],
-   "builds": 7,
+   "builds": 8,
    "keystones": [
     "Roiling Tempest",
     "Zealot's Oath",
     "The Agnostic",
     "Divine Shield",
-    "Eternal Youth"
+    "Eternal Youth",
+    "Pain Attunement"
    ],
    "maxAuras": 4,
    "shares": {
-    "Anathema": 0.43,
-    "Divine Shield": 0.57,
-    "Eternal Youth": 0.57,
-    "Kingmaker": 0.43,
-    "Mageblood": 0.71,
-    "Mask of the Stitched Demon": 0.43,
-    "Replica Dragonfang's Flight": 0.43,
-    "Roiling Tempest": 0.86,
-    "The Agnostic": 0.71,
-    "Zealot's Oath": 0.86
+    "Divine Shield": 0.62,
+    "Eternal Youth": 0.62,
+    "Kingmaker": 0.5,
+    "Mageblood": 0.75,
+    "Mask of the Stitched Demon": 0.5,
+    "Pain Attunement": 0.5,
+    "Roiling Tempest": 0.88,
+    "The Agnostic": 0.75,
+    "Zealot's Oath": 0.88
    },
    "supports": [
     "Infused Channelling",
     "Arcane Surge",
     "Increased Critical Damage",
-    "Inspiration"
+    "Inspiration",
+    "Focused Channelling"
    ],
    "uniques": [
     "Mageblood",
     "Kingmaker",
-    "Mask of the Stitched Demon",
-    "Replica Dragonfang's Flight",
-    "Anathema"
+    "Mask of the Stitched Demon"
    ]
   },
   "Molten Strike": {
    "auras": [
     "Purity of Elements",
-    "Blood and Sand",
-    "Grace",
-    "Determination",
-    "Wrath",
+    "Discipline",
     "Purity of Fire",
-    "Discipline"
+    "Wrath",
+    "Determination",
+    "Grace",
+    "Blood and Sand"
    ],
-   "builds": 6,
+   "builds": 7,
    "keystones": [
     "Chaos Inoculation",
     "Iron Reflexes",
@@ -1488,22 +1481,22 @@
    ],
    "maxAuras": 7,
    "shares": {
-    "Ashes of the Stars": 0.83,
-    "Chaos Inoculation": 0.83,
-    "Iron Reflexes": 0.83,
-    "Mageblood": 0.83,
-    "March of the Legion": 0.67,
-    "Nimis": 1.0,
-    "Point Blank": 0.83,
-    "Precise Technique": 0.83,
-    "Replica Dreamfeather": 0.83,
-    "Zealot's Oath": 0.83
+    "Ashes of the Stars": 0.71,
+    "Chaos Inoculation": 0.86,
+    "Iron Reflexes": 0.71,
+    "Mageblood": 0.71,
+    "March of the Legion": 0.57,
+    "Nimis": 0.86,
+    "Point Blank": 0.71,
+    "Precise Technique": 0.71,
+    "Replica Dreamfeather": 0.71,
+    "Zealot's Oath": 0.71
    },
    "supports": [
     "Volatility",
     "Greater Multistrike",
-    "Slower Projectiles",
     "Greater Multiple Projectiles",
+    "Slower Projectiles",
     "Damage on Full Life"
    ],
    "uniques": [
@@ -1516,13 +1509,13 @@
   },
   "Penance Brand": {
    "auras": [
-    "Summon Chaos Golem",
-    "Herald of Thunder",
-    "Summon Lightning Golem",
     "Herald of Purity",
     "Herald of Ash",
+    "Summon Lightning Golem",
+    "Summon Chaos Golem",
     "Summon Flame Golem",
     "Herald of Ice",
+    "Herald of Thunder",
     "Tempest Shield",
     "Summon Stone Golem",
     "Herald of Agony"
@@ -1557,39 +1550,37 @@
   },
   "Penance Brand of Dissipation": {
    "auras": [
-    "Summon Stone Golem",
-    "Summon Ice Golem",
-    "Herald of Thunder",
-    "Summon Lightning Golem",
     "Herald of Purity",
+    "Summon Stone Golem",
     "Herald of Ash",
-    "Summon Flame Golem",
+    "Summon Lightning Golem",
+    "Summon Ice Golem",
     "Herald of Agony",
-    "Herald of Ice",
     "Tempest Shield",
+    "Summon Flame Golem",
+    "Herald of Ice",
+    "Herald of Thunder",
     "Precision",
-    "Zealotry",
-    "Petrified Blood"
+    "Zealotry"
    ],
-   "builds": 6,
+   "builds": 7,
    "keystones": [
-    "Mind Over Matter",
     "Runebinder",
+    "Mind Over Matter",
     "Pain Attunement"
    ],
    "maxAuras": 8,
    "shares": {
-    "Headhunter": 1.0,
+    "Headhunter": 0.86,
     "Lost Unity": 1.0,
-    "Mind Over Matter": 1.0,
-    "Pain Attunement": 0.67,
+    "Mind Over Matter": 0.86,
+    "Pain Attunement": 0.71,
     "Runebinder": 1.0,
     "Svalinn": 1.0
    },
    "supports": [
     "Inspiration",
-    "Power Charge On Critical",
-    "Increased Critical Damage"
+    "Power Charge On Critical"
    ],
    "uniques": [
     "Svalinn",
@@ -1618,61 +1609,60 @@
   },
   "Reap": {
    "auras": [
+    "Herald of Purity",
     "Summon Stone Golem",
+    "Herald of Ash",
     "Summon Chaos Golem",
+    "Summon Flame Golem",
     "Summon Lightning Golem",
     "Herald of Thunder",
-    "Herald of Purity",
-    "Herald of Ash",
-    "Summon Flame Golem",
-    "Malevolence",
     "Tempest Shield",
-    "Herald of Ice"
+    "Malevolence"
    ],
-   "builds": 6,
+   "builds": 7,
    "keystones": [
     "Elemental Overload",
-    "Mind Over Matter",
-    "Divine Shield"
+    "Mind Over Matter"
    ],
    "maxAuras": 5,
    "shares": {
-    "Ashes of the Stars": 0.83,
-    "Divine Shield": 0.5,
-    "Elemental Overload": 1.0,
-    "Grace of the Goddess": 1.0,
-    "Headhunter": 0.83,
+    "Ashes of the Stars": 0.71,
+    "Elemental Overload": 0.86,
+    "Grace of the Goddess": 0.86,
+    "Headhunter": 0.71,
     "Lost Unity": 1.0,
-    "Mind Over Matter": 0.83,
-    "Polaric Devastation": 0.83,
-    "Svalinn": 0.83
+    "Mind Over Matter": 0.71,
+    "Polaric Devastation": 0.71,
+    "Svalinn": 0.86,
+    "The Dark Monarch": 0.43
    },
    "supports": [
-    "Cruelty",
     "Burning Damage",
+    "Cruelty",
     "Empower",
     "Eclipse",
     "Deadly Ailments",
     "Swift Affliction"
    ],
    "uniques": [
-    "Grace of the Goddess",
     "Lost Unity",
+    "Grace of the Goddess",
     "Svalinn",
     "Ashes of the Stars",
     "Polaric Devastation",
-    "Headhunter"
+    "Headhunter",
+    "The Dark Monarch"
    ]
   },
   "Reap of Butchery": {
    "auras": [
     "Summon Stone Golem",
+    "Herald of Purity",
     "Pride",
     "Summon Chaos Golem",
+    "Summon Flame Golem",
     "Summon Lightning Golem",
     "Herald of Thunder",
-    "Herald of Purity",
-    "Summon Flame Golem",
     "Summon Stone Golem of Safeguarding",
     "Tempest Shield",
     "Summon Carrion Golem of Hordes",
@@ -1693,10 +1683,10 @@
     "The Primordial Chain": 0.9
    },
    "supports": [
+    "Brutality",
     "Swift Affliction",
     "Corrupting Fever",
     "Eclipse",
-    "Brutality",
     "Awakened Empower"
    ],
    "uniques": [
@@ -1710,25 +1700,18 @@
   },
   "Reave": {
    "auras": [
-    "Arctic Armour",
-    "Tempest Shield",
-    "Blood and Sand"
+    "Tempest Shield"
    ],
-   "builds": 7,
-   "keystones": [
-    "Iron Will",
-    "Precise Technique"
-   ],
+   "builds": 9,
+   "keystones": [],
    "maxAuras": 3,
    "shares": {
-    "Crown of Eyes": 0.57,
-    "Iron Will": 0.57,
-    "Kalandra's Touch": 0.57,
-    "Mageblood": 0.57,
-    "Paradoxica": 0.71,
-    "Precise Technique": 0.57,
-    "Replica Alberon's Warpath": 0.57,
-    "Svalinn": 0.43
+    "Crown of Eyes": 0.44,
+    "Kalandra's Touch": 0.56,
+    "Mageblood": 0.56,
+    "Paradoxica": 0.56,
+    "Replica Alberon's Warpath": 0.44,
+    "Svalinn": 0.44
    },
    "supports": [
     "Volatility",
@@ -1737,20 +1720,20 @@
    ],
    "uniques": [
     "Paradoxica",
-    "Crown of Eyes",
-    "Replica Alberon's Warpath",
     "Mageblood",
     "Kalandra's Touch",
-    "Svalinn"
+    "Svalinn",
+    "Crown of Eyes",
+    "Replica Alberon's Warpath"
    ]
   },
   "Reave of Refraction": {
    "auras": [
-    "Arctic Armour",
     "Blood and Sand",
+    "Arctic Armour",
     "Purity of Fire"
    ],
-   "builds": 6,
+   "builds": 8,
    "keystones": [
     "Roiling Tempest",
     "Chaos Inoculation",
@@ -1760,15 +1743,15 @@
    ],
    "maxAuras": 3,
    "shares": {
-    "Chaos Inoculation": 0.67,
-    "Ghost Dance": 0.67,
-    "Ghost Reaver": 0.67,
-    "Hand of Thought and Motion": 0.67,
-    "Kalandra's Touch": 0.67,
-    "Mageblood": 1.0,
-    "Roiling Tempest": 0.83,
-    "Shaper's Touch": 0.67,
-    "Zealot's Oath": 0.67
+    "Chaos Inoculation": 0.75,
+    "Ghost Dance": 0.62,
+    "Ghost Reaver": 0.62,
+    "Hand of Thought and Motion": 0.62,
+    "Kalandra's Touch": 0.75,
+    "Mageblood": 0.88,
+    "Roiling Tempest": 0.88,
+    "Shaper's Touch": 0.62,
+    "Zealot's Oath": 0.62
    },
    "supports": [
     "Volatility",
@@ -1779,9 +1762,9 @@
    ],
    "uniques": [
     "Mageblood",
+    "Kalandra's Touch",
     "Hand of Thought and Motion",
-    "Shaper's Touch",
-    "Kalandra's Touch"
+    "Shaper's Touch"
    ]
   },
   "Righteous Fire": {
@@ -1841,8 +1824,8 @@
     "Unwavering Stance": 0.5
    },
    "supports": [
-    "Multiple Totems",
     "Lifetap",
+    "Multiple Totems",
     "Controlled Destruction",
     "Spell Totem",
     "Empower",
@@ -1875,8 +1858,8 @@
    },
    "supports": [
     "Greater Spell Echo",
-    "Intensify",
-    "Overloaded Intensity"
+    "Overloaded Intensity",
+    "Intensify"
    ],
    "uniques": [
     "Mageblood",
@@ -1886,14 +1869,13 @@
   },
   "Smite": {
    "auras": [
-    "Purity of Fire",
     "Determination",
+    "Purity of Fire",
     "Wrath",
     "Grace",
-    "Purity of Elements",
-    "Vitality"
+    "Purity of Elements"
    ],
-   "builds": 14,
+   "builds": 15,
    "keystones": [
     "Iron Reflexes",
     "Chaos Inoculation",
@@ -1904,20 +1886,18 @@
    ],
    "maxAuras": 7,
    "shares": {
-    "Chaos Inoculation": 0.79,
-    "Divine Shield": 0.57,
-    "Iron Reflexes": 0.93,
-    "Kalandra's Touch": 0.57,
-    "Mageblood": 0.86,
-    "March of the Legion": 0.5,
-    "Precise Technique": 0.79,
-    "Replica Dreamfeather": 0.79,
-    "Versatile Combatant": 0.5,
-    "Zealot's Oath": 0.79
+    "Chaos Inoculation": 0.73,
+    "Divine Shield": 0.53,
+    "Iron Reflexes": 0.87,
+    "Kalandra's Touch": 0.53,
+    "Mageblood": 0.8,
+    "March of the Legion": 0.47,
+    "Precise Technique": 0.73,
+    "Replica Dreamfeather": 0.73,
+    "Versatile Combatant": 0.53,
+    "Zealot's Oath": 0.73
    },
-   "supports": [
-    "Volatility"
-   ],
+   "supports": [],
    "uniques": [
     "Mageblood",
     "Replica Dreamfeather",
@@ -1927,11 +1907,12 @@
   },
   "Smite of Divine Judgement": {
    "auras": [
-    "Arctic Armour",
     "Purity of Fire",
-    "Tempest Shield"
+    "Arctic Armour",
+    "Tempest Shield",
+    "Purity of Elements"
    ],
-   "builds": 6,
+   "builds": 8,
    "keystones": [
     "Iron Reflexes",
     "Iron Will",
@@ -1939,54 +1920,50 @@
    ],
    "maxAuras": 4,
    "shares": {
-    "Crown of Eyes": 0.67,
-    "Iron Reflexes": 0.83,
-    "Iron Will": 0.67,
+    "Crown of Eyes": 0.5,
+    "Iron Reflexes": 0.75,
+    "Iron Will": 0.5,
     "Kalandra's Touch": 0.5,
-    "Mageblood": 0.83,
-    "Paradoxica": 0.5,
-    "Replica Alberon's Warpath": 0.67,
-    "The Iron Fortress": 0.67,
-    "Versatile Combatant": 0.67
+    "Mageblood": 0.75,
+    "Replica Alberon's Warpath": 0.5,
+    "The Iron Fortress": 0.5,
+    "Versatile Combatant": 0.5
    },
    "supports": [
-    "Volatility",
     "Greater Multistrike",
-    "Void Manipulation"
+    "Volatility",
+    "Invert the Rules"
    ],
    "uniques": [
     "Mageblood",
     "Crown of Eyes",
     "The Iron Fortress",
     "Replica Alberon's Warpath",
-    "Paradoxica",
     "Kalandra's Touch"
    ]
   },
   "Soulrend of Reaping": {
    "auras": [
-    "Discipline",
-    "Clarity",
     "Zealotry",
     "Tempest Shield",
+    "Clarity",
+    "Discipline",
     "Flesh and Stone"
    ],
-   "builds": 6,
+   "builds": 8,
    "keystones": [
     "Chaos Inoculation",
     "Zealot's Oath"
    ],
-   "maxAuras": 5,
+   "maxAuras": 4,
    "shares": {
     "Chaos Inoculation": 1.0,
-    "Mageblood": 0.83,
-    "Nimis": 1.0,
-    "Zealot's Oath": 0.67
+    "Mageblood": 0.75,
+    "Nimis": 0.75,
+    "Zealot's Oath": 0.75
    },
    "supports": [
     "Void Manipulation",
-    "Empower",
-    "Power Charge On Critical",
     "Greater Spell Echo"
    ],
    "uniques": [
@@ -1996,15 +1973,14 @@
   },
   "Spark of the Nova": {
    "auras": [
-    "Zealotry",
-    "Wrath"
+    "Zealotry"
    ],
-   "builds": 12,
+   "builds": 13,
    "keystones": [],
    "maxAuras": 3,
    "shares": {
-    "Kalandra's Touch": 0.5,
-    "Mageblood": 0.83
+    "Kalandra's Touch": 0.54,
+    "Mageblood": 0.85
    },
    "supports": [
     "Greater Spell Echo",
@@ -2019,11 +1995,9 @@
   "Static Strike of Gathering Lightning": {
    "auras": [
     "Arctic Armour",
-    "Tempest Shield",
-    "Purity of Fire",
-    "Flesh and Stone"
+    "Tempest Shield"
    ],
-   "builds": 12,
+   "builds": 14,
    "keystones": [
     "Iron Will",
     "Divine Shield",
@@ -2031,19 +2005,19 @@
    ],
    "maxAuras": 3,
    "shares": {
-    "Crown of Eyes": 0.92,
-    "Divine Shield": 0.75,
-    "Iron Will": 0.92,
-    "Kalandra's Touch": 0.83,
-    "Mageblood": 0.75,
-    "Paradoxica": 0.67,
-    "Precise Technique": 0.58,
-    "Replica Alberon's Warpath": 0.92,
-    "Svalinn": 0.42
+    "Crown of Eyes": 0.79,
+    "Divine Shield": 0.64,
+    "Iron Will": 0.79,
+    "Kalandra's Touch": 0.79,
+    "Mageblood": 0.64,
+    "Paradoxica": 0.57,
+    "Precise Technique": 0.5,
+    "Replica Alberon's Warpath": 0.79,
+    "Svalinn": 0.43
    },
    "supports": [
-    "Void Manipulation",
     "Volatility",
+    "Void Manipulation",
     "Greater Multistrike",
     "Close Combat"
    ],
@@ -2060,7 +2034,7 @@
    "auras": [
     "Wrath"
    ],
-   "builds": 12,
+   "builds": 13,
    "keystones": [
     "Ancestral Bond",
     "Iron Will",
@@ -2068,18 +2042,18 @@
    ],
    "maxAuras": 1,
    "shares": {
-    "Anathema": 0.83,
-    "Ancestral Bond": 0.83,
-    "Ashes of the Stars": 0.83,
-    "Iron Will": 0.75,
-    "Kingmaker": 0.42,
-    "Mageblood": 0.83,
-    "Mind Over Matter": 0.75,
-    "Pearl of Tsoatha": 0.5
+    "Anathema": 0.85,
+    "Ancestral Bond": 0.85,
+    "Ashes of the Stars": 0.85,
+    "Iron Will": 0.77,
+    "Kingmaker": 0.46,
+    "Mageblood": 0.77,
+    "Mind Over Matter": 0.77,
+    "Pearl of Tsoatha": 0.54
    },
    "supports": [
-    "More Duration",
     "Increased Critical Damage",
+    "More Duration",
     "Spell Totem"
    ],
    "uniques": [
@@ -2092,19 +2066,18 @@
   },
   "Storm Call": {
    "auras": [
-    "Determination",
     "Tempest Shield"
    ],
-   "builds": 6,
+   "builds": 7,
    "keystones": [
     "Roiling Tempest"
    ],
    "maxAuras": 3,
    "shares": {
-    "Doryani's Prototype": 0.67,
-    "Kalandra's Touch": 0.67,
-    "Mageblood": 0.83,
-    "Roiling Tempest": 0.67
+    "Doryani's Prototype": 0.57,
+    "Kalandra's Touch": 0.57,
+    "Mageblood": 0.86,
+    "Roiling Tempest": 0.71
    },
    "supports": [
     "Greater Spell Echo",
@@ -2120,8 +2093,8 @@
   "Tornado Shot": {
    "auras": [
     "Precision",
-    "Hatred",
-    "Herald of Purity"
+    "Herald of Purity",
+    "Hatred"
    ],
    "builds": 6,
    "keystones": [
@@ -2146,12 +2119,12 @@
   },
   "Tornado of Elemental Turbulence": {
    "auras": [
-    "Vitality",
-    "Petrified Blood",
     "Tempest Shield",
+    "Petrified Blood",
+    "Vitality",
     "Zealotry"
    ],
-   "builds": 8,
+   "builds": 7,
    "keystones": [
     "Blood Magic",
     "Iron Will",
@@ -2164,7 +2137,7 @@
     "Grace of the Goddess": 1.0,
     "Iron Will": 1.0,
     "Kaom's Heart": 1.0,
-    "Mageblood": 0.5,
+    "Mageblood": 0.43,
     "Mind Over Matter": 1.0,
     "Pain Attunement": 1.0,
     "Pearl of Tsoatha": 1.0,
@@ -2173,8 +2146,7 @@
    },
    "supports": [
     "Increased Critical Damage",
-    "Intensify",
-    "Empower"
+    "Intensify"
    ],
    "uniques": [
     "Grace of the Goddess",
@@ -2222,33 +2194,31 @@
    "auras": [
     "Tempest Shield",
     "Malevolence",
-    "Vitality"
+    "Vitality",
+    "Petrified Blood"
    ],
-   "builds": 5,
-   "keystones": [],
+   "builds": 6,
+   "keystones": [
+    "Blood Magic",
+    "Eternal Youth"
+   ],
    "maxAuras": 4,
    "shares": {
-    "Azadi Crest": 0.4,
-    "Betrayal's Sting": 0.4,
+    "Blood Magic": 0.5,
     "Doppelganger Guise": 1.0,
-    "Fury Valve": 0.4,
-    "Mageblood": 0.6,
-    "Ralakesh's Impatience": 0.6,
-    "Svalinn": 0.6,
-    "The Anvil": 0.4,
-    "Valyrium": 0.4
+    "Eternal Youth": 0.5,
+    "Mageblood": 0.5,
+    "Ralakesh's Impatience": 0.5,
+    "Svalinn": 0.67,
+    "Valyrium": 0.5
    },
    "supports": [],
    "uniques": [
     "Doppelganger Guise",
     "Svalinn",
     "Ralakesh's Impatience",
-    "Mageblood",
-    "Fury Valve",
-    "Betrayal's Sting",
-    "Azadi Crest",
-    "The Anvil",
-    "Valyrium"
+    "Valyrium",
+    "Mageblood"
    ]
   },
   "Vaal Arc": {
@@ -2277,39 +2247,40 @@
   "Vaal Flicker Strike": {
    "auras": [
     "Tempest Shield",
-    "Herald of Ice"
+    "Herald of Ice",
+    "Precision"
    ],
-   "builds": 9,
+   "builds": 8,
    "keystones": [],
    "maxAuras": 4,
    "shares": {
-    "Kalandra's Touch": 0.56,
-    "Mageblood": 0.44,
-    "Paradoxica": 0.44,
-    "Replica Farrul's Fur": 0.44,
-    "Svalinn": 0.44
+    "Kalandra's Touch": 0.5,
+    "Mageblood": 0.5,
+    "Paradoxica": 0.5,
+    "Replica Farrul's Fur": 0.5,
+    "Svalinn": 0.5
    },
    "supports": [
-    "Close Combat",
     "Greater Multistrike",
+    "Close Combat",
     "Volatility"
    ],
    "uniques": [
-    "Kalandra's Touch",
     "Paradoxica",
     "Svalinn",
     "Replica Farrul's Fur",
+    "Kalandra's Touch",
     "Mageblood"
    ]
   },
   "Vaal Reap": {
    "auras": [
     "Summon Stone Golem",
-    "Summon Chaos Golem",
-    "Summon Lightning Golem",
     "Herald of Ash",
-    "Summon Flame Golem",
+    "Summon Chaos Golem",
     "Tempest Shield",
+    "Summon Flame Golem",
+    "Summon Lightning Golem",
     "Herald of Thunder",
     "Herald of Purity",
     "Pride",
@@ -2335,8 +2306,8 @@
    "supports": [
     "Eclipse",
     "Empower",
-    "Swift Affliction",
     "Brutality",
+    "Swift Affliction",
     "Corrupting Fever"
    ],
    "uniques": [
@@ -2350,105 +2321,111 @@
     "Mageblood"
    ]
   },
-  "Vaal Reap of Butchery": {
+  "Vaal Reave": {
    "auras": [
-    "Summon Stone Golem",
-    "Pride",
-    "Summon Chaos Golem",
-    "Summon Lightning Golem",
-    "Herald of Thunder",
-    "Summon Carrion Golem of Hordes",
-    "Herald of Purity",
-    "Summon Flame Golem",
+    "Blood and Sand",
+    "Arctic Armour",
     "Tempest Shield",
-    "Summon Stone Golem of Safeguarding",
-    "Herald of Ash"
+    "Purity of Fire",
+    "Precision"
    ],
-   "builds": 3,
+   "builds": 4,
    "keystones": [
-    "Eternal Youth"
+    "Chaos Inoculation",
+    "Ghost Reaver",
+    "Roiling Tempest"
    ],
    "maxAuras": 5,
    "shares": {
-    "Berek's Respite": 0.67,
-    "Eternal Youth": 0.67,
-    "Lost Unity": 1.0,
-    "Mageblood": 1.0,
-    "Skin of the Lords": 0.67,
-    "The Dark Monarch": 1.0,
-    "The Primordial Chain": 1.0
+    "Azadi Crest": 0.5,
+    "Chaos Inoculation": 0.5,
+    "Ghost Reaver": 0.5,
+    "Gruthkul's Pelt": 0.5,
+    "Hand of Thought and Motion": 0.5,
+    "Kingmaker": 0.5,
+    "Mageblood": 0.75,
+    "Marylene's Fallacy": 0.5,
+    "Paradoxica": 0.5,
+    "Roiling Tempest": 0.5,
+    "Shaper's Touch": 0.5
    },
    "supports": [
-    "Swift Affliction",
-    "Eclipse",
-    "Brutality",
-    "Corrupting Fever",
-    "Empower"
+    "Volatility",
+    "Greater Multistrike",
+    "Pulverise",
+    "Elemental Damage with Attacks"
    ],
    "uniques": [
-    "The Dark Monarch",
-    "The Primordial Chain",
-    "Lost Unity",
     "Mageblood",
-    "Skin of the Lords",
-    "Berek's Respite"
+    "Paradoxica",
+    "Azadi Crest",
+    "Marylene's Fallacy",
+    "Hand of Thought and Motion",
+    "Shaper's Touch",
+    "Kingmaker",
+    "Gruthkul's Pelt"
    ]
   },
   "Vaal Smite": {
    "auras": [
-    "Grace",
-    "Determination",
-    "Purity of Fire",
     "Precision",
-    "Wrath",
-    "Vitality",
-    "Purity of Lightning",
+    "Purity of Fire",
     "Zealotry",
-    "Purity of Ice"
+    "Grace",
+    "Purity of Ice",
+    "Determination",
+    "Purity of Lightning",
+    "Wrath",
+    "Discipline",
+    "Haste",
+    "Vitality",
+    "Clarity",
+    "Purity of Elements"
    ],
    "builds": 4,
    "keystones": [
-    "Iron Reflexes",
     "Chaos Inoculation",
+    "Iron Reflexes",
     "Zealot's Oath",
-    "Versatile Combatant"
+    "Magebane"
    ],
    "maxAuras": 11,
    "shares": {
-    "Chaos Inoculation": 0.5,
+    "Chaos Inoculation": 0.75,
     "Iron Reflexes": 0.75,
     "Kalandra's Touch": 0.5,
+    "Magebane": 0.5,
     "Mageblood": 0.75,
-    "The Celestial Brace": 0.5,
-    "The Dark Seer": 0.5,
-    "The Eternal Struggle": 0.5,
-    "The Hand of Phrecia": 0.5,
-    "Versatile Combatant": 0.5,
-    "Zealot's Oath": 0.5
+    "Mask of the Tribunal": 0.5,
+    "The Dark Seer": 0.75,
+    "The Eternal Struggle": 0.75,
+    "The Hand of Phrecia": 0.75,
+    "Zealot's Oath": 0.75
    },
    "supports": [
     "Empower",
-    "Generosity"
+    "Generosity",
+    "Zealotry"
    ],
    "uniques": [
-    "Mageblood",
     "The Dark Seer",
     "The Hand of Phrecia",
     "The Eternal Struggle",
+    "Mageblood",
     "Kalandra's Touch",
-    "The Celestial Brace"
+    "Mask of the Tribunal"
    ]
   },
   "Viper Strike of the Mamba": {
    "auras": [
-    "Clarity",
     "Precision",
+    "Clarity",
     "Discipline",
     "Flesh and Stone",
-    "Malevolence",
-    "Purity of Elements"
+    "Purity of Elements",
+    "Malevolence"
    ],
-   "builds": 12,
+   "builds": 14,
    "keystones": [
     "Chaos Inoculation",
     "Perfect Agony",
@@ -2458,20 +2435,20 @@
    "shares": {
     "Bino's Kitchen Knife": 1.0,
     "Chaos Inoculation": 1.0,
-    "Essentia Sanguis": 0.75,
-    "Ghost Dance": 0.75,
-    "Le Heup of All": 0.58,
+    "Essentia Sanguis": 0.79,
+    "Ghost Dance": 0.79,
+    "Le Heup of All": 0.57,
     "Mageblood": 1.0,
     "Perfect Agony": 1.0,
     "Shavronne's Revelation": 1.0,
     "Whispers of Infinity": 1.0
    },
    "supports": [
-    "Nightblade",
     "Melee Physical Damage",
+    "Nightblade",
     "Swift Affliction",
-    "Deadly Ailments",
-    "Damage on Full Life"
+    "Damage on Full Life",
+    "Deadly Ailments"
    ],
    "uniques": [
     "Bino's Kitchen Knife",
@@ -2484,9 +2461,9 @@
   },
   "Void Shockwave": {
    "auras": [
-    "Blood and Sand",
-    "Flesh and Stone",
     "Pride",
+    "Flesh and Stone",
+    "Blood and Sand",
     "Precision",
     "Herald of Purity",
     "Purity of Elements"
@@ -2501,10 +2478,10 @@
     "Versatile Combatant": 1.0
    },
    "supports": [
-    "Brutality",
+    "Pulverise",
     "Infused Channelling",
     "Melee Physical Damage",
-    "Pulverise",
+    "Brutality",
     "Cyclone of Tumult"
    ],
    "uniques": [
@@ -2541,8 +2518,8 @@
    },
    "supports": [
     "Power Charge On Critical",
-    "Focused Channelling",
     "Infused Channelling",
+    "Focused Channelling",
     "Inspiration",
     "Arcane Surge"
    ],
