@@ -1690,14 +1690,22 @@ function BuildGeneratorClass:AscendancyRecheck()
 		return table.concat(list, ", ")
 	end
 	local old = notables()
+	-- (the golems over the new limit taken out before judging: PoB counts
+	-- their buffs whatever the limit, so Liege of the Primordial's +2 looked free
+	-- to swap out)
+	local snap = self:Snapshot()
+	local savedLog = #self.log
 	self:ClearAscendancy()
 	self:Recalculate()
 	self:AllocateTree(true, true)
+	self:EnforceGolemLimit()
 	local after = self:FullScore()
 	if after > before + 0.005 and notables() ~= old then
 		self:Note(string.format("Ascendancy chosen again for the finished build: %s (was %s), score %+.3f", notables(), old, after - before))
 		return after - before
 	end
+	for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+	self:Restore(snap)
 	spec:RestoreUndoState(undo)
 	spec:BuildAllDependsAndPaths()
 	self:Recalculate()
@@ -7476,7 +7484,42 @@ end
 -- and a build full of skills that don't touch its damage isn't smooth to play.
 -- Kept: setups PoB can't count but a player uses (movement, guard skills,
 -- Animate Guardian, trigger setups, Vaal skills switched off for hand use).
+-- No more golems than the build can have up: PoB counts every golem gem's
+-- buff whatever the limit, and the ascendancy chosen again after the golems
+-- can take away the notable that raised it (a 30 div Penance Brand
+-- Elementalist kept two golems after Liege of the Primordial was swapped
+-- out: limit 1). The golems worth the least go first.
+function BuildGeneratorClass:EnforceGolemLimit()
+	local env = self.build.calcsTab.mainEnv
+	local limit = 1 + (env and env.player.modDB:Sum("BASE", nil, "ActiveGolemLimit") or 0)
+	local list = self.build.skillsTab.socketGroupList
+	local removed = { }
+	while true do
+		local golems = { }
+		for i, group in ipairs(list) do
+			if group.enabled ~= false and (group.label or ""):match("^Golem") then t_insert(golems, i) end
+		end
+		if #golems <= limit then break end
+		local best, bestScore
+		for _, i in ipairs(golems) do
+			local group = list[i]
+			group.enabled = false
+			self:Recalculate()
+			local score = self:FullScore()
+			group.enabled = true
+			if not bestScore or score > bestScore then best, bestScore = i, score end
+		end
+		local group = t_remove(list, best)
+		local g = group.gemList[1]
+		t_insert(removed, g and g.gemId and data.gems[g.gemId].name or "golem")
+		for k, kept in ipairs(self.groups or { }) do if kept == group then t_remove(self.groups, k) break end end
+		self:Recalculate()
+	end
+	if #removed > 0 then self:Note(string.format("Golems over the limit of %d taken out: %s", limit, table.concat(removed, ", "))) end
+end
+
 function BuildGeneratorClass:PruneUselessGems()
+	self:EnforceGolemLimit()
 	-- (auras: each aura or herald alone; other setups as a whole: a curse
 	-- without its Arcanist Brand would just be cast by hand)
 	local prunable = { "^Auras", "^Golem", "^Filler", "^Blessing", "^Curse", "^Brand spell" }
