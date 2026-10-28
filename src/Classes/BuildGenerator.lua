@@ -7405,6 +7405,28 @@ function BuildGeneratorClass:PruneUselessGems()
 				end
 				if #names(group) == 0 then t_remove(list, gi) end
 			else
+				-- (a brand spell put on the curse's Arcanist Brand - Wave of
+				-- Conviction next to Despair on a chaos Bane: its exposure did
+				-- nothing - taken off alone, the curse kept)
+				if (group.label or ""):match("^Curse") and #names(group) > 2 then
+					for i = #group.gemList, 1, -1 do
+						local gem = group.gemList[i]
+						local gd = gem.gemData
+						if gem.enabled ~= false and gd and not gd.grantedEffect.support and not (gd.tags and gd.tags.curse)
+							and gd.name ~= "Arcanist Brand" then
+							t_remove(group.gemList, i)
+							self.build.skillsTab:ProcessSocketGroup(group)
+							local score = self:FullScore()
+							if score >= current - 0.002 then
+								t_insert(removed, gd.name .. " (on the curse's brand)")
+								current = math.max(current, score)
+							else
+								t_insert(group.gemList, i, gem)
+								self.build.skillsTab:ProcessSocketGroup(group)
+							end
+						end
+					end
+				end
 				group.enabled = false
 				local score = self:FullScore()
 				if score >= current - 0.002 then
