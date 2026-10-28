@@ -8802,10 +8802,6 @@ function BuildGeneratorClass:Upgrade()
 	self.stageCount = 6
 	local function stage(index, label)
 		if collectgarbage("count") > 900 * 1024 then collectgarbage("collect") end
-		-- (engine "lagrange": the price of a divine follows the budget)
-		if self.priceWeight and index > 5 then self:UpdatePriceWeight("stage " .. index) end
-		-- (engine "escalate": requirements still unmet weigh more from here on)
-		if index > 5 and self.scorer and self:HasEngine("escalate") then self:UpdateEscalation("stage " .. index) end
 		self.stageIndex, self.stage = index, label
 		self.subProgress, self.moveFrom, self.moveTo = 0, 0, 1
 		self:Tick()
@@ -9224,6 +9220,10 @@ function BuildGeneratorClass:Run()
 			local _, r = self:FullScore()
 			ConPrintf("[stage] before %d: score %.3f dps %.0f ehp %.0f lua %.0f MB t=%.0fs", index, r.score, r.dps, r.ehp, collectgarbage("count") / 1024, os.clock() - (self.startClock or 0))
 		end
+		-- (engine "lagrange": the price of a divine follows the budget)
+		if self.priceWeight and index > 5 then self:UpdatePriceWeight("stage " .. index) end
+		-- (engine "escalate": requirements still unmet weigh more from here on)
+		if index > 5 and self.scorer and self:HasEngine("escalate") then self:UpdateEscalation("stage " .. index) end
 		self.stageIndex, self.stage = index, label
 		self.subProgress, self.moveFrom, self.moveTo = 0, 0, 1
 		self:Tick()

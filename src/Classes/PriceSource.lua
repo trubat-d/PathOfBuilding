@@ -166,6 +166,9 @@ function PriceSourceClass:PriceSource()
 end
 
 function PriceSourceClass:CachePath()
+	-- (POB_PRICE_CACHE: the cache file somewhere else, for headless runs)
+	local override = os.getenv("POB_PRICE_CACHE")
+	if override and override ~= "" then return override end
 	return main.userPath and (main.userPath .. "BuildIdeasPriceCache.json") or nil
 end
 
