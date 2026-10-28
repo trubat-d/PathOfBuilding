@@ -39,6 +39,24 @@ def keystone_ids(tree_path):
     return out
 
 
+def buff_gems(gems_path="src/Data/Gems.lua"):
+    """Names of the gems that are kept up as buffs: auras, heralds, golems,
+    banners (from src/Data/Gems.lua tags; not attacks, totems, mines, traps)."""
+    out = set()
+    text = open(gems_path).read()
+    for m in re.finditer(r'name = "([^"]+)",.*?tags = \{(.*?)\}', text, re.S):
+        name, tags = m.group(1), m.group(2)
+        has = lambda t: re.search(r"\b" + t + r" = true", tags) is not None
+        if (has("aura") or has("herald") or has("golem") or has("banner")) and not (has("attack") or has("totem") or has("mine") or has("trap") or has("vaal") or has("support")):
+            out.add(name)
+    # (buffs that reserve without the aura tag)
+    out |= {"Tempest Shield", "Arctic Armour", "Petrified Blood", "Blood and Sand"}
+    return out
+
+
+BUFFS = None
+
+
 def parse(xml, skill, keystones):
     spec = re.search(r'<Spec [^>]*nodes="([^"]*)"', xml)
     nodes = set(spec.group(1).split(",")) if spec else set()
@@ -65,7 +83,15 @@ def parse(xml, skill, keystones):
                 if n and skill not in n:
                     supports.add(n)
             break
-    return ks, uniques, supports
+    buffs = set()
+    for m in re.finditer(r"<Skill ([^>]*)>(.*?)</Skill>", xml, re.S):
+        if 'enabled="false"' in m.group(1):
+            continue
+        for a in re.findall(r"<Gem ([^>]*)>", m.group(2)):
+            name = (re.search(r'nameSpec="([^"]*)"', a) or [None, ""])[1]
+            if name in BUFFS and 'enabled="false"' not in a:
+                buffs.add(name)
+    return ks, uniques, supports, buffs
 
 
 def main():
@@ -79,6 +105,8 @@ def main():
     ap.add_argument("--keep-showcase", action="store_true", help="keep builds bench/playable.py flags as showcases")
     args = ap.parse_args()
     keystones = keystone_ids(args.tree)
+    global BUFFS
+    BUFFS = buff_gems()
     by_skill = collections.defaultdict(list)
     showcases = {} if args.keep_showcase else playable.showcase_set(args.codes)
     for path in sorted(glob.glob(os.path.join(args.codes, "*.txt"))):
@@ -94,18 +122,24 @@ def main():
         n = len(builds)
         if n < 3:
             continue
-        kc = collections.Counter(k for ks, _, _ in builds for k in ks)
-        uc = collections.Counter(u for _, us, _ in builds for u in us)
+        kc = collections.Counter(k for ks, _, _, _ in builds for k in ks)
+        uc = collections.Counter(u for _, us, _, _ in builds for u in us)
         slots = {}
-        for _, us, _ in builds:
+        for _, us, _, _ in builds:
             for u, slot in us.items():
                 slots.setdefault(u, slot)
-        sc = collections.Counter(s for _, _, ss in builds for s in ss)
+        sc = collections.Counter(s for _, _, ss, _ in builds for s in ss)
+        bc = collections.Counter(b for _, _, _, bs in builds for b in bs)
+        # (golems reserve nothing: the aura count is the rest)
+        counts = sorted(len([b for b in bs if "Golem" not in b]) for _, _, _, bs in builds)
         entry = {
             "builds": n,
             "keystones": [k for k, c in kc.most_common() if c / n >= args.keystone],
             "uniques": [u for u, c in uc.most_common() if c / n >= args.unique],
             "supports": [s for s, c in sc.most_common() if c / n >= args.support],
+            # buffs most of them keep up (auras, heralds, golems) and how many
+            "auras": [b for b, c in bc.most_common() if c / n >= args.support],
+            "maxAuras": counts[len(counts) // 2],
             "shares": {**{k: round(c / n, 2) for k, c in kc.items() if c / n >= args.keystone},
                        **{u: round(c / n, 2) for u, c in uc.items() if c / n >= args.unique}},
         }

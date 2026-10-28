@@ -1,44 +1,48 @@
 {
  "version": 1,
  "source": "poe.ninja top players",
- "players": 261,
+ "players": 539,
  "packages": [
+  {
+   "uniques": [
+    "Crown of Eyes",
+    "Paradoxica"
+   ],
+   "builds": 29,
+   "skills": {
+    "Cyclone of Tumult": 1,
+    "Dual Strike of Ambidexterity": 3,
+    "Flicker Strike": 7,
+    "Reave": 4,
+    "Reave of Refraction": 1,
+    "Smite of Divine Judgement": 3,
+    "Static Strike of Gathering Lightning": 8,
+    "Vaal Flicker Strike": 2
+   }
+  },
   {
    "uniques": [
     "The Dark Monarch",
     "The Primordial Chain"
    ],
-   "builds": 15,
+   "builds": 28,
    "skills": {
-    "Corrupting Fever": 6,
-    "Reap of Butchery": 5,
-    "Vaal Reap": 4
+    "Corrupting Fever": 12,
+    "Reap": 1,
+    "Reap of Butchery": 9,
+    "Storm Call": 1,
+    "Vaal Reap": 5
    }
   },
   {
    "uniques": [
-    "Crown of Eyes",
-    "Paradoxica",
-    "Replica Alberon's Warpath"
+    "Bino's Kitchen Knife",
+    "Shavronne's Revelation",
+    "Whispers of Infinity"
    ],
-   "builds": 11,
+   "builds": 12,
    "skills": {
-    "Cyclone of Tumult": 1,
-    "Dual Strike of Ambidexterity": 1,
-    "Flicker Strike": 4,
-    "Static Strike of Gathering Lightning": 5
-   }
-  },
-  {
-   "uniques": [
-    "Badge of the Brotherhood",
-    "Malachai's Loop",
-    "Tulfall",
-    "Willclash"
-   ],
-   "builds": 10,
-   "skills": {
-    "Winter Orb": 10
+    "Viper Strike of the Mamba": 12
    }
   },
   {
@@ -46,11 +50,94 @@
     "Death Rush",
     "The Primordial Chain"
    ],
-   "builds": 9,
+   "builds": 12,
    "skills": {
     "Corrupting Fever": 3,
-    "Reap of Butchery": 4,
+    "Reap of Butchery": 7,
     "Vaal Reap": 2
+   }
+  },
+  {
+   "uniques": [
+    "Paradoxica",
+    "Replica Farrul's Fur"
+   ],
+   "builds": 12,
+   "skills": {
+    "Flicker Strike": 9,
+    "Vaal Flicker Strike": 3
+   }
+  },
+  {
+   "uniques": [
+    "Gruthkul's Pelt",
+    "Kingmaker",
+    "Leer Cast"
+   ],
+   "builds": 11,
+   "skills": {
+    "Absolution": 1,
+    "Blade Blast": 1,
+    "Cyclone of Tumult": 1,
+    "Kinetic Fusillade": 1,
+    "Lightning Tendrils of Eccentricity": 2,
+    "Soulrend of Reaping": 1,
+    "Spark of the Nova": 2,
+    "Tornado Shot": 1,
+    "Winter Orb": 1
+   }
+  },
+  {
+   "uniques": [
+    "Enmity's Embrace",
+    "Skin of the Lords"
+   ],
+   "builds": 10,
+   "skills": {
+    "Blade Vortex": 1,
+    "Elemental Hit": 2,
+    "Ethereal Knives": 1,
+    "Fireball": 5,
+    "Flicker Strike": 1
+   }
+  },
+  {
+   "uniques": [
+    "Soulwrest",
+    "The Dark Monarch"
+   ],
+   "builds": 10,
+   "skills": {
+    "Blade Blast": 4,
+    "Ethereal Knives": 2,
+    "Shock Nova of Procession": 1,
+    "Spark of the Nova": 3
+   }
+  },
+  {
+   "uniques": [
+    "Defiance of Destiny",
+    "Kaom's Heart",
+    "Rathpith Globe"
+   ],
+   "builds": 8,
+   "skills": {
+    "Blade Vortex": 2,
+    "Righteous Fire": 6
+   }
+  },
+  {
+   "uniques": [
+    "Kingmaker",
+    "Leer Cast",
+    "Windscream"
+   ],
+   "builds": 8,
+   "skills": {
+    "Absolution": 2,
+    "Blade Blast": 2,
+    "Spark of the Nova": 2,
+    "Storm Burst of Repulsion": 2
    }
   },
   {
@@ -60,52 +147,11 @@
     "The Anvil",
     "Valyrium"
    ],
-   "builds": 6,
+   "builds": 7,
    "skills": {
     "Blade Blast": 3,
-    "Detonate Dead of Scavenging": 3
-   }
-  },
-  {
-   "uniques": [
-    "Bino's Kitchen Knife",
-    "Shavronne's Revelation",
-    "Whispers of Infinity"
-   ],
-   "builds": 6,
-   "skills": {
-    "Viper Strike of the Mamba": 6
-   }
-  },
-  {
-   "uniques": [
-    "Defiance of Destiny",
-    "Kaom's Heart",
-    "Rathpith Globe"
-   ],
-   "builds": 6,
-   "skills": {
-    "Righteous Fire": 6
-   }
-  },
-  {
-   "uniques": [
-    "Marylene's Fallacy",
-    "Pearl of Tsoatha"
-   ],
-   "builds": 6,
-   "skills": {
-    "Lightning Tendrils of Eccentricity": 6
-   }
-  },
-  {
-   "uniques": [
-    "Paradoxica",
-    "Replica Farrul's Fur"
-   ],
-   "builds": 6,
-   "skills": {
-    "Flicker Strike": 6
+    "Detonate Dead of Scavenging": 3,
+    "Unhinge": 1
    }
   },
   {
@@ -115,57 +161,132 @@
     "Le Heup of All",
     "Shavronne's Revelation"
    ],
-   "builds": 5,
+   "builds": 7,
    "skills": {
-    "Viper Strike of the Mamba": 5
+    "Viper Strike of the Mamba": 7
    }
   },
   {
    "uniques": [
-    "Malachai's Loop",
-    "Romira's Banquet",
-    "Tulfall",
-    "Willclash"
+    "Bonemeld",
+    "Doryani's Prototype",
+    "Soulwrest"
+   ],
+   "builds": 7,
+   "skills": {
+    "Blade Blast": 2,
+    "Ethereal Knives": 2,
+    "Shock Nova of Procession": 1,
+    "Spark of the Nova": 2
+   }
+  },
+  {
+   "uniques": [
+    "Hand of Thought and Motion",
+    "Shaper's Touch"
+   ],
+   "builds": 7,
+   "skills": {
+    "Reave": 2,
+    "Reave of Refraction": 4,
+    "Vaal Reave": 1
+   }
+  },
+  {
+   "uniques": [
+    "Rathpith Globe",
+    "The Apostate"
+   ],
+   "builds": 7,
+   "skills": {
+    "Arc of Oscillating": 3,
+    "Shock Nova of Procession": 1,
+    "Spark of the Nova": 2,
+    "Vaal Arc": 1
+   }
+  },
+  {
+   "uniques": [
+    "Betrayal's Sting",
+    "Forbidden Shako",
+    "Vixen's Entrapment"
+   ],
+   "builds": 6,
+   "skills": {
+    "Doom Blast": 6
+   }
+  },
+  {
+   "uniques": [
+    "Betrayal's Sting",
+    "The Tides of Time"
+   ],
+   "builds": 6,
+   "skills": {
+    "Cyclone": 1,
+    "Forbidden Rite": 4,
+    "Unhinge": 1
+   }
+  },
+  {
+   "uniques": [
+    "Vixen's Entrapment",
+    "Whispers of Infinity"
+   ],
+   "builds": 6,
+   "skills": {
+    "Doom Blast": 6
+   }
+  },
+  {
+   "uniques": [
+    "Annihilation's Approach",
+    "Eyes of the Greatwolf",
+    "Loreweave",
+    "Moonbender's Wing",
+    "Original Sin"
    ],
    "builds": 5,
    "skills": {
-    "Winter Orb": 5
+    "Double Strike of Momentum": 5
    }
   },
   {
    "uniques": [
-    "Defiance of Destiny",
-    "Kaom's Heart",
-    "Nebulis"
+    "Ephemeral Edge",
+    "Essentia Sanguis",
+    "Le Heup of All",
+    "Shavronne's Revelation",
+    "Voice of the Storm"
    ],
    "builds": 5,
    "skills": {
-    "Righteous Fire": 5
+    "Dual Strike of Ambidexterity": 5
    }
   },
   {
    "uniques": [
+    "Eyes of the Greatwolf",
+    "Loreweave",
+    "Moonbender's Wing",
+    "Original Sin",
+    "Zana's Ingenuity"
+   ],
+   "builds": 5,
+   "skills": {
+    "Double Strike of Momentum": 5
+   }
+  },
+  {
+   "uniques": [
+    "Crown of the Tyrant",
     "Gruthkul's Pelt",
-    "Kingmaker",
-    "Leer Cast"
+    "Kingmaker"
    ],
    "builds": 5,
    "skills": {
-    "Absolution": 1,
-    "Cyclone of Tumult": 1,
-    "Lightning Tendrils of Eccentricity": 1,
-    "Spark of the Nova": 1,
-    "Tornado Shot": 1
-   }
-  },
-  {
-   "uniques": [
-    "Anathema",
-    "Ashes of the Stars"
-   ],
-   "builds": 5,
-   "skills": {
-    "Storm Burst of Repulsion": 5
+    "Kinetic Fusillade": 2,
+    "Storm Burst of Repulsion": 3
    }
   },
   {
@@ -180,8 +301,99 @@
   },
   {
    "uniques": [
+    "Annihilation's Approach",
+    "The Tides of Time"
+   ],
+   "builds": 5,
+   "skills": {
+    "Cyclone": 1,
+    "Forbidden Rite": 4
+   }
+  },
+  {
+   "uniques": [
+    "Berek's Respite",
+    "Skin of the Lords"
+   ],
+   "builds": 5,
+   "skills": {
+    "Fireball": 1,
+    "Reap of Butchery": 1,
+    "Vaal Reap": 3
+   }
+  },
+  {
+   "uniques": [
+    "Berek's Respite",
+    "The Primordial Chain"
+   ],
+   "builds": 5,
+   "skills": {
+    "Corrupting Fever": 1,
+    "Reap of Butchery": 1,
+    "Vaal Reap": 3
+   }
+  },
+  {
+   "uniques": [
+    "Lori's Lantern",
+    "Marylene's Fallacy"
+   ],
+   "builds": 5,
+   "skills": {
+    "Lightning Tendrils of Eccentricity": 5
+   }
+  },
+  {
+   "uniques": [
+    "Replica Dreamfeather",
+    "Zana's Ingenuity"
+   ],
+   "builds": 5,
+   "skills": {
+    "Molten Strike": 1,
+    "Smite": 4
+   }
+  },
+  {
+   "uniques": [
+    "Doppelganger Guise",
+    "Festering Resentment",
+    "The Anvil",
+    "Valyrium"
+   ],
+   "builds": 4,
+   "skills": {
+    "Blade Blast": 2,
+    "Detonate Dead of Scavenging": 1,
+    "Unhinge": 1
+   }
+  },
+  {
+   "uniques": [
+    "Bonemeld",
+    "Darkness Enthroned",
+    "Garb of the Ephemeral"
+   ],
+   "builds": 4,
+   "skills": {
+    "Dominating Blow of Inspiring": 4
+   }
+  },
+  {
+   "uniques": [
+    "Ryslatha's Coil",
+    "Stranglegasp",
+    "The Stampede"
+   ],
+   "builds": 4,
+   "skills": {
+    "Cyclone of Tumult": 4
+   }
+  },
+  {
+   "uniques": [
     "Advancing Fortress",
-    "Replica Alberon's Warpath",
     "The Iron Fortress"
    ],
    "builds": 4,
@@ -192,36 +404,34 @@
   },
   {
    "uniques": [
-    "Crown of Eyes",
-    "Mahuxotl's Machination",
-    "Replica Alberon's Warpath"
+    "Aegis Aurora",
+    "Darkness Enthroned"
    ],
    "builds": 4,
    "skills": {
-    "Earthshatter": 4
+    "Dominating Blow of Inspiring": 4
    }
   },
   {
    "uniques": [
-    "Mahuxotl's Machination",
-    "Replica Alberon's Warpath",
-    "The Iron Fortress"
+    "Anathema",
+    "Cloak of Defiance"
    ],
    "builds": 4,
    "skills": {
-    "Earthshatter": 4
+    "Arc of Oscillating": 2,
+    "Crackling Lance": 1,
+    "Shock Nova of Procession": 1
    }
   },
   {
    "uniques": [
-    "Berek's Respite",
-    "The Primordial Chain"
+    "Ashes of the Stars",
+    "The Tempest Rising"
    ],
    "builds": 4,
    "skills": {
-    "Corrupting Fever": 1,
-    "Reap of Butchery": 1,
-    "Vaal Reap": 2
+    "Lacerate of Haemorrhage": 4
    }
   },
   {
@@ -236,24 +446,89 @@
   },
   {
    "uniques": [
-    "Lori's Lantern",
-    "Marylene's Fallacy"
+    "Crown of Eyes",
+    "Mahuxotl's Machination"
    ],
    "builds": 4,
    "skills": {
-    "Lightning Tendrils of Eccentricity": 4
+    "Earthshatter": 4
    }
   },
   {
    "uniques": [
-    "Soulwrest",
-    "The Dark Monarch"
+    "Darkray Vectors",
+    "Yoke of Suffering"
    ],
    "builds": 4,
    "skills": {
-    "Blade Blast": 2,
-    "Ethereal Knives": 1,
-    "Spark of the Nova": 1
+    "Cyclone of Tumult": 1,
+    "Flicker Strike": 2,
+    "Vaal Flicker Strike": 1
+   }
+  },
+  {
+   "uniques": [
+    "Dyadian Dawn",
+    "The Taming"
+   ],
+   "builds": 4,
+   "skills": {
+    "Eviscerate": 4
+   }
+  },
+  {
+   "uniques": [
+    "Lori's Lantern",
+    "Valyrium"
+   ],
+   "builds": 4,
+   "skills": {
+    "Detonate Dead of Scavenging": 3,
+    "Unhinge": 1
+   }
+  },
+  {
+   "uniques": [
+    "Mahuxotl's Machination",
+    "The Iron Fortress"
+   ],
+   "builds": 4,
+   "skills": {
+    "Earthshatter": 4
+   }
+  },
+  {
+   "uniques": [
+    "March of the Legion",
+    "The Dark Seer"
+   ],
+   "builds": 4,
+   "skills": {
+    "Raise Spectre": 1,
+    "Smite": 2,
+    "Vaal Smite": 1
+   }
+  },
+  {
+   "uniques": [
+    "Matua Tupuna",
+    "The Dark Seer"
+   ],
+   "builds": 4,
+   "skills": {
+    "Raise Spectre": 1,
+    "Smite": 2,
+    "Vaal Smite": 1
+   }
+  },
+  {
+   "uniques": [
+    "Replica Stampede",
+    "Ryslatha's Coil"
+   ],
+   "builds": 4,
+   "skills": {
+    "Cyclone of Tumult": 4
    }
   },
   {
@@ -278,51 +553,27 @@
   },
   {
    "uniques": [
-    "Ephemeral Edge",
-    "Essentia Sanguis",
-    "Le Heup of All",
-    "Shavronne's Revelation",
-    "Voice of the Storm"
+    "Abyssus",
+    "Facebreaker",
+    "Rigwald's Curse",
+    "Seven Teachings"
    ],
    "builds": 3,
    "skills": {
-    "Dual Strike of Ambidexterity": 3
+    "Cyclone": 1,
+    "Cyclone of Tumult": 2
    }
   },
   {
    "uniques": [
-    "Asenath's Gentle Touch",
-    "Dawnbreaker",
-    "Doryani's Prototype",
-    "Windscream"
+    "Admiral's Arrogance",
+    "Arn's Anguish",
+    "The Squire",
+    "The Unseen Hue"
    ],
    "builds": 3,
    "skills": {
-    "Absolution": 3
-   }
-  },
-  {
-   "uniques": [
-    "Asenath's Gentle Touch",
-    "Dawnbreaker",
-    "Kingmaker",
-    "Windscream"
-   ],
-   "builds": 3,
-   "skills": {
-    "Absolution": 3
-   }
-  },
-  {
-   "uniques": [
-    "Asenath's Gentle Touch",
-    "Doryani's Prototype",
-    "Garb of the Ephemeral",
-    "Windscream"
-   ],
-   "builds": 3,
-   "skills": {
-    "Absolution": 3
+    "Elemental Hit": 3
    }
   },
   {
@@ -352,19 +603,6 @@
   },
   {
    "uniques": [
-    "Doppelganger Guise",
-    "Festering Resentment",
-    "The Anvil",
-    "Valyrium"
-   ],
-   "builds": 3,
-   "skills": {
-    "Blade Blast": 2,
-    "Detonate Dead of Scavenging": 1
-   }
-  },
-  {
-   "uniques": [
     "Hyrri's Ire",
     "Hyrri's Truth",
     "The Fledgling",
@@ -377,14 +615,116 @@
   },
   {
    "uniques": [
-    "Carnage Heart",
-    "Circle of Guilt",
-    "Woespike"
+    "Abyssus",
+    "Azadi Crest",
+    "The Tempest Rising"
    ],
    "builds": 3,
    "skills": {
-    "Cyclone of Tumult": 1,
-    "Void Shockwave": 2
+    "Lacerate of Haemorrhage": 3
+   }
+  },
+  {
+   "uniques": [
+    "Abyssus",
+    "Ryslatha's Coil",
+    "The Tempest Rising"
+   ],
+   "builds": 3,
+   "skills": {
+    "Lacerate of Haemorrhage": 3
+   }
+  },
+  {
+   "uniques": [
+    "Anathema",
+    "Leper's Alms",
+    "The Tides of Time"
+   ],
+   "builds": 3,
+   "skills": {
+    "Forbidden Rite": 3
+   }
+  },
+  {
+   "uniques": [
+    "Arn's Anguish",
+    "Eyes of the Greatwolf",
+    "Kaom's Sign"
+   ],
+   "builds": 3,
+   "skills": {
+    "Boneshatter": 1,
+    "Double Strike of Momentum": 1,
+    "Dual Strike of Ambidexterity": 1
+   }
+  },
+  {
+   "uniques": [
+    "Asenath's Gentle Touch",
+    "Dawnbreaker",
+    "Doryani's Prototype"
+   ],
+   "builds": 3,
+   "skills": {
+    "Absolution": 3
+   }
+  },
+  {
+   "uniques": [
+    "Asenath's Gentle Touch",
+    "Dawnbreaker",
+    "Windscream"
+   ],
+   "builds": 3,
+   "skills": {
+    "Absolution": 3
+   }
+  },
+  {
+   "uniques": [
+    "Azadi Crest",
+    "The Tempest Rising",
+    "Venopuncture"
+   ],
+   "builds": 3,
+   "skills": {
+    "Lacerate of Haemorrhage": 3
+   }
+  },
+  {
+   "uniques": [
+    "Darkness Enthroned",
+    "Garb of the Ephemeral",
+    "Legacy of Fury"
+   ],
+   "builds": 3,
+   "skills": {
+    "Dominating Blow of Inspiring": 3
+   }
+  },
+  {
+   "uniques": [
+    "Darkray Vectors",
+    "Forbidden Shako",
+    "Replica Farrul's Fur"
+   ],
+   "builds": 3,
+   "skills": {
+    "Flicker Strike": 1,
+    "Smite of Divine Judgement": 1,
+    "Vaal Flicker Strike": 1
+   }
+  },
+  {
+   "uniques": [
+    "Death's Door",
+    "Echoes of Creation",
+    "Kaom's Sign"
+   ],
+   "builds": 3,
+   "skills": {
+    "Consecrated Path of Endurance": 3
    }
   },
   {
@@ -396,6 +736,17 @@
    "builds": 3,
    "skills": {
     "Toxic Rain": 3
+   }
+  },
+  {
+   "uniques": [
+    "Doppelganger Guise",
+    "Leper's Alms",
+    "The Tides of Time"
+   ],
+   "builds": 3,
+   "skills": {
+    "Forbidden Rite": 3
    }
   },
   {
@@ -422,6 +773,18 @@
   },
   {
    "uniques": [
+    "Hand of Heresy",
+    "Kingmaker",
+    "Windscream"
+   ],
+   "builds": 3,
+   "skills": {
+    "Cyclone of Tumult": 1,
+    "Storm Burst of Repulsion": 2
+   }
+  },
+  {
+   "uniques": [
     "Malachai's Loop",
     "Romira's Banquet",
     "Void Battery"
@@ -429,6 +792,75 @@
    "builds": 3,
    "skills": {
     "Forbidden Rite of Soul Sacrifice": 3
+   }
+  },
+  {
+   "uniques": [
+    "March of the Legion",
+    "Replica Dreamfeather",
+    "The Anticipation"
+   ],
+   "builds": 3,
+   "skills": {
+    "Smite": 3
+   }
+  },
+  {
+   "uniques": [
+    "Mask of the Tribunal",
+    "The Dark Seer",
+    "The Hand of Phrecia"
+   ],
+   "builds": 3,
+   "skills": {
+    "Smite": 2,
+    "Vaal Smite": 1
+   }
+  },
+  {
+   "uniques": [
+    "Replica Dreamfeather",
+    "The Anticipation",
+    "The Celestial Brace"
+   ],
+   "builds": 3,
+   "skills": {
+    "Smite": 1,
+    "Smite of Divine Judgement": 1,
+    "Vaal Smite": 1
+   }
+  },
+  {
+   "uniques": [
+    "Ryslatha's Coil",
+    "The Tempest Rising",
+    "Venopuncture"
+   ],
+   "builds": 3,
+   "skills": {
+    "Lacerate of Haemorrhage": 3
+   }
+  },
+  {
+   "uniques": [
+    "The Dark Seer",
+    "The Eternal Struggle",
+    "The Hand of Phrecia"
+   ],
+   "builds": 3,
+   "skills": {
+    "Smite": 1,
+    "Vaal Smite": 2
+   }
+  },
+  {
+   "uniques": [
+    "Aegis Aurora",
+    "Dyadian Dawn"
+   ],
+   "builds": 3,
+   "skills": {
+    "Eviscerate": 3
    }
   },
   {
@@ -443,22 +875,24 @@
   },
   {
    "uniques": [
-    "Arn's Anguish",
-    "Kaom's Sign"
+    "Anathema",
+    "Mindspiral"
    ],
    "builds": 3,
    "skills": {
-    "Boneshatter": 3
+    "Arc of Oscillating": 1,
+    "Crackling Lance": 1,
+    "Shock Nova of Procession": 1
    }
   },
   {
    "uniques": [
-    "Azadi Crest",
-    "Forbidden Shako"
+    "Ashes of the Stars",
+    "Dyadian Dawn"
    ],
    "builds": 3,
    "skills": {
-    "Flicker Strike": 3
+    "Eviscerate": 3
    }
   },
   {
@@ -473,14 +907,44 @@
   },
   {
    "uniques": [
-    "Bonemeld",
-    "Doryani's Prototype"
+    "Circle of Guilt",
+    "The Primordial Chain"
    ],
    "builds": 3,
    "skills": {
-    "Ethereal Knives": 1,
-    "Raise Spectre": 1,
-    "Spark of the Nova": 1
+    "Corrupting Fever": 3
+   }
+  },
+  {
+   "uniques": [
+    "Dyadian Dawn",
+    "Ephemeral Edge"
+   ],
+   "builds": 3,
+   "skills": {
+    "Eviscerate": 3
+   }
+  },
+  {
+   "uniques": [
+    "Dyadian Dawn",
+    "Polaric Devastation"
+   ],
+   "builds": 3,
+   "skills": {
+    "Eviscerate": 3
+   }
+  },
+  {
+   "uniques": [
+    "Dying Breath",
+    "Gruthkul's Pelt"
+   ],
+   "builds": 3,
+   "skills": {
+    "Blight of Contagion": 1,
+    "Kinetic Fusillade": 1,
+    "Reave of Refraction": 1
    }
   },
   {
@@ -495,50 +959,30 @@
   },
   {
    "uniques": [
-    "Forbidden Shako",
-    "Replica Farrul's Fur"
+    "Legacy of Fury",
+    "Marylene's Fallacy"
    ],
    "builds": 3,
    "skills": {
-    "Flicker Strike": 3
+    "Lightning Tendrils of Eccentricity": 2,
+    "Reave of Refraction": 1
    }
   },
   {
    "uniques": [
-    "Lori's Lantern",
-    "Valyrium"
+    "Precursor's Emblem",
+    "The Squire"
    ],
    "builds": 3,
    "skills": {
-    "Detonate Dead of Scavenging": 3
-   }
-  },
-  {
-   "uniques": [
-    "March of the Legion",
-    "The Dark Seer"
-   ],
-   "builds": 3,
-   "skills": {
-    "Raise Spectre": 1,
-    "Smite": 2
-   }
-  },
-  {
-   "uniques": [
-    "Matua Tupuna",
-    "The Dark Seer"
-   ],
-   "builds": 3,
-   "skills": {
-    "Raise Spectre": 1,
-    "Smite": 2
+    "Flicker Strike": 2,
+    "Vaal Flicker Strike": 1
    }
   },
   {
    "uniques": [
     "Replica Voideye",
-    "Tulfall"
+    "Willclash"
    ],
    "builds": 3,
    "skills": {
@@ -547,37 +991,36 @@
   },
   {
    "uniques": [
-    "Ryslatha's Coil",
-    "The Stampede"
-   ],
-   "builds": 3,
-   "skills": {
-    "Cyclone of Tumult": 2,
-    "Void Shockwave": 1
-   }
-  },
-  {
-   "uniques": [
-    "Skin of the Lords",
-    "The Primordial Chain"
-   ],
-   "builds": 3,
-   "skills": {
-    "Corrupting Fever": 1,
-    "Vaal Reap": 2
-   }
-  },
-  {
-   "uniques": [
+    "Crown of the Tyrant",
+    "Garb of the Ephemeral",
     "Kingmaker",
-    "Leer Cast",
-    "Southbound",
-    "Windscream"
+    "Legacy of Fury"
    ],
    "builds": 2,
    "skills": {
-    "Blade Blast": 1,
-    "Spark of the Nova": 1
+    "Dominating Blow of Inspiring": 2
+   }
+  },
+  {
+   "uniques": [
+    "Defiance of Destiny",
+    "Lightning Coil",
+    "Nebulis"
+   ],
+   "builds": 2,
+   "skills": {
+    "Detonate Dead of Scavenging": 2
+   }
+  },
+  {
+   "uniques": [
+    "Heatshiver",
+    "The Taming",
+    "Yoke of Suffering"
+   ],
+   "builds": 2,
+   "skills": {
+    "Frost Blades": 2
    }
   }
  ]

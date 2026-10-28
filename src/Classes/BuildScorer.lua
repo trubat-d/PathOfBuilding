@@ -334,11 +334,48 @@ function BuildScorerClass:SkillSustain(output)
 			and (output[resource .. "Cost"] or 0) > 0 and (output.Duration or 0) > 0 then
 			perSecond = m_min(perSecond, output[resource .. "Cost"] / m_max(output.Duration, output.Cooldown or 0, 1))
 		end
+		-- (a damage over time that doesn't stack - Reap's corrupted blood, a
+		-- single ignite or bleed: only the strongest deals damage) keeps its
+		-- damage cast once per duration (more often when the ailment isn't
+		-- sure): only the rest of the damage needs the full cast rate. The
+		-- share kept is that dot's share x what the recast rate can pay plus the
+		-- rest x what the full rate can. Top players' Vaal Reap builds (35M
+		-- ignite out of 36M) paid 2.3x their life recovery at the cast rate.
+		local dotShare, recastPerSecond = 0, perSecond
+		if perSecond > 0 and (output[resource .. "Cost"] or 0) > 0 then
+			local combined = m_max(output.CombinedDPS or 0, output.TotalDPS or 0, 1)
+			local parts = { }
+			if not flags.DotCanStack and (output.Duration or 0) > 0 and skillTypes and skillTypes[SkillType.DamageOverTime] then
+				parts[#parts + 1] = { output.TotalDot or 0, output.Duration }
+			end
+			if (output.IgniteStacksMax or 1) <= 1 and (output.IgniteDuration or 0) > 0 then
+				parts[#parts + 1] = { output.IgniteDPS or 0, output.IgniteDuration * m_min(1, (output.IgniteChanceOnHit or 100) / 100) }
+			end
+			if (output.BleedStacksMax or 1) <= 1 and (output.BleedDuration or 0) > 0 then
+				parts[#parts + 1] = { output.BleedDPS or 0, output.BleedDuration * m_min(1, (output.BleedChanceOnHit or 100) / 100) }
+			end
+			local interval = nil
+			for _, p in ipairs(parts) do
+				if p[1] > 0 then
+					dotShare = dotShare + p[1]
+					interval = m_min(interval or p[2], p[2])
+				end
+			end
+			dotShare = m_min(1, dotShare / combined)
+			if interval then
+				recastPerSecond = m_min(perSecond, output[resource .. "Cost"] / m_max(interval, output.Cooldown or 0, 0.5))
+			end
+		end
 		local cost = (perSecond + (extra[resource] or 0)) * costMargin
 		if cost > 0 then
 			-- (calibrated on the top players' builds: a fifth of a long fight short
 			-- of the cost is covered by flasks, pauses and positioning)
-			local f = math.min(1, self:SustainableRate(output, resource) / cost / sustainTolerance)
+			local rate = self:SustainableRate(output, resource)
+			local f = math.min(1, rate / cost / sustainTolerance)
+			if dotShare > 0 then
+				local fRecast = math.min(1, rate / ((recastPerSecond + (extra[resource] or 0)) * costMargin) / sustainTolerance)
+				f = dotShare * fRecast + (1 - dotShare) * f
+			end
 			if f < fraction then fraction, limiting = f, resource end
 		end
 	end

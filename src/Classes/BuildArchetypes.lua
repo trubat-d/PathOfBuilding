@@ -439,6 +439,10 @@ function BuildArchetypesClass.PlayersArchetype(gem)
 		lens2 = { stat = "CritEffect", func = critEffect, base = 1, label = "Crit damage factor", weight = 0.3 }
 		if not lens then lens, lens2 = lens2, nil end
 	end
+	local auras = { }
+	for _, name in ipairs(entry.auras or { }) do
+		if not name:find("Golem", 1, true) then t_insert(auras, name) end
+	end
 	local parts = { }
 	if #(entry.keystones or { }) > 0 then t_insert(parts, table.concat(entry.keystones, ", ")) end
 	if #(entry.uniques or { }) > 0 then t_insert(parts, table.concat(entry.uniques, ", ")) end
@@ -447,6 +451,10 @@ function BuildArchetypesClass.PlayersArchetype(gem)
 		label = string.format("Top players' archetype (%s)", table.concat(parts, "; ")),
 		summary = string.format("What most of the %d top %s players share: %s.", entry.builds or 0, gem.name, table.concat(parts, "; ")),
 		keystones = entry.keystones, uniques = entry.uniques, supports = entry.supports,
+		-- (the buffs most of them keep up, and how many: golems go through the
+		-- golem limit, not the aura group - Penance Brand's top players run
+		-- five heralds, Tempest Shield and four golems)
+		auras = auras, maxAuras = entry.maxAuras and math.max(4, entry.maxAuras) or nil,
 		lens = lens, lens2 = lens2,
 		maxUniques = math.max(3, #(entry.uniques or { })), setTolerance = 0.25,
 		players = true,
