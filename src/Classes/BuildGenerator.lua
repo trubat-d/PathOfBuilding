@@ -4479,8 +4479,8 @@ function BuildGeneratorClass:FinalAudit()
 					if s then s:SetSelItemId(0) end
 					self.itemsTab:PopulateSlots()
 					spec:BuildClusterJewelGraphs()
-					self:TrimTree()
 					self:AutoConfigure()
+					self:Recalculate()
 					local plain = self:FullScore()
 					if plain >= before - 0.002 then
 						kept = true
