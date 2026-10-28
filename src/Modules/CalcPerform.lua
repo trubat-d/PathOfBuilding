@@ -1823,6 +1823,7 @@ function calcs.perform(env, skipEHP)
 		end
 		if not modDB:Flag(nil, "FlasksDoNotApplyToPlayer") then
 			local utilityFlasksDisabled = modDB:Flag(nil, "UtilityFlasksDoNotApplyToPlayer")
+			env.player.output.UtilityFlasksDisabled = utilityFlasksDisabled or nil
 			local appliedFlaskConditions = utilityFlasksDisabled and flaskConditionsNonUtility or flaskConditions
 			local appliedFlaskBuffs = utilityFlasksDisabled and flaskBuffsNonUtility or flaskBuffs
 			for flaskCond, status in pairs(appliedFlaskConditions) do

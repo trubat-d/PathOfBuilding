@@ -122,9 +122,14 @@ end
 
 -- Self-damage over time not covered by regeneration (per second, 0 if fine)
 function BuildScorerClass:DegenDeficit(output)
-	local net = (output.NetLifeRegen or 0) + m_max(0, output.NetEnergyShieldRegen or 0)
-	local regen = output.LifeRegenRecovery or 0
-	local degen = regen - (output.NetLifeRegen or regen)
+	-- (a degen PoB puts on energy shield counts too: with Zealot's Oath a
+	-- Righteous Fire's 1,945/s burn went on 497 energy shield, net -1,920/s,
+	-- while its life showed no degen at all - the check passed and the build
+	-- couldn't stand its own fire)
+	local netLife, netES = output.NetLifeRegen or 0, output.NetEnergyShieldRegen or 0
+	local net = netLife + netES
+	local regen = (output.LifeRegenRecovery or 0) + m_max(0, output.EnergyShieldRegenRecovery or 0)
+	local degen = m_max(0, (output.LifeRegenRecovery or 0) - netLife) + m_max(0, (output.EnergyShieldRegenRecovery or 0) - netES)
 	if degen > 1 and net < 0 then
 		return -net, degen
 	end
@@ -775,6 +780,15 @@ function BuildScorerClass:GetPenalties(output)
 		local p = 4 + 6 * m_min(1, deficit / m_max(1, degen))
 		total = total + p
 		t_insert(penalties, { label = string.format("Self-damage over time is %.0f/s more than regeneration (%.0f/s degen): the build can't keep it up", deficit, degen), value = p })
+	end
+	-- Utility flasks disabled (Toad's Price, on the way to the bloodline's +1
+	-- Ring Slot): no Quicksilver, Granite, Jade or Silver flask - movement,
+	-- the defence they add in a fight and the flask suffix immunities PoB
+	-- only partly sees; the third ring outbid them in most budget builds
+	if output.UtilityFlasksDisabled then
+		local p = self.utilityFlaskPenalty or 0.6
+		total = total + p
+		t_insert(penalties, { label = "Utility flasks are disabled (no movement, defensive or immunity flasks)", value = p })
 	end
 	-- Ailments and stuns the build isn't protected against (the generator turns
 	-- this on once flasks are chosen: before that, rares would waste mods on
