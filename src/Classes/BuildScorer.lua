@@ -50,6 +50,10 @@ function BuildScorerClass:BuildScorer(build, options)
 	self.focus = options.focus or self.focusList[1]
 	self.ehpFloor = options.ehpFloor
 	self.hitFloor = options.hitFloor
+	self.dpsTarget = options.dpsTarget
+	self.dpsTargetWeight = options.dpsTargetWeight
+	self.checklistScale = options.checklistScale
+	self.hitTarget = options.hitTarget or self.hitTarget
 	-- "uber" or "pinnacle": which boss hits the build must survive
 	self.bossTier = options.bossTier or "pinnacle"
 	self.chargesPerSecond = options.chargesPerSecond or 4
@@ -779,6 +783,8 @@ function BuildScorerClass:GetPenalties(output)
 		for _, entry in ipairs(missingList) do
 			if not entry.ok then t_insert(names, entry.avoid and string.format("%s (%d%%)", entry.label, entry.avoid) or entry.label) end
 		end
+		-- (a league-start / low budget build trades some of them for damage)
+		missingTotal = missingTotal * (self.checklistScale or 1)
 		total = total + missingTotal
 		t_insert(penalties, { label = "Missing defences: " .. table.concat(names, ", "), value = missingTotal })
 	end
@@ -1132,6 +1138,14 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 		local target = m_log(2)
 		if avoided > target then avoided = target + (self.pastTarget or 0.35) * (avoided - target) end
 		score = score + avoidWeight * avoided
+	end
+	-- the damage a build needs to play its content (dpsTarget): below it every
+	-- missing bit of damage weighs double - a league-start build at 30 div
+	-- wants 3-5M before more life or ailment immunities (players' rule);
+	-- the 30 div Cyclone traded down to 0.76M for 6,400 life
+	local dpsTarget = self.dpsTarget
+	if dpsTarget and dps < dpsTarget then
+		score = score - (self.dpsTargetWeight or 1) * self.focus.dps * m_log(dpsTarget / m_max(dps, 1))
 	end
 	-- below the EHP floor, every missing bit costs more than damage can pay back
 	local floor = self.ehpFloor or self.focus.ehpFloor

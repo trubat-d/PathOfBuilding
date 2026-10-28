@@ -133,7 +133,7 @@ return function(jobJson, userPath, scriptBase)
 			ehpFloor = sc.ehpFloor, hitFloor = sc.hitFloor, bossTier = sc.bossTier, killsPerSecond = sc.killsPerSecond, flaskRealism = sc.flaskRealism,
 		})
 		for _, key in ipairs({ "hitScale", "dpsScale", "resourceSustain", "ignoreCosts", "ignoreAttributes", "ignoreReservation", "useChecklist",
-			"lens", "lens2", "avoidanceWeight", "pastTarget", "fightWeight", "smoothBuffs", "reservationSlope", "clearBoost", "clearBuffs", "fightSim", "softSustain", "secondaryTrim", "stationaryBlend" }) do
+			"lens", "lens2", "avoidanceWeight", "pastTarget", "fightWeight", "smoothBuffs", "reservationSlope", "clearBoost", "clearBuffs", "fightSim", "softSustain", "secondaryTrim", "stationaryBlend", "dpsTarget", "dpsTargetWeight", "checklistScale", "hitTarget" }) do
 			scorer[key] = sc[key]
 		end
 		if sc.focusEhp and scorer.focus and scorer.focus.ehp ~= sc.focusEhp then

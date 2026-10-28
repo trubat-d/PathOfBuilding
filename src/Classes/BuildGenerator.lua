@@ -2460,6 +2460,7 @@ function BuildGeneratorClass:RunRaresParallel(finder, options)
 		smoothBuffs = sc.smoothBuffs, reservationSlope = sc.reservationSlope, focusEhp = sc.focus and sc.focus.ehp,
 		clearBoost = sc.clearBoost, clearBuffs = sc.clearBuffs, fightSim = sc.fightSim, softSustain = sc.softSustain,
 		secondaryTrim = sc.secondaryTrim, stationaryBlend = sc.stationaryBlend,
+		dpsTarget = sc.dpsTarget, dpsTargetWeight = sc.dpsTargetWeight, checklistScale = sc.checklistScale, hitTarget = sc.hitTarget,
 	}
 	local xml = self.build:SaveDB("code")
 	-- weapons first (their seeded fills take longest), then round robin
@@ -8991,6 +8992,21 @@ function BuildGeneratorClass:SetupScorer()
 	self.scorer = new("BuildScorer"):BuildScorer(self.build, { focus = opts.focus, chargesPerSecond = opts.chargesPerSecond, overlap = self.overlap, ehpFloor = opts.ehpFloor, hitFloor = opts.hitFloor,
 		bossTier = opts.investment and opts.investment.awakenedGems and "uber" or "pinnacle" })
 	self.scorer.useChecklist = false -- on from the flask stage
+	-- A low budget (a league start): the damage the content needs comes
+	-- first - 3 to 5M for a league starter, players' rule - and the defence
+	-- layers have lower targets (a 20k max hit, ailment immunities half as
+	-- important): below the damage target, life and immunities are traded
+	-- for damage. Up to 60 divines; opts.dpsTarget overrides (0: none).
+	local lowBudget = opts.totalBudget and opts.totalBudget <= 60
+	local dpsTarget = opts.dpsTarget or (lowBudget and 3e6) or nil
+	if dpsTarget and dpsTarget > 0 then
+		self.scorer.dpsTarget = dpsTarget
+		self.scorer.dpsTargetWeight = opts.dpsTargetWeight or 1
+	end
+	if lowBudget then
+		self.scorer.checklistScale = 0.5
+		self.scorer.hitTarget = self.scorer.hitTarget or 20000
+	end
 	-- (mana the build can't pay for priced, not cut, while it is made: the
 	-- finishing stages judge on the real cut and buy the recovery)
 	self.scorer.softSustain = opts.softSustain ~= false or nil
