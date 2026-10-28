@@ -875,7 +875,12 @@ function BuildDoctorClass:PredictCombos(archetypes, maxSize)
 			end
 		end
 		if os.getenv("DOCTOR_DEBUG") and ratio then ConPrintf("[combos] %s x%.3f (%s)", a.id, ratio, why or "") end
-		if ratio and ratio >= 1.3 then t_insert(options, { id = a.id, ratio = ratio, why = why, stat = a.lens and a.lens.stat, keystones = a.keystones }) end
+		-- (block is predicted low: the test adds block to the build as it is,
+		-- while built for it the tree, shield and masteries come together - built
+		-- for it, Cyclone, Boneshatter and Lacerate at 300 div scored +0.21,
+		-- +0.37 and +0.52 over their standard builds for a predicted x1.17)
+		local bar = a.id == "BLOCK" and 1.1 or 1.3
+		if ratio and ratio >= bar then t_insert(options, { id = a.id, ratio = ratio, why = why, stat = a.lens and a.lens.stat, keystones = a.keystones }) end
 	end
 	t_sort(options, function(a, b) return a.ratio > b.ratio end)
 	-- (one idea per stat: POWER and MINED_POWER are the same commitment)
