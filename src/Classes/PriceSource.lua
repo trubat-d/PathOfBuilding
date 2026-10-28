@@ -277,6 +277,11 @@ function PriceSourceClass:Refresh(callback, leagueOverride)
 		local request = t_remove(queue, 1)
 		if not request then
 			data.time, data.league = os.time(), self.league
+			-- (the gem list is optional and big: when it didn't come, the
+			-- previous one is kept rather than every gem priced at nothing; the
+			-- same for the league start poe.ninja doesn't always give)
+			if next(data.gems) == nil and self.gems and next(self.gems) ~= nil then data.gems = self.gems end
+			data.leagueStart = data.leagueStart or self.leagueStart
 			self:SetData(data)
 			self:SaveCache()
 			self.loading = false
