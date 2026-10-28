@@ -4046,7 +4046,10 @@ function BuildGeneratorClass:FillEmptySockets()
 			local ctx = {
 				calcFunc = self.calcFunc, baseOutput = baseOutput, basePower = measure(baseOutput),
 				measure = measure, tick = function() self:Tick() end,
-				opts = { quality = self.options.quality, levelOnly = true, keepResists = false, keepAttributes = false, keepLife = false },
+				-- (after the total budget made the jewels cheaper, sockets filled
+				-- again get cheaper jewels too: refilled at 4 mods, nine 40 div
+				-- jewels kept a 300 div Flicker Strike at 405 div)
+				opts = { quality = self.options.quality, levelOnly = true, keepResists = false, keepAttributes = false, keepLife = false, jewelAffixes = self.fitJewelAffixes },
 			}
 			local best
 			for _, baseName in ipairs({ "Crimson Jewel", "Viridian Jewel", "Cobalt Jewel" }) do
@@ -6478,12 +6481,16 @@ function BuildGeneratorClass:FitTotalBudget()
 		-- their maximum; without it the build lost 1.9)
 		for _, e in ipairs(chosen) do
 			local before = self:FullScore()
+			local costBefore = self:BuildCost()
 			local snap = self:Snapshot()
 			local savedLog = #self.log
 			if self:CheapVersion(e) then
 				self:AutoConfigure()
 				local after = self:FullScore()
-				if before - after > m_max(3 * e.loss, e.loss + 0.1) then
+				-- (a cheap version that saves nothing is no fit: the cost has to
+				-- go down by a good part of what it was meant to save)
+				local saved = costBefore - self:BuildCost()
+				if before - after > m_max(3 * e.loss, e.loss + 0.1) or saved < 0.25 * e.price then
 					self:Restore(snap)
 					for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
 					self:AutoConfigure()
@@ -6491,6 +6498,9 @@ function BuildGeneratorClass:FitTotalBudget()
 					if self.options.debugTiming then ConPrintf("[budget] %s kept: estimated %+.3f, real %+.3f", e.label, -e.loss, after - before) end
 				else
 					t_insert(replaced, string.format("%s (%s, %+.3f)", e.label, GetPriceSource().FormatPrice(e.price), after - before))
+					if e.kind == "jewel" and e.cheapLevel and e.cheapLevel.jewelAffixes then
+						self.fitJewelAffixes = math.min(self.fitJewelAffixes or 99, e.cheapLevel.jewelAffixes)
+					end
 				end
 			end
 		end
