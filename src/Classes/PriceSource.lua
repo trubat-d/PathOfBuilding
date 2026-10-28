@@ -136,9 +136,26 @@ function PriceSourceClass.Available(level, title)
 	if rules and rules.userExcluded and rules.userExcluded[title] then return false end
 	if not level then return true end
 	if level.scarce == false and PriceSourceClass.scarceUniques[title] then return false end
-	-- (early in a league they aren't found at any budget)
-	if main and main.priceSource and main.priceSource:PhaseScarce() and PriceSourceClass.scarceUniques[title] then return false end
+	-- (early in a league they aren't found at any budget; nor the uber
+	-- pinnacle bosses' drops - Crystallised Omniscience from the Uber Searing
+	-- Exarch was 0.02 div on poe.ninja at day 96, not in a first week)
+	if main and main.priceSource and main.priceSource:PhaseScarce() and (PriceSourceClass.scarceUniques[title] or PriceSourceClass.IsUberDrop(title)) then return false end
 	return true
+end
+
+-- Uniques only the uber pinnacle bosses drop (their source line)
+local uberDrops
+function PriceSourceClass.IsUberDrop(title)
+	if not uberDrops then
+		if not (main and main.uniqueDB and main.uniqueDB.list and not main.uniqueDB.loading) then return false end
+		uberDrops = { }
+		for _, item in pairs(main.uniqueDB.list) do
+			local source = item.source or ""
+			local name = item.title or item.name
+			if name and (source:find("(Uber)", 1, true) or source:find("Uber Incarnation", 1, true)) then uberDrops[name] = true end
+		end
+	end
+	return uberDrops[title] or false
 end
 
 function PriceSourceClass:PriceSource()
