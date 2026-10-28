@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <PoBVersion>
-	<Version number="2.67.2-ia.202610281337" />
+	<Version number="2.67.2-ia.202610281410" />
 	<Source part="default" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/" />
 	<Source part="runtime" platform="win32" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/runtime/" />
 	<Source part="program" url="https://raw.githubusercontent.com/trubat-d/PathOfBuilding/{branch}/src/" />
@@ -122,7 +122,7 @@
 	<File name="Assets/vestigialicon.png" part="program" sha1="ecb5dd4b9aed1cac0c1a677b18838ae9c62744d7" />
 	<File name="Assets/warlordicon.png" part="program" sha1="cca050c84884f5c0bb1380ece51d3c4b32be4900" />
 	<File name="Classes/AnimateGuardianSetup.lua" part="program" sha1="40777ebb38411b982f2fcf8448ef9e5be7162f24" />
-	<File name="Classes/AutoConfig.lua" part="program" sha1="6d1368b002689c4969f532b03dd6bfe7e9db7271" />
+	<File name="Classes/AutoConfig.lua" part="program" sha1="972fe61ce446996d49d7c817b0f744f06bf1252c" />
 	<File name="Classes/BestItemFinder.lua" part="program" sha1="3af5aa67f70351eee5070cc47f46b94a859145f8" />
 	<File name="Classes/BestItemListControl.lua" part="program" sha1="75edb896520eedbfb9fa2f7ede7f109c3d4bc39b" />
 	<File name="Classes/BuildArchetypes.lua" part="program" sha1="812789eae27b8792882263156751843e20207834" />
@@ -274,10 +274,10 @@
 	<File name="Data/Gems.lua" part="program" sha1="4e36e80d2f531ba5fe6950aa2a80189a782036c6" />
 	<File name="Data/GeneratorLayerTargets.json" part="program" sha1="f42ad31eace1bc75db25517a0a6eb1c4e13d1018" />
 	<File name="Data/GeneratorModel.json" part="program" sha1="78826f5421e035717149795805fe9d1f29751f4a" />
-	<File name="Data/GeneratorPlayerArchetypes.json" part="program" sha1="01a8911e3e7c4c269669315e54b8022e891be6f4" />
+	<File name="Data/GeneratorPlayerArchetypes.json" part="program" sha1="87250009af7da25c00032c31c7a8b3d794459f58" />
 	<File name="Data/GeneratorPriors.json" part="program" sha1="e1a06d11d2506d6324eac1f452a10aef84de5bfb" />
 	<File name="Data/GeneratorStepPriors.json" part="program" sha1="1ffefe7abb5be3ca3cd2deaf046d0fe3bf468bb6" />
-	<File name="Data/GeneratorUniquePackages.json" part="program" sha1="516f2585f08f1f23dc6cb2bc91c3d598eabdb106" />
+	<File name="Data/GeneratorUniquePackages.json" part="program" sha1="5d0a51f89030daeaf69e32a04ec61d23dc1905d1" />
 	<File name="Data/Global.lua" part="program" sha1="72bff7e953555cf3045880b0ff0dc0c37f43056e" />
 	<File name="Data/IncursionDropOnly.lua" part="program" sha1="1fa5c24b1bf897e781c54b3ce7a7fcd7d23fd645" />
 	<File name="Data/Minions.lua" part="program" sha1="96b00b39dded3f5459349665abc3d2e6c30a142f" />
@@ -455,7 +455,7 @@
 	<File name="Modules/GeneratorLearning.lua" part="program" sha1="f38d60dbd6e7d16df97d1bce15ef68bfe42cae3b" />
 	<File name="Modules/GeneratorModel.lua" part="program" sha1="e60b90a5dfcf6b7b5482fb88ef98513bcc7c8dd7" />
 	<File name="Modules/GeneratorModelTrainer.lua" part="program" sha1="3bb58f3180bdeec309519d51f5c9bba55e988e60" />
-	<File name="Modules/GeneratorRules.lua" part="program" sha1="d36f3f03164ca4ef3b05e1e33f2d6adbf0fcf115" />
+	<File name="Modules/GeneratorRules.lua" part="program" sha1="4416635ac5af5e2418457c84efd5467745533196" />
 	<File name="Modules/GeneratorWorker.lua" part="program" sha1="3bf74caacbb0de4faeacc48b254ea65538f81bd1" />
 	<File name="Modules/ItemSlotHelper.lua" part="program" sha1="4b7d441f9ade5d57c413aa1f8f8067b654cfb927" />
 	<File name="Modules/ItemTools.lua" part="program" sha1="3fbd7aba963b6a67eb5c1d213112fc6a3e681952" />
