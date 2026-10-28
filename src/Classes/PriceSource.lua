@@ -344,11 +344,11 @@ end
 PriceSourceClass.phases = {
 	{ id = "NOW", label = "Now (poe.ninja)" },
 	{ id = "START", label = "League start", day = 2 },
-	{ id = "WEEK1", label = "First week", day = 5 },
+	{ id = "WEEK1", label = "First week", day = 7 },
 	{ id = "MID", label = "Mid league", day = 21 },
 	{ id = "LATE", label = "Late league", day = 70 },
 }
-local phaseDays = { 2, 5, 21, 70 }
+local phaseDays = { 2, 7, 21, 70 }
 local phaseCurves = {
 	chase = { 5, 2.5, 1, 0.7 },   -- uniques worth 20+ div at mid league
 	unique = { 2.5, 1.6, 1, 0.8 }, -- 1 to 20 div
@@ -537,10 +537,23 @@ function PriceSourceClass:RarePrice(item, level)
 end
 
 -- Price of a gem at a level (the nearest listed level at or below it); nil = not listed
-function PriceSourceClass:GemPrice(name, level)
-	for l = level or 20, 1, -1 do
-		local price = self.gems[name .. ":" .. l]
-		if price then return price * self:PhaseFactor("rare") end
+-- A gem's price (divines): its level as listed on poe.ninja (keys
+-- "name:level", "name:levelc" for corrupted copies). Above the gem's natural
+-- maximum (21/20, Awakened 6, exceptional 4+) only a corrupted copy exists;
+-- else the clean copy, else the nearest level below. (The cache had no gem
+-- prices at all: an Awakened Enlighten 5 - 350 to 550 divines - counted 0 in
+-- the budget, with 300 divines builds carrying one.)
+function PriceSourceClass:GemPrice(name, level, maxLevel)
+	local gems = self.gems or { }
+	level = level or 20
+	local factor = self:PhaseFactor("rare")
+	if maxLevel and level > maxLevel then
+		local price = gems[name .. ":" .. level .. "c"]
+		if price then return price * factor end
+	end
+	for l = level, 1, -1 do
+		local price = gems[name .. ":" .. l] or gems[name .. ":" .. l .. "c"]
+		if price then return price * factor end
 	end
 	return nil
 end

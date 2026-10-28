@@ -1704,6 +1704,63 @@ function BuildGeneratorClass:AscendancyRecheck()
 	return 0
 end
 
+-- Golems as a package: the ascendancy notable that raises the golem limit
+-- (Elementalist's Liege of the Primordial, +2 golems, immune to elemental
+-- damage) is worth little measured alone - one golem is up, the next ones
+-- need the limit first - and the golems are worth little without it, so
+-- neither is chosen. Tried together: that notable allocated, the utility
+-- gems chosen again (the golem pass fills the limit before the guard and
+-- filler gems take the sockets), the tree refined; kept if the build is
+-- better. Every Elementalist among the poe.ninja 25M DPS / 100k EHP players
+-- (66 of 66) runs Liege of the Primordial and 3-4 golems.
+function BuildGeneratorClass:GolemMove()
+	local spec = self.build.spec
+	local target
+	for _, node in ipairs(nodesById(spec.nodes)) do
+		if node.ascendancyName == spec.curAscendClassName and not node.alloc and node.type == "Notable" then
+			for _, line in ipairs(node.sd or { }) do
+				if line:find("maximum number of Summoned Golems", 1, true) then target = node end
+			end
+		end
+	end
+	if not target then return 0 end
+	local before = self:FullScore()
+	local snap = self:Snapshot()
+	local savedLog = { }
+	for i, l in ipairs(self.log) do savedLog[i] = l end
+	local ok, err = pcall(function()
+		self:ClearAscendancy()
+		spec:BuildAllDependsAndPaths()
+		if target.path then
+			for _, n in ipairs(target.path) do
+				if not n.alloc then spec:AllocNode(n) end
+			end
+		end
+		self:Recalculate()
+		self:SearchAscendancy()
+		self:ChooseUtilityGems()
+		self:AutoConfigure()
+		self:RefineTree(10)
+		self:AutoConfigure()
+	end)
+	local after = ok and self:FullScore() or before
+	if ok and after > before + 0.01 then
+		local golems = 0
+		for _, group in ipairs(self.build.skillsTab.socketGroupList) do
+			if (group.label or ""):match("^Golem") then golems = golems + 1 end
+		end
+		self:Note(string.format("Golems: %s allocated and %d golems kept up, score %+.3f", target.dn, golems, after - before))
+		return after - before
+	end
+	if not ok then ConPrintf("Golem move failed: %s", tostring(err)) end
+	self:Restore(snap)
+	for i = #self.log, 1, -1 do self.log[i] = nil end
+	for i, l in ipairs(savedLog) do self.log[i] = l end
+	self:AutoConfigure()
+	self:Recalculate()
+	return 0
+end
+
 -- Removes every allocated ascendancy / bloodline passive (start nodes stay)
 -- Main skill supports chosen again for the finished build (they were chosen
 -- for the gear and tree of stage 6); kept if the build is better
@@ -6206,7 +6263,7 @@ end
 -- Cost of the build, total budget and upgrade order
 ------------------------------------------------------------------------------
 
-local exceptionalGems = { ["Enlighten Support"] = true, ["Empower Support"] = true, ["Enhance Support"] = true }
+local exceptionalGems = { ["Enlighten"] = true, ["Empower"] = true, ["Enhance"] = true }
 
 -- What the finished build costs, item by item (divines): uniques at their
 -- poe.ninja price, rares at the level's typical price, anoints at their oils,
@@ -6266,8 +6323,19 @@ function BuildGeneratorClass:BuildCost()
 	for _, group in ipairs(self.build.skillsTab.socketGroupList) do
 		for index, g in ipairs(group.gemList) do
 			local gemData = g.gemId and data.gems[g.gemId]
-			if gemData and g.enabled ~= false and (gemData.name:match("^Awakened ") or exceptionalGems[gemData.name]) then
-				add({ kind = "gem", label = gemData.name .. " " .. (g.level or 20), price = prices:GemPrice(gemData.name, g.level), gem = g, group = group, index = index })
+			-- (every gem with a real price: awakened and exceptional supports,
+			-- Greater Spell Echo / Multistrike, corrupted 21 gems; the common
+			-- ones under a tenth of a divine aren't listed)
+			if gemData and g.enabled ~= false then
+				local price = prices:GemPrice(gemData.name, g.level, gemData.naturalMaxLevel)
+				if not price and (gemData.name:match("^Awakened ") or exceptionalGems[gemData.name]) then
+					price = nil -- (unknown: counted as unknown)
+				elseif not price or price < 0.1 then
+					price = false
+				end
+				if price ~= false then
+					add({ kind = "gem", label = gemData.name .. " " .. (g.level or 20), price = price, gem = g, group = group, index = index })
+				end
 			end
 		end
 	end
@@ -9253,6 +9321,10 @@ function BuildGeneratorClass:Run()
 	stage(12, "Finishing: ascendancy, supports and passive tree")
 	self:Move(1, 6, "Choosing the ascendancy again")
 	if opts.ascendancyRecheck ~= false then self:AscendancyRecheck() end
+	if opts.golemMove ~= false then
+		local ok, err = pcall(function() self:GolemMove() end)
+		if not ok then ConPrintf("Golem move failed: %s", tostring(err)) end
+	end
 	if opts.bloodlineRecheck ~= false then
 		local ok, err = pcall(function() self:BloodlineRecheck() end)
 		if not ok then ConPrintf("Bloodline recheck failed: %s", tostring(err)) end
