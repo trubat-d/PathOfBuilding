@@ -626,7 +626,11 @@ function AutoConfigClass:Run()
 			local perSecond = 0
 			local source
 			for _, line in ipairs(lines) do
-				if line:find("fortify", 1, true) and line:find("hit", 1, true) and not line:find("fortifying hits", 1, true) and not line:find("cannot", 1, true) then
+				-- (The Celestial Brace: "Melee Hits from Strike Skills Fortify" -
+				-- only a strike skill, poewiki; Lacerate isn't one)
+				local tags = skill and skill.activeEffect and skill.activeEffect.gemData and skill.activeEffect.gemData.tags or { }
+				local strikeOk = not line:find("strike skills", 1, true) or tags.strike
+				if strikeOk and line:find("fortify", 1, true) and line:find("hit", 1, true) and not line:find("fortifying hits", 1, true) and not line:find("cannot", 1, true) then
 					local chance = (tonumber(line:match("([%d%.]+)%% chance")) or 100) / 100
 					if line:find("which stun", 1, true) then chance = chance * 0.3 end
 					local rate = speedOf(output) * chance
