@@ -959,7 +959,13 @@ function GemSetupClass:ChooseFillers()
 	if free("Automation") then
 		-- (instant spells only: Automation's own rule; Frost Bomb and Wave of
 		-- Conviction have a cast time and are cast by hand)
-		for _, spell in ipairs({ "Withering Step", "Blood Rage", "Corrupting Fever", "Arcane Cloak", "Plague Bearer", "Convocation", "Wave of Conviction", "Frost Bomb" }) do
+		-- (not Arcane Cloak: a guard skill, 3 s of buff then its 4 s cooldown
+		-- that doesn't recover during the buff - up 43% of the time, which PoB
+		-- counts as always; its added lightning from unreserved mana then made
+		-- every aura a loss and the final prune took them all out: 30 div
+		-- Elementalists with no aura at all. Guards are switched off like the
+		-- Cast when Damage Taken setup)
+		for _, spell in ipairs({ "Withering Step", "Blood Rage", "Corrupting Fever", "Plague Bearer", "Convocation", "Wave of Conviction", "Frost Bomb" }) do
 			local id = gemId(spell)
 			local types = id and data.gems[id].grantedEffect.skillTypes or { }
 			if free(spell) and not types[SkillType.HasReservation] then add("Automation + " .. spell, { "Automation", spell }, true) end
