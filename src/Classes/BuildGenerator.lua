@@ -1761,6 +1761,67 @@ function BuildGeneratorClass:GolemMove()
 	return 0
 end
 
+-- A keystone that makes auras cost what the build defends with - Blood
+-- Magic (auras reserve life), Mind Over Matter (mana is a defence pool) -
+-- and no aura because of it: the keystone was taken before any aura was
+-- tried, then every aura measured against it. Tried the other way round: the
+-- keystone out, the utility gems (auras first) chosen again, the points
+-- spent again; kept if the build is better. (A 30 div Righteous Fire
+-- Chieftain on Blood Magic ran no Purity of Fire: -0.65 against 9,401 life)
+function BuildGeneratorClass:KeystoneAuraMove()
+	local spec = self.build.spec
+	local function auraCount()
+		local n = 0
+		for _, group in ipairs(self.build.skillsTab.socketGroupList) do
+			if (group.label or ""):match("^Auras") then
+				for _, g in ipairs(group.gemList) do
+					if g.gemId and not data.gems[g.gemId].grantedEffect.support then n = n + 1 end
+				end
+			end
+		end
+		return n
+	end
+	local gain = 0
+	for _, name in ipairs({ "Blood Magic", "Mind Over Matter" }) do
+		local node
+		for _, n in pairs(spec.allocNodes) do if n.type == "Keystone" and n.dn == name then node = n end end
+		local archetype = self.options.archetype
+		local committed = false
+		for _, k in ipairs(archetype and archetype.keystones or { }) do if k == name then committed = true end end
+		if node and not committed and auraCount() <= 1 then
+			local before = self:FullScore()
+			local snap = self:Snapshot()
+			local savedLog = { }
+			for i, l in ipairs(self.log) do savedLog[i] = l end
+			local wasProtected = self.protectedNodes and self.protectedNodes[node.id]
+			local ok, err = pcall(function()
+				if self.protectedNodes then self.protectedNodes[node.id] = nil end
+				spec:DeallocNode(node)
+				self:Recalculate()
+				self:TrimTree()
+				self:ChooseUtilityGems()
+				self:AutoConfigure()
+				self:RefineTree(10)
+				self:AutoConfigure()
+			end)
+			local after = ok and self:FullScore() or before
+			if ok and after > before + 0.01 and not node.alloc then
+				self:Note(string.format("%s taken out for auras: %d auras kept up, score %+.3f", name, auraCount(), after - before))
+				gain = gain + after - before
+			else
+				if not ok then ConPrintf("Keystone aura move failed: %s", tostring(err)) end
+				self:Restore(snap)
+				if self.protectedNodes then self.protectedNodes[node.id] = wasProtected end
+				for i = #self.log, 1, -1 do self.log[i] = nil end
+				for i, l in ipairs(savedLog) do self.log[i] = l end
+				self:AutoConfigure()
+				self:Recalculate()
+			end
+		end
+	end
+	return gain
+end
+
 -- Removes every allocated ascendancy / bloodline passive (start nodes stay)
 -- Main skill supports chosen again for the finished build (they were chosen
 -- for the gear and tree of stage 6); kept if the build is better
@@ -9343,6 +9404,10 @@ function BuildGeneratorClass:Run()
 	if opts.golemMove ~= false then
 		local ok, err = pcall(function() self:GolemMove() end)
 		if not ok then ConPrintf("Golem move failed: %s", tostring(err)) end
+	end
+	if opts.keystoneAuraMove ~= false then
+		local ok, err = pcall(function() self:KeystoneAuraMove() end)
+		if not ok then ConPrintf("Keystone aura move failed: %s", tostring(err)) end
 	end
 	if opts.bloodlineRecheck ~= false then
 		local ok, err = pcall(function() self:BloodlineRecheck() end)
