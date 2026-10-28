@@ -326,6 +326,14 @@ function BuildScorerClass:SkillSustain(output)
 			local duration = flags.totem and (output.TotemDuration or 8) or m_max(output.Duration or 4, 2)
 			perSecond = m_min(perSecond, output[resource .. "Cost"] * m_max(1, count) / m_max(duration, 1))
 		end
+		-- (a buff cast once per duration - Corrupting Fever's corrupted blood
+		-- comes from hits while the buff lasts: cast again when it ends, not
+		-- at its cast rate; 25% sustained on top players' 41M builds)
+		local skillTypes = env and env.player.mainSkill and env.player.mainSkill.skillTypes
+		if perSecond > 0 and skillTypes and skillTypes[SkillType.Buff] and skillTypes[SkillType.Duration] and not skillTypes[SkillType.Channel]
+			and (output[resource .. "Cost"] or 0) > 0 and (output.Duration or 0) > 0 then
+			perSecond = m_min(perSecond, output[resource .. "Cost"] / m_max(output.Duration, output.Cooldown or 0, 1))
+		end
 		local cost = (perSecond + (extra[resource] or 0)) * costMargin
 		if cost > 0 then
 			-- (calibrated on the top players' builds: a fifth of a long fight short
