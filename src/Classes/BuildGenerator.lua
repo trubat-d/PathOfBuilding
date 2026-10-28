@@ -4470,6 +4470,22 @@ function BuildGeneratorClass:FinalAudit()
 				if after >= before - 0.001 then
 					kept = true
 					t_insert(removed, string.format("%s (%+.3f)", title, after - before))
+				else
+					-- (the refill and the tree refined again can come out lower
+					-- than the jewel simply taken out: a Bound by Destiny whose
+					-- influenced items were made cheaper stayed in, worth 0)
+					self:Restore(snap)
+					local s = self.itemsTab.slots[slotName]
+					if s then s:SetSelItemId(0) end
+					self.itemsTab:PopulateSlots()
+					spec:BuildClusterJewelGraphs()
+					self:TrimTree()
+					self:AutoConfigure()
+					local plain = self:FullScore()
+					if plain >= before - 0.002 then
+						kept = true
+						t_insert(removed, string.format("%s (%+.3f)", title, plain - before))
+					end
 				end
 			end
 			for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
