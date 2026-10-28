@@ -6396,7 +6396,13 @@ function BuildGeneratorClass:BuildCost()
 			-- (every gem with a real price: awakened and exceptional supports,
 			-- Greater Spell Echo / Multistrike, corrupted 21 gems; the common
 			-- ones under a tenth of a divine aren't listed)
-			if gemData and g.enabled ~= false then
+			-- (only gems a player can't level himself: awakened, exceptional and
+			-- "Greater" supports, levels above the natural maximum - a level 20
+			-- Cruelty is levelled by playing; priced at 1.7 div at first-week prices,
+			-- the budget fit took it out of a 30 div Toxic Rain's 6-link)
+			local hard = gemData and ((g.level or 20) > (gemData.naturalMaxLevel or 20) or gemData.name:match("^Awakened ")
+				or gemData.name:match("^Greater ") or exceptionalGems[gemData.name])
+			if gemData and g.enabled ~= false and hard then
 				local price = prices:GemPrice(gemData.name, g.level, gemData.naturalMaxLevel)
 				if not price and (gemData.name:match("^Awakened ") or exceptionalGems[gemData.name]) then
 					price = nil -- (unknown: counted as unknown)
