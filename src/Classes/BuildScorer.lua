@@ -69,7 +69,10 @@ end
 -- hitting / being hit, which is most of a fight; recharge needs a pause.
 -- Life and energy shield recovered per second from blocking and suppressing
 -- (an enemy hit a second, half attacks and half spells: what a fight is like)
-local hitsTakenPerSecond = 1
+-- (two: when recovery matters the build is being hit often - a pack, a boss
+-- phase; at one a second, Recover 5% of Energy Shield on Block at 62% block
+-- - a build players rate among the tankiest - counted 222/s)
+local hitsTakenPerSecond = 2
 function BuildScorerClass:BlockRecovery(output)
 	local attackBlock = (output.EffectiveBlockChance or output.BlockChance or 0) / 100
 	local spellBlock = (output.EffectiveSpellBlockChance or output.SpellBlockChance or 0) / 100
@@ -1148,9 +1151,14 @@ function BuildScorerClass:ScoreFromValues(dps, ehp, penalty, output)
 		score = score - (self.dpsTargetWeight or 1) * self.focus.dps * m_log(dpsTarget / m_max(dps, 1))
 	end
 	-- below the EHP floor, every missing bit costs more than damage can pay back
+	-- (the pool alone isn't how tanky a build is: what it recovers while
+	-- being hit - recovery on block, regeneration, leech - counts towards the
+	-- floor, up to 1.6x for 15% of the pool a second)
 	local floor = self.ehpFloor or self.focus.ehpFloor
-	if floor and ehp < floor then
-		score = score - 3 * m_log(floor / m_max(ehp, 1))
+	local floorEhp = ehp
+	if floor and output then floorEhp = ehp * (1 + 4 * m_min(0.15, m_max(0, self:RecoveryRatio(output)))) end
+	if floor and floorEhp < floor then
+		score = score - 3 * m_log(floor / m_max(floorEhp, 1))
 	end
 	-- same for the max hit floor (weakest damage type)
 	local hitFloor = self.hitFloor or self.focus.hitFloor
