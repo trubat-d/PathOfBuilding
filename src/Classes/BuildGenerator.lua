@@ -9629,6 +9629,12 @@ function BuildGeneratorClass:Run()
 		-- them - a 300 div Righteous Fire's body armour went from a 165 div rare
 		-- to a mid one, Kaom's Heart then worth +0.67 for 0.6 div)
 		if opts.uniqueSweep ~= false and opts.finalUniqueSweep ~= false then
+			-- (judged after the fit it forces: a 6 div Ynda's Stand at +0.03
+			-- made the second fit turn a 30 div Boneshatter's axe into a
+			-- league-start one, -0.67 - 4.25M DPS to 1.75M)
+			local sweepBefore = self:FullScore()
+			local sweepSnap = self:Snapshot()
+			local sweepLog = #self.log
 			local ok3, found = pcall(function() return self:UniqueSweep(3) end)
 			if not ok3 then ConPrintf("Unique sweep after the budget failed: %s", tostring(found)) end
 			if ok3 and found and found > 0 then
@@ -9642,6 +9648,13 @@ function BuildGeneratorClass:Run()
 					-- (or a cheap unique took a rare's place: what it freed spent
 					-- again - a 30 div Cyclone ended at 19 div)
 					pcall(function() self:SpendBudgetMove() end)
+				end
+				if self:FullScore() < sweepBefore - 0.002 then
+					self:Restore(sweepSnap)
+					for i = #self.log, sweepLog + 1, -1 do t_remove(self.log, i) end
+					self:Note("Late uniques left out: with the budget fitted again they cost more than they gave")
+					self:AutoConfigure()
+					self:Recalculate()
 				end
 			end
 		end
