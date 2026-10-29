@@ -705,11 +705,22 @@ local maxEHP = 5000000
 -- (Righteous Fire) that MoM takes partly from mana, faster than mana comes
 -- back, keeps mana at zero - the pool PoB counts in front of life for hits
 -- isn't there. Returns the share of the hit pool left (1: nothing to fix)
+-- The same for energy shield: a degen of the build's own that takes energy
+-- shield faster than it regenerates keeps it at zero (a Righteous Fire with
+-- 2,910 energy shield burning 680/s of it against 150/s of regeneration: the
+-- burn spills onto life, the shield PoB counts for hits is never there)
 function BuildScorerClass:MoMDrainFactor(output)
-	if (output.sharedMindOverMatter or 0) <= 0 or not output.NetManaRegen or output.NetManaRegen >= 0 then return 1 end
-	local life, withMoM = output.LifeHitPool, output.sharedMoMHitPool
-	if not life or not withMoM or withMoM <= 0 or life >= withMoM then return 1 end
-	return life / withMoM
+	local factor = 1
+	if (output.sharedMindOverMatter or 0) > 0 and output.NetManaRegen and output.NetManaRegen < 0 then
+		local life, withMoM = output.LifeHitPool, output.sharedMoMHitPool
+		if life and withMoM and withMoM > 0 and life < withMoM then factor = life / withMoM end
+	end
+	local es = output.EnergyShield or 0
+	if es > 0 and output.TotalBuildDegen and output.NetEnergyShieldRegen and output.NetEnergyShieldRegen < 0 then
+		local life = m_max(1, output.Life or 0)
+		factor = factor * life / (life + es)
+	end
+	return factor
 end
 
 function BuildScorerClass:GetEHP(output)
