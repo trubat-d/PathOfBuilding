@@ -141,6 +141,9 @@ function BuildScorerClass:DegenDeficit(output)
 	-- between life and mana with it - a Righteous Fire with MoM showed 40%
 	-- less burn on life while its mana, regenerating less than its share,
 	-- emptied; then the whole burn lands on life and no skill can be paid)
+	-- (life leech pays for a degen while the build attacks or casts: Blood
+	-- Rage on a leeching Cyclone - counted at 80%, as the recovery terms do)
+	net = net + 0.8 * (output.LifeLeechGainRate or 0)
 	if output.NetManaRegen then
 		local netMana = output.NetManaRegen
 		degen = degen + m_max(0, (output.ManaRegenRecovery or 0) - netMana)

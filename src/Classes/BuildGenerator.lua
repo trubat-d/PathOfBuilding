@@ -7590,7 +7590,10 @@ function BuildGeneratorClass:PruneUselessGems()
 	self:EnforceGolemLimit()
 	-- (auras: each aura or herald alone; other setups as a whole: a curse
 	-- without its Arcanist Brand would just be cast by hand)
-	local prunable = { "^Auras", "^Golem", "^Filler", "^Blessing", "^Curse", "^Brand spell" }
+	-- (Blood Rage too: chosen while the build's regeneration paid for it, kept
+	-- after the budget fit took the regeneration rolls - a 30 div Cyclone
+	-- ended with a 162/s degen it couldn't stand, -10 score, never re-judged)
+	local prunable = { "^Auras", "^Golem", "^Filler", "^Blessing", "^Curse", "^Brand spell", "^Blood Rage" }
 	local function isPrunable(label)
 		for _, p in ipairs(prunable) do if (label or ""):match(p) then return true end end
 		return false
