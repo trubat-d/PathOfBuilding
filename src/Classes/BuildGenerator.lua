@@ -6729,10 +6729,21 @@ function BuildGeneratorClass:FitTotalBudget()
 		-- (several cheap parts at once when far over: the worst value first)
 		local over = total - budget
 		local chosen = { }
+		-- (a little over: the one cut that fits it losing least, not the best
+		-- value per divine - a Lightning Arrow 1.6 div over gave up its 6.8 div
+		-- body armour for -0.89 and ended at 26 div)
+		local single
 		for _, e in ipairs(values) do
-			t_insert(chosen, e)
-			over = over - e.price
-			if over <= 0 or #chosen >= 3 then break end
+			if e.price >= over and (not single or e.loss < single.loss) then single = e end
+		end
+		if single and single.loss <= 2 * (entry.loss / entry.price) * over + 0.02 then
+			chosen = { single }
+		else
+			for _, e in ipairs(values) do
+				t_insert(chosen, e)
+				over = over - e.price
+				if over <= 0 or #chosen >= 3 then break end
+			end
 		end
 		-- (each replacement checked on the real build, its configuration
 		-- updated: a part's worth measured alone can miss what it holds up -
