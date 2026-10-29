@@ -287,7 +287,7 @@ function BuildGeneratorClass:AlnsScore()
 	local budget = self.options.totalBudget
 	if budget and budget > 0 and not self.priceWeight and GetPriceSource().loaded then
 		local cost = self:BuildCost()
-		if cost > budget then score = score - (self.options.alnsOverWeight or 1.5) * (cost - budget) / budget end
+		if cost > budget then score = score - (self.options.alnsOverWeight or 4) * (cost - budget) / budget end
 	end
 	return score, r
 end

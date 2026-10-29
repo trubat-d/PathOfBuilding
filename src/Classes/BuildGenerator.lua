@@ -6632,7 +6632,8 @@ function BuildGeneratorClass:FitTotalBudget()
 	if not budget or budget <= 0 or not GetPriceSource().loaded then return end
 	local replaced = { }
 	local kept = { }
-	for _ = 1, 12 do
+	-- (enough rounds for every priced part: a build with 13 rares and jewels kept a 12 div ring past the twelfth)
+	for _ = 1, 40 do
 		local total = self:BuildCost()
 		if total <= budget then break end
 		local values = { }
