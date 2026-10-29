@@ -9250,7 +9250,10 @@ function BuildGeneratorClass:SetupScorer()
 	local bossFight = not opts.configScenario or opts.configScenario.boss and true or false
 	opts.chargesPerSecond = opts.chargesPerSecond or (bossFight and 1.5 or 4)
 	self.scorer = new("BuildScorer"):BuildScorer(self.build, { focus = opts.focus, chargesPerSecond = opts.chargesPerSecond, overlap = self.overlap, ehpFloor = opts.ehpFloor, hitFloor = opts.hitFloor,
-		bossTier = opts.investment and opts.investment.awakenedGems and "uber" or "pinnacle" })
+		-- (a low budget - a league start - is judged against the pinnacle
+		-- bosses, not their uber versions: a 30 div week-one build carried an
+		-- "Uber Maven Fireball" one-shot penalty from the Endgame level's tier)
+		bossTier = opts.bossTier or ((opts.totalBudget and opts.totalBudget <= 60) and "pinnacle") or (opts.investment and opts.investment.awakenedGems and "uber") or "pinnacle" })
 	self.scorer.useChecklist = false -- on from the flask stage
 	-- A low budget (a league start): the damage the content needs comes
 	-- first - 3 to 5M for a league starter, players' rule - and the defence
