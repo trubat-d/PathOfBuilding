@@ -6683,6 +6683,35 @@ function BuildGeneratorClass:FitTotalBudget()
 		end
 		self:RefineTree(6)
 	end
+	-- (a hard budget: when the checks above kept every part they would cut and
+	-- the build is still over, the cheapest loss per divine is cut anyway - a
+	-- 30 div Cyclone ended at 33 div with each cut refused one by one)
+	for _ = 1, 20 do
+		local total = self:BuildCost()
+		if total <= budget then break end
+		local values = self:PartValues(0.5, true)
+		t_sort(values, function(a, b) return a.loss / a.price < b.loss / b.price end)
+		local done = false
+		for _, e in ipairs(values) do
+			local costBefore = self:BuildCost()
+			local snap = self:Snapshot()
+			local savedLog = #self.log
+			local before = self:FullScore()
+			if self:CheapVersion(e) then
+				self:AutoConfigure()
+				if costBefore - self:BuildCost() >= 0.25 * e.price then
+					t_insert(replaced, string.format("%s (%s, %+.3f, over budget)", e.label, GetPriceSource().FormatPrice(e.price), self:FullScore() - before))
+					done = true
+					break
+				end
+				self:Restore(snap)
+				for i = #self.log, savedLog + 1, -1 do t_remove(self.log, i) end
+				self:AutoConfigure()
+			end
+		end
+		if not done then break end
+		self:RefineTree(6)
+	end
 	local total = self:BuildCost()
 	if #replaced > 0 then
 		self:Note(string.format("Fitted under the total budget of %s: %s replaced by cheaper versions; build now about %s",
