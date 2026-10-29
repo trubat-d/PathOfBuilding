@@ -205,14 +205,16 @@ local ailments = {
 -- Enemy debuffs inflicted by hits (lines found in the build's passives and
 -- items, or gems that inflict them), with how long one lasts
 local enemyDebuffs = {
-	{ var = "conditionEnemyIntimidated", words = { "intimidate" }, gems = { "Intimidating Cry" }, duration = 4 },
-	{ var = "conditionEnemyUnnerved", words = { "unnerve" }, duration = 4 },
+	-- (gemChance: supports whose "chance to ... on hit" PoB has no mapping for -
+	-- the awakened supports' 10% chance to intimidate / unnerve / crush)
+	{ var = "conditionEnemyIntimidated", words = { "intimidate" }, gems = { "Intimidating Cry" }, gemChance = { ["Awakened Melee Physical Damage"] = 10 }, duration = 4 },
+	{ var = "conditionEnemyUnnerved", words = { "unnerve" }, gemChance = { ["Awakened Controlled Destruction"] = 10 }, duration = 4 },
 	{ var = "conditionEnemyBlinded", words = { "blind" }, gems = { "Blind" }, duration = 4 },
 	{ var = "conditionEnemyMaimed", words = { "maim" }, gems = { "Maim" }, duration = 4 },
 	{ var = "conditionEnemyHindered", words = { "hinder" }, duration = 4 },
 	{ var = "conditionEnemyCoveredInAsh", words = { "cover enemies in ash" }, duration = 5 },
 	{ var = "conditionEnemyCoveredInFrost", words = { "cover enemies in frost" }, duration = 5 },
-	{ var = "conditionEnemyCrushed", words = { "crush" }, duration = 4 },
+	{ var = "conditionEnemyCrushed", words = { "crush" }, gemChance = { ["Awakened Brutality"] = 10 }, duration = 4 },
 	{ var = "conditionEnemyScorched", words = { "scorch" }, duration = 4 },
 	{ var = "conditionEnemyBrittle", words = { "brittle" }, duration = 4 },
 	{ var = "conditionEnemySapped", words = { "inflict sap", "to sap " }, duration = 4 },
@@ -1001,6 +1003,7 @@ function AutoConfigClass:Run()
 					for _, g in ipairs(debuff.gems or { }) do
 						if name == g then best = 100 end
 					end
+					if debuff.gemChance and debuff.gemChance[name] then best = math.max(best, debuff.gemChance[name]) end
 				end
 				local p = math.min(1, best / 100)
 				local uptime = p >= 1 and 1 or (1 - (1 - p) ^ (hitRate * debuff.duration))

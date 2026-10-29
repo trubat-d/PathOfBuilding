@@ -2503,6 +2503,27 @@ function calcs.offence(env, actor, activeSkill)
 	if env.configInput.repeatMode == "FINAL" or skillModList:Flag(nil, "OnlyFinalRepeat") then
 		skillData.dpsMultiplier = skillData.dpsMultiplier / (output.Repeats or 1)
 	end
+	-- Projectiles that return (Returning Projectiles Support): poewiki "Return" -
+	-- a returning projectile can hit a target again unless it returned directly
+	-- from that target, and only one projectile of a set does. Against a single
+	-- target the way back hits only after piercing it (chance or count), at the
+	-- support's less damage for returning projectiles; one extra hit per set.
+	-- (Tornado Shot's secondary projectiles, rain skills, Splitting Steel...
+	-- can't return: ProjectileCannotReturn, or listed here)
+	if skillFlags.projectile and skillModList:Flag(nil, "ProjectilesReturn") and not activeSkill.skillTypes[SkillType.ProjectileCannotReturn]
+		and not ({ ["Tornado Shot"] = true, ["Spark"] = true, ["Winter Orb"] = true, ["Forbidden Rite"] = true })[activeSkill.activeEffect.grantedEffect.name or ""]
+		and env.configInput.returningProjectilesHitAgain ~= false then
+		-- (clear: the way back pierces every enemy on the line - BuildScorer's clear term)
+		output.ProjectilesReturn = true
+		local pierce = (output.PierceCount or 0) >= 1 and 1 or m_min(1, skillModList:Sum("BASE", skillCfg, "PierceChance") / 100)
+		local returnDamage = skillModList:More(skillCfg, "ReturningProjectileDamage")
+		if pierce > 0 and returnDamage > 0 then
+			-- (sequential projectiles - Barrage - are sets of one: each returns)
+			local factor = 1 + pierce * returnDamage
+			skillData.dpsMultiplier = skillData.dpsMultiplier * factor
+			output.ReturnHitMultiplier = factor
+		end
+	end
 	if skillModList:Flag(nil, "TriggeredBySnipe") then
 		skillFlags.channelRelease = true
 	end

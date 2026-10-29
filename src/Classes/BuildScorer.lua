@@ -84,9 +84,16 @@ function BuildScorerClass:BlockRecovery(output)
 	return life * hitsTakenPerSecond, es * hitsTakenPerSecond
 end
 
+-- The part of the build's own degen that Mind over Matter puts on mana and
+-- mana can't regenerate: once mana is empty it lands on life (<= 0)
+function BuildScorerClass:ManaDegenSpill(output)
+	if (output.sharedMindOverMatter or 0) > 0 and output.NetManaRegen and output.NetManaRegen < 0 then return output.NetManaRegen end
+	return 0
+end
+
 function BuildScorerClass:Recovery(output)
 	local blockLife, blockES = self:BlockRecovery(output)
-	local life = (output.ComprehensiveNetLifeRegen or output.NetLifeRegen or output.LifeRegenRecovery or 0) + blockLife
+	local life = (output.ComprehensiveNetLifeRegen or output.NetLifeRegen or output.LifeRegenRecovery or 0) + blockLife + self:ManaDegenSpill(output)
 	local es = output.ComprehensiveNetEnergyShieldRegen or output.NetEnergyShieldRegen or output.EnergyShieldRegenRecovery or 0
 	local leech = (output.LifeLeechGainRate or 0) + (output.EnergyShieldLeechGainRate or 0)
 	local onKill = ((output.LifeOnKill or 0) + (output.EnergyShieldOnKill or 0)) * self.killsPerSecond
@@ -106,7 +113,7 @@ function BuildScorerClass:RecoveryRatio(output)
 	local lifePool = m_max(0, output.Life or 0)
 	local esPool = m_max(0, output.EnergyShield or 0)
 	local blockLife, blockES = self:BlockRecovery(output)
-	local lifeSide = (output.ComprehensiveNetLifeRegen or output.NetLifeRegen or output.LifeRegenRecovery or 0)
+	local lifeSide = (output.ComprehensiveNetLifeRegen or output.NetLifeRegen or output.LifeRegenRecovery or 0) + self:ManaDegenSpill(output)
 		+ (output.LifeLeechGainRate or 0) * 0.8 + (output.LifeOnKill or 0) * self.killsPerSecond + blockLife
 	local esSide = (output.ComprehensiveNetEnergyShieldRegen or output.NetEnergyShieldRegen or output.EnergyShieldRegenRecovery or 0)
 		+ (output.EnergyShieldLeechGainRate or 0) * 0.8 + (output.EnergyShieldOnKill or 0) * self.killsPerSecond
@@ -130,6 +137,15 @@ function BuildScorerClass:DegenDeficit(output)
 	local net = netLife + netES
 	local regen = (output.LifeRegenRecovery or 0) + m_max(0, output.EnergyShieldRegenRecovery or 0)
 	local degen = m_max(0, (output.LifeRegenRecovery or 0) - netLife) + m_max(0, (output.EnergyShieldRegenRecovery or 0) - netES)
+	-- (and the part Mind over Matter takes from mana: PoB splits a degen
+	-- between life and mana with it - a Righteous Fire with MoM showed 40%
+	-- less burn on life while its mana, regenerating less than its share,
+	-- emptied; then the whole burn lands on life and no skill can be paid)
+	if output.NetManaRegen then
+		local netMana = output.NetManaRegen
+		degen = degen + m_max(0, (output.ManaRegenRecovery or 0) - netMana)
+		if netMana < 0 then net = net + netMana end
+	end
 	if degen > 1 and net < 0 then
 		return -net, degen
 	end
@@ -154,7 +170,16 @@ function BuildScorerClass:ClearTerm(output)
 	local areaFactor = radius and m_min(4, m_max(0.3, (radius / 18) ^ 2)) or 1
 	-- (melee strikes splashing around their target: Tribal Fury)
 	if output.MeleeSplash then areaFactor = m_max(areaFactor, 1.5) end
+	-- (supports whose clear PoB doesn't count - their stats have no mapping
+	-- in its calculations: Melee Splash's splash around the target, Ancestral
+	-- Call's extra strikes on other enemies, Spell Cascade's extra areas)
+	if self:SupportedBy("Melee Splash") or self:SupportedBy("Awakened Melee Splash") then areaFactor = m_max(areaFactor, 1.5) end
+	if self:SupportedBy("Ancestral Call") or self:SupportedBy("Greater Ancestral Call") or self:SupportedBy("Awakened Ancestral Call") then areaFactor = areaFactor * 1.3 end
+	if self:SupportedBy("Spell Cascade") or self:SupportedBy("Greater Spell Cascade") or self:SupportedBy("Awakened Spell Cascade") then areaFactor = areaFactor * 1.6 end
 	local projectiles = (output.ProjectileCount or 1) - 1 + 0.5 * m_min(4, output.PierceCount or 0) + 0.7 * m_min(4, output.ChainMax or 0)
+	-- (projectiles that return: the way back pierces every enemy on the line,
+	-- Returning Projectiles Support; CalcOffence sets it)
+	if output.ProjectilesReturn then projectiles = projectiles + 1.5 end
 	local projFactor = 1 + 0.25 * m_max(0, projectiles)
 	local explode = output.ClearExplodeValue or 0
 	-- ignites that spread to other enemies (Fan the Flames, glove implicits,
@@ -276,6 +301,11 @@ function BuildScorerClass:SustainableRate(output, resource)
 	local recovery, pool = 0, 0
 	if resource == "Mana" then
 		recovery = (output.ManaRegenRecovery or output.ManaRegen or 0) + (output.ManaLeechGainRate or 0) + (output.ManaOnHitRate or 0)
+		-- (the build's own degen taken from mana by Mind over Matter: not
+		-- there to pay for skills)
+		if output.NetManaRegen and output.ManaRegenRecovery then
+			recovery = recovery - math.max(0, output.ManaRegenRecovery - output.NetManaRegen)
+		end
 		pool = math.max(0, output.ManaUnreserved or 0)
 		if output.EnergyShieldProtectsMana then
 			recovery = recovery + (output.EnergyShieldRegenRecovery or 0) + (output.EnergyShieldLeechGainRate or 0)
@@ -671,8 +701,20 @@ end
 -- Effective hit pool, capped: immunities make PoB report infinite EHP, which
 -- would make every other difference meaningless (poe.ninja caps at 10M too)
 local maxEHP = 5000000
+-- Mind over Matter with an empty mana pool: a degen of the build's own
+-- (Righteous Fire) that MoM takes partly from mana, faster than mana comes
+-- back, keeps mana at zero - the pool PoB counts in front of life for hits
+-- isn't there. Returns the share of the hit pool left (1: nothing to fix)
+function BuildScorerClass:MoMDrainFactor(output)
+	if (output.sharedMindOverMatter or 0) <= 0 or not output.NetManaRegen or output.NetManaRegen >= 0 then return 1 end
+	local life, withMoM = output.LifeHitPool, output.sharedMoMHitPool
+	if not life or not withMoM or withMoM <= 0 or life >= withMoM then return 1 end
+	return life / withMoM
+end
+
 function BuildScorerClass:GetEHP(output)
 	local ehp = output.TotalEHP or ((output.Life or 0) + (output.EnergyShield or 0))
+	if ehp == ehp then ehp = ehp * self:MoMDrainFactor(output) end
 	if ehp ~= ehp or ehp > maxEHP then ehp = maxEHP end
 	return ehp
 end
@@ -940,9 +982,11 @@ end
 function BuildScorerClass:MinMaxHit(output)
 	local lowest
 	local sum, n = 0, 0
+	local drain = self:MoMDrainFactor(output)
 	for _, damageType in ipairs({ "Physical", "Fire", "Cold", "Lightning", "Chaos" }) do
 		local hit = output[damageType .. "MaximumHitTaken"]
 		if hit and hit == hit then
+			hit = hit * drain
 			hit = m_max(1, m_min(hit, maxEHP))
 			if not lowest or hit < lowest then lowest = hit end
 			sum, n = sum + m_log(hit), n + 1
@@ -976,6 +1020,7 @@ function BuildScorerClass:BossHitRatio(output)
 			for damageType, m in pairs(boss.DamageMultipliers) do
 				local damage = base * (m[1] + 70 * m[2]) * mult
 				local hit = output[damageType .. "MaximumHitTaken"]
+				if hit and hit == hit then hit = hit * self:MoMDrainFactor(output) end
 				if hit and hit == hit and hit > 0 then
 					local pen = tonumber(pens[damageType .. "Pen"] or "")
 					if pen and damageType ~= "Physical" then

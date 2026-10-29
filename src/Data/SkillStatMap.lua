@@ -1442,6 +1442,18 @@ return {
 ["active_skill_returning_projectile_damage_+%_final"] = {
 	mod("Damage", "MORE", nil, 0, 0, { type = "Condition", var = "ReturningProjectile" }),
 },
+-- (traps that trigger twice: Fire Trap of Blasting's 50%, the trap gems' quality -
+-- each trigger is a full detonation)
+["trap_%_chance_to_trigger_twice"] = {
+	mod("DPS", "MORE", nil, 0, KeywordFlag.Trap),
+},
+-- (Returning Projectiles Support: the return is counted in CalcOffence, ReturnHitMultiplier)
+["projectiles_return"] = {
+	flag("ProjectilesReturn"),
+},
+["support_return_returning_projectiles_damage_+%_final"] = {
+	mod("ReturningProjectileDamage", "MORE", nil),
+},
 ["returning_projectiles_always_pierce"] = {
 	flag("PierceAllTargets", { type = "Condition", var = "ReturningProjectile" }),
 },
