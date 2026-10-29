@@ -60,7 +60,7 @@ function BuildGeneratorClass:UpdatePriceWeight(label)
 	local old = self.priceWeight
 	if cost > budget then
 		self.priceWeight = m_min(self.options.priceWeightMax or 1, old * (1 + 0.5 * m_min(1, (cost - budget) / budget)))
-	elseif cost < 0.8 * budget then
+	elseif cost < (self.options.priceLowShare or 0.9) * budget then
 		self.priceWeight = m_max(self.options.priceWeightMin or 0.02, old * 0.7)
 	end
 	if self.options.debugTiming then ConPrintf("[lagrange] %s: cost %.1f / %.1f, price %.3f -> %.3f", label or "", cost, budget, old, self.priceWeight) end
@@ -386,6 +386,25 @@ function BuildGeneratorClass:AlnsSearch(rounds, seconds)
 			back(curSnap)
 		end
 		op.weight = m_max(0.15, (1 - reaction) * op.weight + reaction * sigma)
+		-- (engine "lagrange": the price of a divine follows the budget on the
+		-- build the search holds - after the fit, the stages' price had only
+		-- seen first-draft rares over budget and sat at its cap, the searched
+		-- builds ending at 20-24 of 30 div; best and current re-scored at the
+		-- new price so the comparisons stay fair)
+		if self.priceWeight and opts.alnsPriceUpdate ~= false and round % 3 == 0 then
+			local old = self.priceWeight
+			self:UpdatePriceWeight("alns round " .. round)
+			if self.priceWeight ~= old then
+				current = self:AlnsScore()
+				if bestSnap ~= curSnap then
+					back(bestSnap)
+					best = self:AlnsScore()
+					back(curSnap)
+				else
+					best = current
+				end
+			end
+		end
 		self:Tick()
 	end
 	if bestSnap ~= curSnap then back(bestSnap) end
