@@ -743,6 +743,29 @@ function AutoConfigClass:Run()
 			local notHitByAttack = (1 - share) ^ (4 * hits / 2)
 			setIfUsed("conditionBeenHitByAttackRecently", notHitByAttack < 0.5, string.format("%.0f%% of hits avoided: %.0f%% chance to go 4 seconds without being hit by an attack", (1 - share) * 100, notHitByAttack * 100))
 		end
+		-- (blocked recently: the same three hits a second, half attacks, half
+		-- spells. Effects "if you have not Blocked Recently" defeat themselves -
+		-- Replica Mistwall's maximum spell block is up only until the first
+		-- block, then gone for 4 seconds: with any of them in the build the
+		-- state stays on once it is, measured with the block it has then)
+		do
+			local attackBlock = (output.EffectiveBlockChance or output.BlockChance or 0) / 100
+			local spellBlock = (output.EffectiveSpellBlockChance or output.SpellBlockChance or 0) / 100
+			local hits = 3
+			local notBlocked = (1 - m_min(1, attackBlock)) ^ (4 * hits / 2) * (1 - m_min(1, spellBlock)) ^ (4 * hits / 2)
+			local selfDefeating = false
+			for _, line in ipairs(lines) do
+				if line:find("not blocked recently", 1, true) or line:find("haven't blocked recently", 1, true) then selfDefeating = true end
+			end
+			local input = self.build.configTab.input
+			local blocked = notBlocked < 0.5 or (selfDefeating and input.conditionBlockedRecently == true)
+			setIfUsed("conditionBlockedRecently", blocked, string.format("%.0f%% attack / %.0f%% spell block: %.0f%% chance to go 4 seconds without blocking%s", attackBlock * 100, spellBlock * 100, notBlocked * 100,
+				selfDefeating and " (\"not blocked recently\" effects end at the first block)" or ""))
+			local notBlockedAttack = (1 - m_min(1, attackBlock)) ^ (4 * hits / 2)
+			setIfUsed("conditionBlockedAttackRecently", notBlockedAttack < 0.5, string.format("%.0f%% attack block", attackBlock * 100))
+			local notBlockedSpell = (1 - m_min(1, spellBlock)) ^ (4 * hits / 2)
+			setIfUsed("conditionBlockedSpellRecently", notBlockedSpell < 0.5 or (selfDefeating and input.conditionBlockedSpellRecently == true), string.format("%.0f%% spell block", spellBlock * 100))
+		end
 		setIfUsed("conditionKilledRecently", not boss, boss and "not while fighting a boss" or "clearing maps")
 		setIfUsed("conditionHeadhunterBuffs", not boss, boss and "no rare monsters to steal from on a boss" or "rare monsters' modifiers stolen while clearing maps")
 		local impale = math.max(skillValue(output, "ImpaleChance") or 0, skillValue(output, "ImpaleChanceOnCrit") or 0)
