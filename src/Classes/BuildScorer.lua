@@ -715,8 +715,17 @@ function BuildScorerClass:MoMDrainFactor(output)
 		local life, withMoM = output.LifeHitPool, output.sharedMoMHitPool
 		if life and withMoM and withMoM > 0 and life < withMoM then factor = life / withMoM end
 	end
+	-- (PoB only puts a degen on energy shield when the shield regenerates - with
+	-- none it shows the whole burn on life and the shield untouched; in the
+	-- game the burn takes the shield first, which then never recharges under
+	-- constant damage: drained whenever the burn outpaces its regeneration)
 	local es = output.EnergyShield or 0
-	if es > 0 and output.TotalBuildDegen and output.NetEnergyShieldRegen and output.NetEnergyShieldRegen < 0 then
+	local esGain = m_max(0, output.EnergyShieldRegenRecovery or 0) + (output.EnergyShieldLeechGainRate or 0)
+	-- (elemental and chaos burns; physical "degen" is mostly life loss - Blood
+	-- Rage - which the shield doesn't take)
+	local burn = 0
+	for _, t in ipairs({ "Fire", "Cold", "Lightning", "Chaos" }) do burn = burn + (output[t .. "BuildDegen"] or 0) end
+	if es > 0 and burn > esGain + 1 then
 		local life = m_max(1, output.Life or 0)
 		factor = factor * life / (life + es)
 	end
