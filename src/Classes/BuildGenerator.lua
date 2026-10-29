@@ -1782,6 +1782,88 @@ end
 -- keystone out, the utility gems (auras first) chosen again, the points
 -- spent again; kept if the build is better. (A 30 div Righteous Fire
 -- Chieftain on Blood Magic ran no Purity of Fire: -0.65 against 9,401 life)
+-- The ascendancy started from each notable the build doesn't take: a notable
+-- whose worth needs other parts with it - Valako, Storm's Embrace (maximum
+-- fire resistance applying to cold and lightning) is worth nothing until
+-- Purity of Fire and the maximum resistance passives come with it, so the
+-- greedy allocation, one notable at a time, never takes it; Pohx's Righteous
+-- Fire Chieftain does. Each start is screened cheaply (the rest of the
+-- ascendancy filled in), the best few rebuilt with the utility gems and the
+-- passives after them; the best kept if the build is better.
+function BuildGeneratorClass:AscendancyStartsMove(maxFull)
+	local spec = self.build.spec
+	local before = self:FullScore()
+	local base = self:Snapshot()
+	local savedLog = { }
+	for i, l in ipairs(self.log) do savedLog[i] = l end
+	local function restoreLog()
+		for i = #self.log, 1, -1 do self.log[i] = nil end
+		for i, l in ipairs(savedLog) do self.log[i] = l end
+	end
+	local candidates = { }
+	for _, node in ipairs(nodesById(spec.nodes)) do
+		if node.ascendancyName == spec.curAscendClassName and not node.alloc and (node.type == "Notable" or node.isMultipleChoiceOption) then
+			t_insert(candidates, node)
+		end
+	end
+	if #candidates == 0 then return 0 end
+	local function start(target)
+		self:ClearAscendancy()
+		spec:BuildAllDependsAndPaths()
+		if target.path then
+			for _, n in ipairs(target.path) do if not n.alloc then spec:AllocNode(n) end end
+		end
+		self:Recalculate()
+		self:SearchAscendancy()
+		self:EnforceGolemLimit()
+	end
+	-- screening: the ascendancy alone
+	local screened = { }
+	for _, target in ipairs(candidates) do
+		local ok = pcall(function() start(target) end)
+		if ok and target.alloc then t_insert(screened, { node = target, score = self:FullScore() }) end
+		self:Restore(base)
+		restoreLog()
+		self:Tick()
+	end
+	t_sort(screened, function(a, b) return a.score > b.score end)
+	local best, bestSnap
+	for i = 1, m_min(maxFull or 3, #screened) do
+		local target = screened[i].node
+		local ok, err = pcall(function()
+			start(target)
+			self:ChooseUtilityGems()
+			self:AutoConfigure()
+			self:RefineTree(10)
+			self:AutoConfigure()
+		end)
+		local after = ok and target.alloc and self:FullScore() or -math.huge
+		if not ok then ConPrintf("Ascendancy start %s failed: %s", target.dn, tostring(err)) end
+		if self.options.debugTiming then ConPrintf("[ascstart] %s: screened %.3f, rebuilt %.3f (before %.3f)", target.dn, screened[i].score, after, before) end
+		if after > before + 0.01 and (not best or after > best.score) then
+			best = { node = target, score = after }
+			bestSnap = self:Snapshot()
+			bestSnap.logCopy = { }
+			for j, l in ipairs(self.log) do bestSnap.logCopy[j] = l end
+		end
+		self:Restore(base)
+		restoreLog()
+		self:Tick()
+	end
+	if best then
+		self:Restore(bestSnap)
+		for i = #self.log, 1, -1 do self.log[i] = nil end
+		for i, l in ipairs(bestSnap.logCopy) do self.log[i] = l end
+		self:AutoConfigure()
+		self:Recalculate()
+		self:Note(string.format("Ascendancy rebuilt around %s (with the utility gems and passives for it): score %+.3f", best.node.dn, best.score - before))
+		return best.score - before
+	end
+	self:AutoConfigure()
+	self:Recalculate()
+	return 0
+end
+
 function BuildGeneratorClass:KeystoneAuraMove()
 	local spec = self.build.spec
 	local function auraCount()
@@ -9534,6 +9616,10 @@ function BuildGeneratorClass:Run()
 	if opts.golemMove ~= false then
 		local ok, err = pcall(function() self:GolemMove() end)
 		if not ok then ConPrintf("Golem move failed: %s", tostring(err)) end
+	end
+	if opts.ascendancyStarts ~= false then
+		local ok, err = pcall(function() self:AscendancyStartsMove(opts.ascendancyStartsFull or 3) end)
+		if not ok then ConPrintf("Ascendancy starts move failed: %s", tostring(err)) end
 	end
 	if opts.keystoneAuraMove ~= false then
 		local ok, err = pcall(function() self:KeystoneAuraMove() end)
