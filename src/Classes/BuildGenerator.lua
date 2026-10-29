@@ -9627,7 +9627,9 @@ function BuildGeneratorClass:Run()
 		if not ok then ConPrintf("Boss skill move failed: %s", tostring(err)) end
 	end
 	-- the finished build partly rebuilt, again and again (large neighbourhood search)
-	if self:HasEngine("alns") then
+	if self:HasEngine("alns") and opts.alnsAfterFit then
+		-- (the adaptive search runs later, on the build fitted to the budget)
+	elseif self:HasEngine("alns") then
 		self:Move(6, 6, "Rebuilding parts of the build to improve it (adaptive search)")
 		local ok, err = pcall(function() self:AlnsSearch() end)
 		if not ok then ConPrintf("ALNS failed: %s", tostring(err)) end
@@ -9729,6 +9731,15 @@ function BuildGeneratorClass:Run()
 	if opts.totalBudget and opts.spendBudget ~= false and self:BuildCost() < 0.9 * opts.totalBudget then
 		local ok, err = pcall(function() self:SpendBudgetMove() end)
 		if not ok then ConPrintf("Spending the budget failed: %s", tostring(err)) end
+	end
+	-- (alnsAfterFit: the adaptive search on the build as fitted to the budget -
+	-- searching an over-budget build mostly measured what the fit undoes later;
+	-- going over is priced, and fitted again if a kept rebuild still is)
+	if self:HasEngine("alns") and opts.alnsAfterFit then
+		self:Move(6, 6, "Rebuilding parts of the build to improve it (adaptive search)")
+		local ok, err = pcall(function() self:AlnsSearch() end)
+		if not ok then ConPrintf("ALNS failed: %s", tostring(err)) end
+		if opts.totalBudget and self:BuildCost() > opts.totalBudget then pcall(function() self:FitTotalBudget() end) end
 	end
 	-- hard requirements (resistances, attributes) fixed with bench crafts
 	if opts.requirements ~= false then self:RequirementsMove() end
