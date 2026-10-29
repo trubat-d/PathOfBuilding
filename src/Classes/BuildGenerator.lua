@@ -9336,7 +9336,10 @@ function BuildGeneratorClass:Run()
 			ConPrintf("[stage] before %d: score %.3f dps %.0f ehp %.0f lua %.0f MB t=%.0fs", index, r.score, r.dps, r.ehp, collectgarbage("count") / 1024, os.clock() - (self.startClock or 0))
 		end
 		-- (engine "lagrange": the price of a divine follows the budget)
-		if self.priceWeight and index > 5 then self:UpdatePriceWeight("stage " .. index) end
+		-- (from stage 9: before it the rares are first drafts at the investment's
+		-- level and the build is far over the budget the fit will make it fit -
+		-- every 30 div test run drove the price to its cap by stage 8)
+		if self.priceWeight and index > (opts.priceUpdateFrom or 8) then self:UpdatePriceWeight("stage " .. index) end
 		-- (engine "escalate": requirements still unmet weigh more from here on)
 		if index > 5 and self.scorer and self:HasEngine("escalate") then self:UpdateEscalation("stage " .. index) end
 		self.stageIndex, self.stage = index, label

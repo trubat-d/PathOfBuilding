@@ -59,7 +59,7 @@ function BuildGeneratorClass:UpdatePriceWeight(label)
 	local cost = self:BuildCost()
 	local old = self.priceWeight
 	if cost > budget then
-		self.priceWeight = m_min(self.options.priceWeightMax or 3, old * (1 + m_min(1, (cost - budget) / budget)))
+		self.priceWeight = m_min(self.options.priceWeightMax or 1, old * (1 + 0.5 * m_min(1, (cost - budget) / budget)))
 	elseif cost < 0.8 * budget then
 		self.priceWeight = m_max(self.options.priceWeightMin or 0.02, old * 0.7)
 	end
