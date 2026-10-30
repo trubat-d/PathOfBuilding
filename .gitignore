@@ -49,6 +49,7 @@ runtime/SimpleGraphic/Screenshots
 # build generator background thread traces
 src/GeneratorWorker_*.log
 src/GeneratorThreads.log
-.claude/
+.claude/worktrees/
+.claude/settings.local.json
 bench/__pycache__/
 PathOfBuildingIA-Setup*.exe
