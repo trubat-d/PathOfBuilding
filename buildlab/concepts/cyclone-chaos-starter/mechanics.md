@@ -36,3 +36,11 @@ No core interaction is WRONG. The concept stands, with the corrections below.
 | Herald of Agony | Last changed in 3.23 | https://poedb.tw/us/Herald_of_Agony |
 | Withering Touch | 29% of physical as extra chaos at gem level 20, 30% at 21 (PoB gem data `src/Data/Skills/sup_dex.lua`); the concept's 21% is wrong | repo |
 | Chaos poisons by default | No: a poison chance source is needed (PoB `ModParser.lua`; no poedb page contradicts it) | repo |
+
+## Grasping Nightshade (poedb, 2026-10-30)
+- Sporebloom Tincture, level 52: "Melee Weapon Hits Inflict (2-3) Withered Debuffs for 2 seconds". Not modelled in
+  PoB (Withered is set by hand in Config).
+- Tinctures sit in the flask belt (one active at a time), so it takes a flask slot.
+- Mana Burn: one stack every 0.9 s, each stack drains 1% of maximum mana per second; it deactivates at 0 mana,
+  then has an 8 s cooldown. With ~96 mana/s of spare sustain (fix_best), rough uptime is 10-15 s on, 8 s off.
+  Source: https://poedb.tw/us/Grasping_Nightshade
