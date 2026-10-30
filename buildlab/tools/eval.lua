@@ -6,15 +6,6 @@
 -- states, charges and debuffs are set from the build itself).
 -- Run from the src folder (buildlab/tools/eval.sh does this):
 --   FILES="a.xml b.xml" BUDGET=30 PHASE=WEEK1 luajit ../buildlab/tools/eval.lua
--- PoB's files start with a "#@" line, which recent LuaJIT builds no longer skip.
-function loadfile(name)
-	local f, err = io.open(name)
-	if not f then return nil, err end
-	local text = f:read("*a"):gsub("^#[^\n]*", "")
-	f:close()
-	return loadstring(text, "@" .. name)
-end
-function dofile(name) return assert(loadfile(name))() end
 dofile("HeadlessWrapper.lua")
 local dk = require("dkjson")
 while main.uniqueDB.loading do runCallback("OnFrame") end
