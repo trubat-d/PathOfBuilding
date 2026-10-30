@@ -9257,6 +9257,45 @@ function BuildGeneratorClass:PrepareOptions()
 	end
 end
 
+-- Uniques valued at the roll a budget buys: poe.ninja's price is the cheapest
+-- listed copy, a low roll, and PoB's uniques come at a middle roll - Admiral's
+-- Arrogance at +2 melee gem levels priced as the 0.2 div +1 copy (a +2 / +3
+-- costs many times that). With a total budget up to 60 div, every unique's
+-- ranged lines are set to options.uniqueRollRange (0.2) for the run; the
+-- returned function puts the rolls back.
+function BuildGeneratorClass:SetUniqueRolls()
+	local opts = self.options
+	local range = opts.uniqueRollRange
+	if range == nil and opts.totalBudget and opts.totalBudget <= 60 then range = 0.2 end
+	if not range or not (main and main.uniqueDB and main.uniqueDB.list) then return function() end end
+	local saved, items = { }, { }
+	-- (items are equipped from their text, which carries no roll: parsed at
+	-- PoB's default roll, set to the same for the run)
+	local savedDefault = main.defaultItemAffixQuality
+	main.defaultItemAffixQuality = range
+	for _, item in pairs(main.uniqueDB.list) do
+		local changed = false
+		for _, list in ipairs({ item.explicitModLines, item.implicitModLines }) do
+			for _, modLine in ipairs(list or { }) do
+				if modLine.range and modLine.range ~= range then
+					t_insert(saved, { modLine = modLine, range = modLine.range })
+					modLine.range = range
+					changed = true
+				end
+			end
+		end
+		if changed then
+			t_insert(items, item)
+			pcall(function() item:BuildModList() end)
+		end
+	end
+	return function()
+		main.defaultItemAffixQuality = savedDefault
+		for _, e in ipairs(saved) do e.modLine.range = e.range end
+		for _, item in ipairs(items) do pcall(function() item:BuildModList() end) end
+	end
+end
+
 -- The scorer for the options (focus, budget tier, configuration, archetype lens)
 function BuildGeneratorClass:SetupScorer()
 	local opts = self.options
@@ -9371,6 +9410,7 @@ function BuildGeneratorClass:Run()
 
 	stage(1, "Setting up the character and configuration")
 	if opts.learntNote then self:Note(opts.learntNote) end
+	self.restoreUniqueRolls = self:SetUniqueRolls()
 	self:Setup()
 	self:InitKnowledge()
 	self:SetupScorer()
@@ -9460,6 +9500,7 @@ function BuildGeneratorClass:Run()
 		end
 		local total = 0
 		for _, price in ipairs(self.costs) do total = total + (price or 0) end
+		if self.restoreUniqueRolls then self.restoreUniqueRolls() end
 		return { log = self.log, final = final, cost = total, ideas = { }, configChanges = self.configChanges or { }, assumptions = { } }
 	end
 	self:TreeSolverMove()
@@ -10090,6 +10131,7 @@ function BuildGeneratorClass:Run()
 	if opts.writeNotes ~= false then
 		pcall(function() self:WriteNotes(assumptions, costLine) end)
 	end
+	if self.restoreUniqueRolls then self.restoreUniqueRolls() end
 	return {
 		log = self.log,
 		final = final,

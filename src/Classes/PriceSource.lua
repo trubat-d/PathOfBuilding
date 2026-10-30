@@ -428,7 +428,8 @@ function PriceSourceClass:UniquePrice(item)
 	if price and self.phase and self.phase ~= "NOW" then price = price * self:PhaseFactor("unique", price) end
 	-- (uniques whose roll is the whole item: poe.ninja's cheapest copy is a
 	-- low roll - The Adorned at 0.09 div - a high roll costs far more)
-	local rollPriced = { ["The Adorned"] = 20 }
+	-- (Admiral's Arrogance: +1 to +3 melee gem levels - the cheapest copy is +1)
+	local rollPriced = { ["The Adorned"] = 20, ["Admiral's Arrogance"] = 25 }
 	if price and title and rollPriced[title] then
 		local range = 0.5
 		for _, l in ipairs(item.explicitModLines or { }) do if l.range then range = l.range end end
