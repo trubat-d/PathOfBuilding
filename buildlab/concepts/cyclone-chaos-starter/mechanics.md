@@ -1,7 +1,8 @@
 # Mechanics check: concept C (Pathfinder non-crit poison Cyclone), 3.29
 
 Sources: this repo's 3.29 data (`src/TreeData/3_29/tree.lua`, `src/Data/`, `src/Modules/`).
-poewiki and poedb were not reachable from the session, so no wiki or patch-note check yet.
+poedb.tw checked afterwards for the open points (see "Verified on poedb" below); poewiki
+(www.poewiki.net) is still blocked by the session's network policy.
 
 No core interaction is WRONG. The concept stands, with the corrections below.
 
@@ -26,7 +27,12 @@ No core interaction is WRONG. The concept stands, with the corrections below.
 - Master Distiller bonuses (correctly excluded).
 - Herald of Agony's virulence ramp, Withering Presence's ramp, Withered stack refresh/expiry: static Config counts.
 
-## To check by hand (poewiki / poedb)
-1. Replica Innsbury Edge: local vs global conversion wording, level requirement.
-2. Nature's Reprisal: does the Withered effect apply to all sources?
-3. 3.29 changes to Cyclone and Herald of Agony.
+## Verified on poedb (2026-10-30)
+| Point | Result | Source |
+|---|---|---|
+| Replica Innsbury Edge | Level 47, 81 Str, 81 Dex. "50% of Physical Damage Converted to Chaos Damage" is tagged **Global**: applies to all hits. Withered on hit is weapon-only ("with this Weapon") | https://poedb.tw/us/Replica_Innsbury_Edge |
+| Nature's Reprisal effect on all Withered sources | **Very likely yes**: Withered is one debuff, whatever inflicts it, and "increased Effect of Withered" has no source restriction (inference, not an explicit statement) | https://poedb.tw/us/Withered |
+| Cyclone changes | 3.26: 68.2-125.1% effectiveness (was 60.6-111.2%). 3.27: 20% more damage at all levels. Nothing in 3.28-3.29. PoB data includes both (81.6% at gem level 1 = 68.2% × 1.2) | https://poedb.tw/us/Cyclone |
+| Herald of Agony | Last changed in 3.23 | https://poedb.tw/us/Herald_of_Agony |
+| Withering Touch | 29% of physical as extra chaos at gem level 20, 30% at 21 (PoB gem data `src/Data/Skills/sup_dex.lua`); the concept's 21% is wrong | repo |
+| Chaos poisons by default | No: a poison chance source is needed (PoB `ModParser.lua`; no poedb page contradicts it) | repo |
